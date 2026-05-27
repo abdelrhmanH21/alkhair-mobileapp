@@ -17,6 +17,7 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
     on<DelegateClientCreated>(_onCreateClient);
     on<DelegateInvoiceSubmitted>(_onSubmitInvoice);
     on<DelegateInvoicesFetched>(_onFetchInvoices);
+    on<DelegateLoadingStatusUpdateRequested>(_onUpdateLoadingStatus);
   }
 
   Future<void> _onFetchLoading(
@@ -136,6 +137,19 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
     try {
       final invoices = await _repo.getInvoices();
       emit(DelegateInvoicesLoaded(invoices));
+    } on DioException catch (e) {
+      emit(DelegateFailure(_parseError(e)));
+    }
+  }
+
+  Future<void> _onUpdateLoadingStatus(
+    DelegateLoadingStatusUpdateRequested event,
+    Emitter<DelegateState> emit,
+  ) async {
+    emit(DelegateLoading());
+    try {
+      final loading = await _repo.updateLoadingStatus(event.loadingId, event.status);
+      emit(DelegateLoadingStatusUpdated(loading));
     } on DioException catch (e) {
       emit(DelegateFailure(_parseError(e)));
     }

@@ -25,6 +25,7 @@ abstract class DelegateRemoteDataSource {
   });
   Future<List<DelegateInvoiceModel>> fetchInvoices();
   Future<DelegateInvoiceModel> fetchInvoice(int id);
+  Future<LoadingModel> updateLoadingStatus(int id, String status);
 }
 
 class DelegateRemoteDataSourceImpl implements DelegateRemoteDataSource {
@@ -109,5 +110,14 @@ class DelegateRemoteDataSourceImpl implements DelegateRemoteDataSource {
   Future<DelegateInvoiceModel> fetchInvoice(int id) async {
     final res = await _client.dio.get('${ApiEndpoints.delegateInvoices}/$id');
     return DelegateInvoiceModel.fromJson(res.data['data'] as Map<String, dynamic>);
+  }
+
+  @override
+  Future<LoadingModel> updateLoadingStatus(int id, String status) async {
+    final res = await _client.dio.post(
+      ApiEndpoints.delegateLoadingStatus(id),
+      data: {'status': status},
+    );
+    return LoadingModel.fromJson(res.data['data'] as Map<String, dynamic>);
   }
 }

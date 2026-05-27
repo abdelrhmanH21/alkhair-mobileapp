@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/app_logo.dart';
+import '../../../app_config/presentation/bloc/app_config_bloc.dart';
+import '../../../app_config/presentation/bloc/app_config_state.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../auth/presentation/bloc/auth_event.dart';
 import '../../../auth/presentation/bloc/auth_state.dart';
@@ -10,6 +13,7 @@ import '../bloc/admin_state.dart';
 import '../../data/models/admin_models.dart';
 // delegates_page.dart is a re-export barrel; no additional imports needed
 import 'settle_delegate_page.dart';
+import 'create_loading_page.dart';
 
 class AdminDashboardPage extends StatefulWidget {
   const AdminDashboardPage({super.key});
@@ -33,6 +37,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
     final userName = authState is AuthAuthenticated ? authState.user.name : '';
 
     return Scaffold(
+      drawer: _AdminDrawer(userName: userName),
       appBar: AppBar(
         title: const Text('لوحة تحكم الإدارة'),
         actions: [
@@ -63,6 +68,22 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
           ),
         ],
       ),
+      floatingActionButton: _currentTab == 1
+          ? FloatingActionButton.extended(
+              onPressed: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => BlocProvider.value(
+                    value: context.read<AdminBloc>(),
+                    child: const CreateLoadingPage(),
+                  ),
+                ),
+              ).then((_) =>
+                  context.read<AdminBloc>().add(AdminDelegatesFetched())),
+              icon: const Icon(Icons.add_road_rounded),
+              label: const Text('تحميلة جديدة'),
+            )
+          : null,
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentTab,
         onDestinationSelected: (i) {
@@ -87,6 +108,66 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
           _DashboardTab(userName: userName),
           const _DelegatesTab(),
         ],
+      ),
+    );
+  }
+}
+
+// ─── Admin Drawer ──────────────────────────────────────────────────────────────
+
+class _AdminDrawer extends StatelessWidget {
+  final String userName;
+  const _AdminDrawer({required this.userName});
+
+  @override
+  Widget build(BuildContext context) {
+    return Drawer(
+      child: BlocBuilder<AppConfigBloc, AppConfigState>(
+        builder: (_, configState) {
+          final logoUrl = configState is AppConfigLoaded
+              ? configState.config.logoUrl
+              : null;
+          final companyName = configState is AppConfigLoaded &&
+                  configState.config.companyName.isNotEmpty
+              ? configState.config.companyName
+              : 'الخير للألبان';
+
+          return Column(
+            children: [
+              DrawerHeader(
+                decoration: BoxDecoration(color: AppTheme.primary),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    AppLogo(logoUrl: logoUrl, size: 72, borderRadius: 16),
+                    const SizedBox(height: 10),
+                    Text(
+                      companyName,
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold),
+                    ),
+                    Text(
+                      userName,
+                      style: TextStyle(
+                          color: Colors.white.withValues(alpha: 0.8),
+                          fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+              ListTile(
+                leading: const Icon(Icons.logout_rounded),
+                title: const Text('تسجيل الخروج'),
+                onTap: () {
+                  Navigator.pop(context);
+                  context.read<AuthBloc>().add(AuthLogoutRequested());
+                },
+              ),
+            ],
+          );
+        },
       ),
     );
   }

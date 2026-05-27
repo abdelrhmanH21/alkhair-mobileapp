@@ -55,4 +55,8 @@ class DelegateRepositoryImpl implements DelegateRepository {
 
   @override
   Future<List<DelegateInvoiceModel>> getInvoices() => _remote.fetchInvoices();
+
+  @override
+  Future<LoadingModel> updateLoadingStatus(int id, String status) =>
+      _remote.updateLoadingStatus(id, status);
 }

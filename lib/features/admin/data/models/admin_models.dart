@@ -68,6 +68,53 @@ class DelegateModel {
       );
 }
 
+class SimpleProductModel {
+  final int id;
+  final String name;
+  final String unit;
+  final double salePrice;
+
+  const SimpleProductModel({
+    required this.id,
+    required this.name,
+    required this.unit,
+    required this.salePrice,
+  });
+
+  factory SimpleProductModel.fromJson(Map<String, dynamic> json) =>
+      SimpleProductModel(
+        id: json['id'] as int,
+        name: json['name'] as String,
+        unit: json['unit'] as String? ?? '',
+        salePrice: (json['sale_price'] as num? ?? 0).toDouble(),
+      );
+
+  @override
+  String toString() => name;
+}
+
+class SimpleWarehouseModel {
+  final int id;
+  final String name;
+  final String type;
+
+  const SimpleWarehouseModel({
+    required this.id,
+    required this.name,
+    required this.type,
+  });
+
+  factory SimpleWarehouseModel.fromJson(Map<String, dynamic> json) =>
+      SimpleWarehouseModel(
+        id: json['id'] as int,
+        name: json['name'] as String,
+        type: json['type'] as String? ?? '',
+      );
+
+  @override
+  String toString() => name;
+}
+
 class ShiftSummaryModel {
   final Map<String, dynamic> delegate;
   final int totalInvoices;

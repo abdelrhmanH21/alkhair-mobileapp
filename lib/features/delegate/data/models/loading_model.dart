@@ -70,6 +70,13 @@ class LoadingModel {
 
   bool get isPendingPickup => status == 'pending_pickup';
   bool get isAccepted      => status == 'accepted';
+  bool get isInTransit     => status == 'in_transit';
+  bool get isCompleted     => status == 'completed';
+  bool get isSettled       => status == 'settled';
+
+  bool get canUpdateToInTransit => isAccepted;
+  bool get canUpdateToCompleted => isInTransit;
+  bool get isActiveForSales     => isAccepted || isInTransit;
 }
 
 class TruckStockModel {

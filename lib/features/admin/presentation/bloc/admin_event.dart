@@ -30,3 +30,22 @@ class AdminDelegateSettled extends AdminEvent {
   @override
   List<Object?> get props => [delegateId, treasuryId, physicalCash];
 }
+
+class AdminLoadingFormRequested extends AdminEvent {}
+
+class AdminLoadingSubmitted extends AdminEvent {
+  final int delegateId;
+  final int warehouseId;
+  final List<Map<String, dynamic>> items;
+  final String? notes;
+
+  AdminLoadingSubmitted({
+    required this.delegateId,
+    required this.warehouseId,
+    required this.items,
+    this.notes,
+  });
+
+  @override
+  List<Object?> get props => [delegateId, warehouseId, items];
+}

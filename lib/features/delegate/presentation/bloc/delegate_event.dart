@@ -56,3 +56,11 @@ class DelegateInvoiceSubmitted extends DelegateEvent {
 }
 
 class DelegateInvoicesFetched extends DelegateEvent {}
+
+class DelegateLoadingStatusUpdateRequested extends DelegateEvent {
+  final int loadingId;
+  final String status;
+  DelegateLoadingStatusUpdateRequested({required this.loadingId, required this.status});
+  @override
+  List<Object?> get props => [loadingId, status];
+}

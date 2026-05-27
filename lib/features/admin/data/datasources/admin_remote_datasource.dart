@@ -12,6 +12,14 @@ abstract class AdminRemoteDataSource {
     required double physicalCash,
     String? notes,
   });
+  Future<List<SimpleProductModel>> fetchProducts();
+  Future<List<SimpleWarehouseModel>> fetchWarehouses();
+  Future<void> createLoading({
+    required int delegateId,
+    required int warehouseId,
+    required List<Map<String, dynamic>> items,
+    String? notes,
+  });
 }
 
 class AdminRemoteDataSourceImpl implements AdminRemoteDataSource {
@@ -56,5 +64,38 @@ class AdminRemoteDataSourceImpl implements AdminRemoteDataSource {
       if (notes != null) 'notes': notes,
     });
     return res.data as Map<String, dynamic>;
+  }
+
+  @override
+  Future<List<SimpleProductModel>> fetchProducts() async {
+    final res = await _client.dio.get(ApiEndpoints.adminProducts);
+    final list = res.data['data'] as List? ?? [];
+    return list
+        .map((e) => SimpleProductModel.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  @override
+  Future<List<SimpleWarehouseModel>> fetchWarehouses() async {
+    final res = await _client.dio.get(ApiEndpoints.adminWarehouses);
+    final list = res.data['data'] as List? ?? [];
+    return list
+        .map((e) => SimpleWarehouseModel.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  @override
+  Future<void> createLoading({
+    required int delegateId,
+    required int warehouseId,
+    required List<Map<String, dynamic>> items,
+    String? notes,
+  }) async {
+    await _client.dio.post(ApiEndpoints.adminLoadings, data: {
+      'delegate_id': delegateId,
+      'warehouse_id': warehouseId,
+      'items': items,
+      if (notes != null && notes.isNotEmpty) 'notes': notes,
+    });
   }
 }

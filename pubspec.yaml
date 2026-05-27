@@ -32,6 +32,9 @@ dependencies:
   # Bluetooth ESC/POS thermal printing (80mm)
   print_bluetooth_thermal: ^1.2.1
 
+  # Image loading and caching
+  cached_network_image: ^3.4.1
+
   # Utilities
   intl: ^0.20.2
   shared_preferences: ^2.3.2

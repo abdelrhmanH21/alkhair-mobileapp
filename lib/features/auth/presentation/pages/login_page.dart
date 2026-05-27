@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/app_logo.dart';
+import '../../../app_config/presentation/bloc/app_config_bloc.dart';
+import '../../../app_config/presentation/bloc/app_config_state.dart';
 import '../bloc/auth_bloc.dart';
 import '../bloc/auth_event.dart';
 import '../bloc/auth_state.dart';
@@ -58,23 +61,29 @@ class _LoginPageState extends State<LoginPage> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   // Logo / brand mark
-                  Container(
-                    width: 90,
-                    height: 90,
-                    decoration: BoxDecoration(
-                      color: AppTheme.primary,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: const Icon(Icons.local_shipping_rounded,
-                        color: Colors.white, size: 50),
+                  BlocBuilder<AppConfigBloc, AppConfigState>(
+                    builder: (_, state) {
+                      final logoUrl = state is AppConfigLoaded
+                          ? state.config.logoUrl
+                          : null;
+                      return AppLogo(logoUrl: logoUrl);
+                    },
                   ),
                   const SizedBox(height: 20),
-                  const Text(
-                    'الخير للألبان',
-                    style: TextStyle(
-                        fontSize: 26,
-                        fontWeight: FontWeight.bold,
-                        color: AppTheme.primary),
+                  BlocBuilder<AppConfigBloc, AppConfigState>(
+                    builder: (_, state) {
+                      final name = state is AppConfigLoaded &&
+                              state.config.companyName.isNotEmpty
+                          ? state.config.companyName
+                          : 'الخير للألبان';
+                      return Text(
+                        name,
+                        style: const TextStyle(
+                            fontSize: 26,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.primary),
+                      );
+                    },
                   ),
                   const SizedBox(height: 6),
                   const Text('تطبيق العمليات الميدانية',

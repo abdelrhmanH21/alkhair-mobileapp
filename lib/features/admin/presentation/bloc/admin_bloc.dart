@@ -11,6 +11,8 @@ class AdminBloc extends Bloc<AdminEvent, AdminState> {
     on<AdminDelegatesFetched>(_onDelegates);
     on<AdminShiftSummaryFetched>(_onShiftSummary);
     on<AdminDelegateSettled>(_onSettle);
+    on<AdminLoadingFormRequested>(_onLoadingForm);
+    on<AdminLoadingSubmitted>(_onSubmitLoading);
   }
 
   Future<void> _onDashboard(
@@ -57,6 +59,39 @@ class AdminBloc extends Bloc<AdminEvent, AdminState> {
         notes: e.notes,
       );
       emit(AdminSettlementSuccess(result));
+    } on DioException catch (e) {
+      emit(AdminFailure(_msg(e)));
+    }
+  }
+
+  Future<void> _onLoadingForm(
+      AdminLoadingFormRequested e, Emitter<AdminState> emit) async {
+    emit(AdminLoading());
+    try {
+      final delegates  = await _remote.fetchDelegates();
+      final warehouses = await _remote.fetchWarehouses();
+      final products   = await _remote.fetchProducts();
+      emit(AdminLoadingFormLoaded(
+        delegates: delegates,
+        warehouses: warehouses,
+        products: products,
+      ));
+    } on DioException catch (e) {
+      emit(AdminFailure(_msg(e)));
+    }
+  }
+
+  Future<void> _onSubmitLoading(
+      AdminLoadingSubmitted e, Emitter<AdminState> emit) async {
+    emit(AdminLoading());
+    try {
+      await _remote.createLoading(
+        delegateId: e.delegateId,
+        warehouseId: e.warehouseId,
+        items: e.items,
+        notes: e.notes,
+      );
+      emit(AdminLoadingCreatedSuccess('تم إنشاء التحميلة وإرسالها للمندوب.'));
     } on DioException catch (e) {
       emit(AdminFailure(_msg(e)));
     }

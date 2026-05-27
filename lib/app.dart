@@ -5,6 +5,9 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'core/di/service_locator.dart';
 import 'core/theme/app_theme.dart';
 
+import 'features/app_config/presentation/bloc/app_config_bloc.dart';
+import 'features/app_config/presentation/bloc/app_config_event.dart';
+
 import 'features/auth/presentation/bloc/auth_bloc.dart';
 import 'features/auth/presentation/bloc/auth_event.dart';
 import 'features/auth/presentation/bloc/auth_state.dart';
@@ -23,9 +26,11 @@ class AlKhairApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiBlocProvider(
       providers: [
+        BlocProvider<AppConfigBloc>(
+          create: (_) => sl<AppConfigBloc>()..add(AppConfigFetchRequested()),
+        ),
         BlocProvider<AuthBloc>(
-          create: (_) => sl<AuthBloc>()
-            ..add(AuthSessionRestoreRequested()),
+          create: (_) => sl<AuthBloc>()..add(AuthSessionRestoreRequested()),
         ),
         BlocProvider<DelegateBloc>(create: (_) => sl<DelegateBloc>()),
         BlocProvider<AdminBloc>(create: (_) => sl<AdminBloc>()),

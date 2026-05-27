@@ -22,4 +22,5 @@ abstract class DelegateRepository {
     double? longitude,
   });
   Future<List<DelegateInvoiceModel>> getInvoices();
+  Future<LoadingModel> updateLoadingStatus(int id, String status);
 }

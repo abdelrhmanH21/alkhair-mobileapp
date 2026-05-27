@@ -1,5 +1,6 @@
 import 'package:equatable/equatable.dart';
 import '../../data/models/admin_models.dart';
+// ignore_for_file: always_use_package_imports
 
 abstract class AdminState extends Equatable {
   @override
@@ -35,6 +36,28 @@ class AdminSettlementSuccess extends AdminState {
   AdminSettlementSuccess(this.result);
   @override
   List<Object?> get props => [result];
+}
+
+class AdminLoadingFormLoaded extends AdminState {
+  final List<DelegateModel> delegates;
+  final List<SimpleWarehouseModel> warehouses;
+  final List<SimpleProductModel> products;
+
+  AdminLoadingFormLoaded({
+    required this.delegates,
+    required this.warehouses,
+    required this.products,
+  });
+
+  @override
+  List<Object?> get props => [delegates, warehouses, products];
+}
+
+class AdminLoadingCreatedSuccess extends AdminState {
+  final String message;
+  AdminLoadingCreatedSuccess(this.message);
+  @override
+  List<Object?> get props => [message];
 }
 
 class AdminFailure extends AdminState {

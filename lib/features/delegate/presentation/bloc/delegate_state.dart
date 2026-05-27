@@ -61,6 +61,13 @@ class DelegateInvoicesLoaded extends DelegateState {
   List<Object?> get props => [invoices];
 }
 
+class DelegateLoadingStatusUpdated extends DelegateState {
+  final LoadingModel loading;
+  DelegateLoadingStatusUpdated(this.loading);
+  @override
+  List<Object?> get props => [loading];
+}
+
 class DelegateFailure extends DelegateState {
   final String message;
   DelegateFailure(this.message);

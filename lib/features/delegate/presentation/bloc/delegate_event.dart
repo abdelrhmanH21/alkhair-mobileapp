@@ -1,0 +1,58 @@
+import 'package:equatable/equatable.dart';
+import '../../data/models/invoice_model.dart';
+
+abstract class DelegateEvent extends Equatable {
+  @override
+  List<Object?> get props => [];
+}
+
+class DelegateLoadingFetched extends DelegateEvent {}
+
+class DelegateLoadingConfirmed extends DelegateEvent {}
+
+class DelegateTruckStockFetched extends DelegateEvent {}
+
+class DelegateClientSearchRequested extends DelegateEvent {
+  final String query;
+  DelegateClientSearchRequested(this.query);
+  @override
+  List<Object?> get props => [query];
+}
+
+class DelegateClientCreated extends DelegateEvent {
+  final String name;
+  final String phone;
+  final String? region;
+  final double? initialBalance;
+  DelegateClientCreated({
+    required this.name,
+    required this.phone,
+    this.region,
+    this.initialBalance,
+  });
+  @override
+  List<Object?> get props => [name, phone, region, initialBalance];
+}
+
+class DelegateInvoiceSubmitted extends DelegateEvent {
+  final int clientId;
+  final List<InvoiceSaleItem> salesItems;
+  final List<InvoiceReturnItem> returnedItems;
+  final double cashReceived;
+  final double? latitude;
+  final double? longitude;
+
+  DelegateInvoiceSubmitted({
+    required this.clientId,
+    required this.salesItems,
+    required this.returnedItems,
+    required this.cashReceived,
+    this.latitude,
+    this.longitude,
+  });
+
+  @override
+  List<Object?> get props => [clientId, cashReceived, latitude, longitude];
+}
+
+class DelegateInvoicesFetched extends DelegateEvent {}

@@ -30,6 +30,8 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
       emit(DelegateLoadingLoaded(loading));
     } on DioException catch (e) {
       emit(DelegateFailure(_parseError(e)));
+    } catch (_) {
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
     }
   }
 
@@ -43,6 +45,8 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
       emit(DelegateLoadingConfirmedState(loading));
     } on DioException catch (e) {
       emit(DelegateFailure(_parseError(e)));
+    } catch (_) {
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
     }
   }
 
@@ -56,6 +60,8 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
       emit(DelegateTruckStockLoaded(stocks));
     } on DioException catch (e) {
       emit(DelegateFailure(_parseError(e)));
+    } catch (_) {
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
     }
   }
 
@@ -68,6 +74,8 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
       emit(DelegateClientSearchResults(clients));
     } on DioException catch (e) {
       emit(DelegateFailure(_parseError(e)));
+    } catch (_) {
+      emit(DelegateFailure('حدث خطأ في البحث. حاول مرة أخرى.'));
     }
   }
 
@@ -86,6 +94,8 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
       emit(DelegateClientCreatedState(client));
     } on DioException catch (e) {
       emit(DelegateFailure(_parseError(e)));
+    } catch (_) {
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
     }
   }
 
@@ -126,6 +136,8 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
       emit(DelegateInvoiceSubmittedState(invoice));
     } on DioException catch (e) {
       emit(DelegateFailure(_parseError(e)));
+    } catch (_) {
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
     }
   }
 
@@ -139,6 +151,8 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
       emit(DelegateInvoicesLoaded(invoices));
     } on DioException catch (e) {
       emit(DelegateFailure(_parseError(e)));
+    } catch (_) {
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
     }
   }
 
@@ -152,9 +166,23 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
       emit(DelegateLoadingStatusUpdated(loading));
     } on DioException catch (e) {
       emit(DelegateFailure(_parseError(e)));
+    } catch (_) {
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
     }
   }
 
-  String _parseError(DioException e) =>
-      e.response?.data?['message'] as String? ?? 'فشل الاتصال بالخادم.';
+  String _parseError(DioException e) {
+    final serverMessage = e.response?.data?['message'] as String?;
+    if (serverMessage != null && serverMessage.isNotEmpty) return serverMessage;
+    switch (e.type) {
+      case DioExceptionType.connectionTimeout:
+      case DioExceptionType.sendTimeout:
+      case DioExceptionType.receiveTimeout:
+        return 'انتهت مهلة الاتصال. تحقق من الشبكة وأعد المحاولة.';
+      case DioExceptionType.connectionError:
+        return 'تعذر الاتصال بالخادم. تحقق من الإنترنت.';
+      default:
+        return 'فشل الاتصال بالخادم.';
+    }
+  }
 }

@@ -85,6 +85,17 @@ class _LoadingPageState extends State<LoadingPage> {
             return const Center(child: CircularProgressIndicator());
           }
 
+          // Full-screen error only when we have no data to show (initial fetch failed).
+          // Action failures (confirm, status update) use the SnackBar from the listener
+          // and keep the loading detail visible via _currentLoading.
+          if (state is DelegateFailure && _currentLoading == null) {
+            return _ErrorView(
+              message: state.message,
+              onRetry: () =>
+                  context.read<DelegateBloc>().add(DelegateLoadingFetched()),
+            );
+          }
+
           if (_currentLoading == null) {
             return _EmptyLoadingView(
               onRefresh: () =>
@@ -140,6 +151,50 @@ class _LoadingPageState extends State<LoadingPage> {
       ),
     );
   }
+}
+
+// ─── Error state ─────────────────────────────────────────────────────────────
+
+class _ErrorView extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
+  const _ErrorView({required this.message, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) => Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: AppTheme.danger.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.cloud_off_rounded,
+                    size: 64, color: AppTheme.danger),
+              ),
+              const SizedBox(height: 16),
+              const Text('تعذر تحميل البيانات',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Text(
+                message,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.grey, fontSize: 13),
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh),
+                label: const Text('إعادة المحاولة'),
+              ),
+            ],
+          ),
+        ),
+      );
 }
 
 // ─── Empty state ────────────────────────────────────────────────────────────

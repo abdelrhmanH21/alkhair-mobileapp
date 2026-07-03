@@ -12,6 +12,8 @@ class DelegateLoadingConfirmed extends DelegateEvent {}
 
 class DelegateTruckStockFetched extends DelegateEvent {}
 
+class DelegateDashboardRequested extends DelegateEvent {}
+
 class DelegateClientSearchRequested extends DelegateEvent {
   final String query;
   DelegateClientSearchRequested(this.query);

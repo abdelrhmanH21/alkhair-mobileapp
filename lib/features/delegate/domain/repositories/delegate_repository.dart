@@ -1,11 +1,13 @@
 import '../../data/models/loading_model.dart';
 import '../../data/models/client_model.dart';
 import '../../data/models/invoice_model.dart';
+import '../../data/models/dashboard_model.dart';
 
 abstract class DelegateRepository {
   Future<LoadingModel?> getCurrentLoading();
   Future<LoadingModel> confirmLoading();
   Future<List<TruckStockModel>> getTruckStock();
+  Future<DashboardModel> getDashboard();
   Future<List<ClientModel>> searchClients(String query);
   Future<ClientModel> createClient({
     required String name,

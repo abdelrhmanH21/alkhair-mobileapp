@@ -2,6 +2,7 @@ import 'package:equatable/equatable.dart';
 import '../../data/models/loading_model.dart';
 import '../../data/models/client_model.dart';
 import '../../data/models/invoice_model.dart';
+import '../../data/models/dashboard_model.dart';
 
 abstract class DelegateState extends Equatable {
   @override
@@ -66,6 +67,13 @@ class DelegateLoadingStatusUpdated extends DelegateState {
   DelegateLoadingStatusUpdated(this.loading);
   @override
   List<Object?> get props => [loading];
+}
+
+class DelegateDashboardLoaded extends DelegateState {
+  final DashboardModel dashboard;
+  DelegateDashboardLoaded(this.dashboard);
+  @override
+  List<Object?> get props => [dashboard];
 }
 
 class DelegateFailure extends DelegateState {

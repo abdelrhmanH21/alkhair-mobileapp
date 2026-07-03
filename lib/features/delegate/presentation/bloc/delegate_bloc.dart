@@ -13,6 +13,7 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
     on<DelegateLoadingFetched>(_onFetchLoading);
     on<DelegateLoadingConfirmed>(_onConfirmLoading);
     on<DelegateTruckStockFetched>(_onFetchTruckStock);
+    on<DelegateDashboardRequested>(_onFetchDashboard);
     on<DelegateClientSearchRequested>(_onSearchClients);
     on<DelegateClientCreated>(_onCreateClient);
     on<DelegateInvoiceSubmitted>(_onSubmitInvoice);
@@ -58,6 +59,21 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
     try {
       final stocks = await _repo.getTruckStock();
       emit(DelegateTruckStockLoaded(stocks));
+    } on DioException catch (e) {
+      emit(DelegateFailure(_parseError(e)));
+    } catch (_) {
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
+    }
+  }
+
+  Future<void> _onFetchDashboard(
+    DelegateDashboardRequested event,
+    Emitter<DelegateState> emit,
+  ) async {
+    emit(DelegateLoading());
+    try {
+      final dashboard = await _repo.getDashboard();
+      emit(DelegateDashboardLoaded(dashboard));
     } on DioException catch (e) {
       emit(DelegateFailure(_parseError(e)));
     } catch (_) {

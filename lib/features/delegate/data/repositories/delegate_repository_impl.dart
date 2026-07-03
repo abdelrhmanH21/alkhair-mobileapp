@@ -2,6 +2,7 @@ import '../datasources/delegate_remote_datasource.dart';
 import '../models/loading_model.dart';
 import '../models/client_model.dart';
 import '../models/invoice_model.dart';
+import '../models/dashboard_model.dart';
 import '../../domain/repositories/delegate_repository.dart';
 
 class DelegateRepositoryImpl implements DelegateRepository {
@@ -10,6 +11,9 @@ class DelegateRepositoryImpl implements DelegateRepository {
 
   @override
   Future<LoadingModel?> getCurrentLoading() => _remote.fetchCurrentLoading();
+
+  @override
+  Future<DashboardModel> getDashboard() => _remote.fetchDashboard();
 
   @override
   Future<LoadingModel> confirmLoading() => _remote.confirmLoading();

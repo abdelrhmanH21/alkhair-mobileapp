@@ -3,11 +3,13 @@ import '../../../../core/network/api_endpoints.dart';
 import '../models/loading_model.dart';
 import '../models/client_model.dart';
 import '../models/invoice_model.dart';
+import '../models/dashboard_model.dart';
 
 abstract class DelegateRemoteDataSource {
   Future<LoadingModel?> fetchCurrentLoading();
   Future<LoadingModel> confirmLoading();
   Future<List<TruckStockModel>> fetchTruckStock();
+  Future<DashboardModel> fetchDashboard();
   Future<List<ClientModel>> searchClients(String query);
   Future<ClientModel> createClient({
     required String name,
@@ -51,6 +53,12 @@ class DelegateRemoteDataSourceImpl implements DelegateRemoteDataSource {
     final res = await _client.dio.get(ApiEndpoints.delegateTruckStock);
     final list = res.data['data'] as List? ?? [];
     return list.map((e) => TruckStockModel.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  @override
+  Future<DashboardModel> fetchDashboard() async {
+    final res = await _client.dio.get(ApiEndpoints.delegateDashboard);
+    return DashboardModel.fromJson(res.data['data'] as Map<String, dynamic>);
   }
 
   @override

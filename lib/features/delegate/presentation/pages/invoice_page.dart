@@ -11,6 +11,7 @@ import '../widgets/add_client_sheet.dart';
 import 'invoice_history_page.dart';
 import 'truck_stock_page.dart';
 import 'print_invoice_page.dart';
+import 'dashboard_page.dart';
 
 class InvoicePage extends StatefulWidget {
   const InvoicePage({super.key});
@@ -126,6 +127,15 @@ class _InvoicePageState extends State<InvoicePage> {
                 MaterialPageRoute(builder: (_) => BlocProvider.value(
                       value: context.read<DelegateBloc>(),
                       child: const TruckStockPage(),
+                    ))),
+          ),
+          IconButton(
+            icon: const Icon(Icons.dashboard_outlined),
+            tooltip: 'لوحة الأداء',
+            onPressed: () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => BlocProvider.value(
+                      value: context.read<DelegateBloc>(),
+                      child: const DashboardPage(),
                     ))),
           ),
         ],

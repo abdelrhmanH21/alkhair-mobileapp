@@ -5,6 +5,7 @@ import '../bloc/delegate_bloc.dart';
 import '../bloc/delegate_event.dart';
 import '../bloc/delegate_state.dart';
 import '../../data/models/client_model.dart';
+import '../../data/models/customer_region_model.dart';
 
 class AddClientSheet extends StatefulWidget {
   final void Function(ClientModel client) onClientAdded;
@@ -18,26 +19,33 @@ class _AddClientSheetState extends State<AddClientSheet> {
   final _formKey = GlobalKey<FormState>();
   final _nameCtrl    = TextEditingController();
   final _phoneCtrl   = TextEditingController();
-  final _regionCtrl  = TextEditingController();
   final _balanceCtrl = TextEditingController();
+
+  List<CustomerRegionModel> _regions = [];
+  CustomerRegionModel? _selectedRegion;
+  String? _phoneError;
+
+  @override
+  void initState() {
+    super.initState();
+    context.read<DelegateBloc>().add(DelegateCustomerRegionsFetched());
+  }
 
   @override
   void dispose() {
     _nameCtrl.dispose();
     _phoneCtrl.dispose();
-    _regionCtrl.dispose();
     _balanceCtrl.dispose();
     super.dispose();
   }
 
   void _submit() {
+    setState(() => _phoneError = null);
     if (!_formKey.currentState!.validate()) return;
     context.read<DelegateBloc>().add(DelegateClientCreated(
           name: _nameCtrl.text.trim(),
           phone: _phoneCtrl.text.trim(),
-          region: _regionCtrl.text.trim().isNotEmpty
-              ? _regionCtrl.text.trim()
-              : null,
+          customerRegionId: _selectedRegion?.id,
           initialBalance: double.tryParse(_balanceCtrl.text),
         ));
   }
@@ -49,6 +57,23 @@ class _AddClientSheetState extends State<AddClientSheet> {
         if (state is DelegateClientCreatedState) {
           widget.onClientAdded(state.client);
           Navigator.of(ctx).pop();
+        }
+        if (state is DelegateCustomerRegionsLoaded) {
+          setState(() => _regions = state.regions);
+        }
+        if (state is DelegateClientValidationFailure) {
+          final phoneErrors = state.errors['phone'];
+          if (phoneErrors != null && phoneErrors.isNotEmpty) {
+            setState(() {
+              _phoneError = phoneErrors.first;
+              _formKey.currentState?.validate();
+            });
+          } else {
+            ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+              content: Text(state.message),
+              backgroundColor: AppTheme.danger,
+            ));
+          }
         }
         if (state is DelegateFailure) {
           ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
@@ -98,15 +123,25 @@ class _AddClientSheetState extends State<AddClientSheet> {
                 decoration: const InputDecoration(
                     labelText: 'رقم الهاتف *',
                     prefixIcon: Icon(Icons.phone_outlined)),
-                validator: (v) =>
-                    v == null || v.trim().isEmpty ? 'الهاتف مطلوب' : null,
+                onChanged: (_) {
+                  if (_phoneError != null) setState(() => _phoneError = null);
+                },
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return 'الهاتف مطلوب';
+                  return _phoneError;
+                },
               ),
               const SizedBox(height: 10),
-              TextFormField(
-                controller: _regionCtrl,
+              DropdownButtonFormField<CustomerRegionModel>(
+                value: _selectedRegion,
+                hint: const Text('اختر منطقة'),
                 decoration: const InputDecoration(
-                    labelText: 'المنطقة / العنوان',
+                    labelText: 'المنطقة',
                     prefixIcon: Icon(Icons.location_on_outlined)),
+                items: _regions
+                    .map((r) => DropdownMenuItem(value: r, child: Text(r.name)))
+                    .toList(),
+                onChanged: (v) => setState(() => _selectedRegion = v),
               ),
               const SizedBox(height: 10),
               TextFormField(

@@ -1,13 +1,15 @@
 class InvoiceSaleItem {
   final int productId;
   final String productName;
+  final double maxQty;
   double quantity;
-  double unitPrice;
+  final double unitPrice;
   double get subtotal => quantity * unitPrice;
 
   InvoiceSaleItem({
     required this.productId,
     required this.productName,
+    this.maxQty = double.infinity,
     this.quantity = 1,
     this.unitPrice = 0,
   });
@@ -17,7 +19,7 @@ class InvoiceReturnItem {
   final int productId;
   final String productName;
   double quantity;
-  double unitPrice;
+  final double unitPrice;
   String condition; // 'سليم' | 'تالف'
   double get subtotal => quantity * unitPrice;
 

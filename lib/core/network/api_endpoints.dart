@@ -1,6 +1,10 @@
 class ApiEndpoints {
   static const String baseUrl = 'https://accounting.alkhairdairies.com/api/v1/mobile';
 
+  // Root API (non-mobile-prefixed, shared reference-data endpoints).
+  // Dio treats an absolute "http..." path as-is and ignores baseUrl.
+  static const String apiRoot = 'https://accounting.alkhairdairies.com/api';
+
   // Public
   static const String appSettings = '/app-settings';
 
@@ -13,10 +17,15 @@ class ApiEndpoints {
   static const String delegateLoading        = '/delegate/loading';
   static const String delegateLoadingConfirm = '/delegate/loading/confirm';
   static const String delegateTruckStock     = '/delegate/truck-stock';
+  static const String delegateSellableProducts = '/delegate/sellable-products';
 
   // Delegate — clients
   static const String delegateClients       = '/delegate/clients';
   static const String delegateClientSearch  = '/delegate/clients/search';
+
+  // Shared reference data (root API, not under /v1/mobile)
+  static const String products        = '$apiRoot/products';
+  static const String customerRegions = '$apiRoot/customer-regions';
 
   // Delegate — invoices
   static const String delegateInvoice  = '/delegate/invoice';

@@ -3,6 +3,9 @@ import '../../../../core/network/api_endpoints.dart';
 import '../models/loading_model.dart';
 import '../models/client_model.dart';
 import '../models/invoice_model.dart';
+import '../models/sellable_product_model.dart';
+import '../models/catalog_product_model.dart';
+import '../models/customer_region_model.dart';
 
 abstract class DelegateRemoteDataSource {
   Future<LoadingModel?> fetchCurrentLoading();
@@ -13,8 +16,12 @@ abstract class DelegateRemoteDataSource {
     required String name,
     required String phone,
     String? region,
+    int? customerRegionId,
     double? initialBalance,
   });
+  Future<List<SellableProductModel>> fetchSellableProducts({int? customerId});
+  Future<List<CatalogProductModel>> fetchSalesCatalogProducts();
+  Future<List<CustomerRegionModel>> fetchCustomerRegions();
   Future<DelegateInvoiceModel> submitInvoice({
     required int clientId,
     required List<Map<String, dynamic>> salesItems,
@@ -68,15 +75,47 @@ class DelegateRemoteDataSourceImpl implements DelegateRemoteDataSource {
     required String name,
     required String phone,
     String? region,
+    int? customerRegionId,
     double? initialBalance,
   }) async {
     final res = await _client.dio.post(ApiEndpoints.delegateClients, data: {
       'name': name,
       'phone': phone,
+      if (customerRegionId != null) 'customer_region_id': customerRegionId,
       if (region != null) 'region': region,
       if (initialBalance != null) 'initial_outstanding_balance': initialBalance,
     });
     return ClientModel.fromJson(res.data['data'] as Map<String, dynamic>);
+  }
+
+  @override
+  Future<List<SellableProductModel>> fetchSellableProducts({int? customerId}) async {
+    final res = await _client.dio.get(
+      ApiEndpoints.delegateSellableProducts,
+      queryParameters: {if (customerId != null) 'customer_id': customerId},
+    );
+    final list = res.data['data'] as List? ?? [];
+    return list.map((e) => SellableProductModel.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  @override
+  Future<List<CatalogProductModel>> fetchSalesCatalogProducts() async {
+    final res = await _client.dio.get(
+      ApiEndpoints.products,
+      queryParameters: {'is_sales_item': true, 'per_page': 500},
+    );
+    final list = res.data['data'] as List? ?? [];
+    return list.map((e) => CatalogProductModel.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  @override
+  Future<List<CustomerRegionModel>> fetchCustomerRegions() async {
+    final res = await _client.dio.get(
+      ApiEndpoints.customerRegions,
+      queryParameters: {'is_active': true, 'per_page': 500},
+    );
+    final list = res.data['data'] as List? ?? [];
+    return list.map((e) => CustomerRegionModel.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   @override

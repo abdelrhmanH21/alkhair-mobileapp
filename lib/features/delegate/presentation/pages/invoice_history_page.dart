@@ -7,7 +7,7 @@ import '../bloc/delegate_bloc.dart';
 import '../bloc/delegate_event.dart';
 import '../bloc/delegate_state.dart';
 import '../../data/models/invoice_model.dart';
-import 'print_invoice_page.dart';
+import 'invoice_detail_page.dart';
 
 class InvoiceHistoryPage extends StatefulWidget {
   /// Bumped by DelegateHomePage each time this tab is (re)selected — when
@@ -94,7 +94,7 @@ class _InvoiceHistoryPageState extends State<InvoiceHistoryPage> {
                   onTap: () => Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (_) => PrintInvoicePage(invoiceId: inv.id),
+                      builder: (_) => InvoiceDetailPage(invoiceId: inv.id),
                     ),
                   ),
                 ),

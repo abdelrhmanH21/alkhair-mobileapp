@@ -33,6 +33,13 @@ class DelegateHomePage extends StatefulWidget {
 class _DelegateHomePageState extends State<DelegateHomePage> {
   int _tab = 0;
   LoadingModel? _loading;
+  // SettlementPage lives inside an IndexedStack that builds every tab once
+  // and keeps it alive for the whole session, so its initState() fetch only
+  // ever runs at home-page mount — typically before any sales exist yet.
+  // Bumping this each time the settlement tab is (re)selected lets
+  // SettlementPage detect "I just became visible again" via didUpdateWidget
+  // and refetch, instead of showing the stale first-load snapshot forever.
+  int _settlementRefreshTick = 0;
 
   bool get _canSell => _loading?.isActiveForSales == true;
   bool get _hasActiveLoading => _loading != null;
@@ -54,7 +61,10 @@ class _DelegateHomePageState extends State<DelegateHomePage> {
       ));
       return;
     }
-    setState(() => _tab = i);
+    setState(() {
+      _tab = i;
+      if (i == 4) _settlementRefreshTick++;
+    });
   }
 
   void _confirmLogout() {
@@ -169,7 +179,8 @@ class _DelegateHomePageState extends State<DelegateHomePage> {
           BlocProvider.value(
               value: context.read<DelegateBloc>(), child: const InvoiceHistoryPage()),
           BlocProvider.value(
-              value: context.read<DelegateBloc>(), child: const SettlementPage()),
+              value: context.read<DelegateBloc>(),
+              child: SettlementPage(refreshTick: _settlementRefreshTick)),
         ],
       ),
     );

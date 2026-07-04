@@ -125,7 +125,7 @@ class _AdminDrawer extends StatelessWidget {
       child: BlocBuilder<AppConfigBloc, AppConfigState>(
         builder: (_, configState) {
           final logoUrl = configState is AppConfigLoaded
-              ? configState.config.logoUrl
+              ? (configState.config.logoColorUrl ?? configState.config.logoUrl)
               : null;
           final companyName = configState is AppConfigLoaded &&
                   configState.config.companyName.isNotEmpty

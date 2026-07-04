@@ -105,7 +105,9 @@ class _DelegateHomePageState extends State<DelegateHomePage> {
           children: [
             BlocBuilder<AppConfigBloc, AppConfigState>(
               builder: (_, state) {
-                final logoUrl = state is AppConfigLoaded ? state.config.logoUrl : null;
+                final logoUrl = state is AppConfigLoaded
+                    ? (state.config.logoColorUrl ?? state.config.logoUrl)
+                    : null;
                 return AppLogo(logoUrl: logoUrl, size: 34, borderRadius: 8);
               },
             ),

@@ -60,7 +60,7 @@ class _LoginPageState extends State<LoginPage> {
                   BlocBuilder<AppConfigBloc, AppConfigState>(
                     builder: (_, state) {
                       final logoUrl = state is AppConfigLoaded
-                          ? state.config.logoUrl
+                          ? (state.config.logoColorUrl ?? state.config.logoUrl)
                           : null;
                       return AppLogo(logoUrl: logoUrl);
                     },

@@ -1,8 +1,8 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/app_snackbar.dart';
+import '../../../../core/utils/polling_mixin.dart';
 import '../../../../core/widgets/state_views.dart';
 import '../bloc/delegate_bloc.dart';
 import '../bloc/delegate_event.dart';
@@ -24,7 +24,8 @@ class SettlementPage extends StatefulWidget {
   State<SettlementPage> createState() => _SettlementPageState();
 }
 
-class _SettlementPageState extends State<SettlementPage> {
+class _SettlementPageState extends State<SettlementPage>
+    with PollingMixin<SettlementPage> {
   SettlementSummaryModel? _summary;
   String? _summaryError;
   bool _submitting = false;
@@ -36,7 +37,6 @@ class _SettlementPageState extends State<SettlementPage> {
   // "confirmed" state instead of just reverting to "no active loading".
   int? _submittedLoadingId;
   bool _confirmed = false;
-  Timer? _pollTimer;
 
   final _cashCtrl = TextEditingController(text: '0');
   final _walletCtrl = TextEditingController(text: '0');
@@ -45,6 +45,10 @@ class _SettlementPageState extends State<SettlementPage> {
   void initState() {
     super.initState();
     _fetchSummary();
+    // Runs continuously (not just while awaiting confirmation) so a new
+    // loading assigned after confirmation is also picked up automatically —
+    // PollingMixin pauses/resumes with the app foreground state on its own.
+    startPolling();
   }
 
   @override
@@ -57,25 +61,21 @@ class _SettlementPageState extends State<SettlementPage> {
 
   @override
   void dispose() {
-    _pollTimer?.cancel();
+    stopPolling();
     _cashCtrl.dispose();
     _walletCtrl.dispose();
     super.dispose();
   }
 
+  @override
+  void onPoll() {
+    if (_submitting) return; // don't clobber an in-flight submit
+    _fetchSummary();
+  }
+
   void _fetchSummary() {
     setState(() => _summaryError = null);
     context.read<DelegateBloc>().add(DelegateSettlementSummaryRequested());
-  }
-
-  /// While awaiting admin confirmation, poll periodically so the delegate
-  /// sees confirmation as soon as it happens instead of only after manually
-  /// reopening the app or switching tabs.
-  void _startPolling() {
-    _pollTimer?.cancel();
-    _pollTimer = Timer.periodic(const Duration(seconds: 15), (_) {
-      if (!_confirmed) _fetchSummary();
-    });
   }
 
   void _submit() {
@@ -113,8 +113,6 @@ class _SettlementPageState extends State<SettlementPage> {
             final isNewLoading = _submittedLoadingId != null && _submittedLoadingId != newLoadingId;
             final hasPendingRequest = _submittedLoadingId == null && state.summary.settlementRequestId != null;
 
-            if (isNewLoading) _pollTimer?.cancel();
-
             setState(() {
               _summary = state.summary;
               _summaryError = null;
@@ -137,15 +135,12 @@ class _SettlementPageState extends State<SettlementPage> {
                 _submittedMessage = 'يوجد طلب تسليم قيد الانتظار لهذه التحميلة.';
               }
             });
-
-            if (hasPendingRequest) _startPolling();
           } else if (state is DelegateSettlementRequestSubmittedState) {
             setState(() {
               _submitting = false;
               _submittedLoadingId = _summary?.loadingId;
               _submittedMessage = state.message;
             });
-            _startPolling();
           } else if (state is DelegateFailure) {
             if (_submitting) {
               setState(() => _submitting = false);
@@ -154,7 +149,6 @@ class _SettlementPageState extends State<SettlementPage> {
               // myShiftSummary() only 404s when there's no active (unsettled)
               // loading — while we're waiting on a submitted request, that
               // means admin just confirmed the settlement, not a real error.
-              _pollTimer?.cancel();
               setState(() {
                 _confirmed = true;
                 _summary = null;
@@ -162,6 +156,8 @@ class _SettlementPageState extends State<SettlementPage> {
             } else if (_summary == null) {
               setState(() => _summaryError = state.message);
             }
+            // else: a background poll failed while data is already showing
+            // (awaiting-confirmation or normal view) — silent, retry next tick.
           }
         },
         child: _buildBody(context),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/app_snackbar.dart';
+import '../../../../core/utils/polling_mixin.dart';
 import '../bloc/delegate_bloc.dart';
 import '../bloc/delegate_event.dart';
 import '../bloc/delegate_state.dart';
@@ -16,7 +17,7 @@ class LoadingPage extends StatefulWidget {
   State<LoadingPage> createState() => _LoadingPageState();
 }
 
-class _LoadingPageState extends State<LoadingPage> {
+class _LoadingPageState extends State<LoadingPage> with PollingMixin<LoadingPage> {
   LoadingModel? _currentLoading;
 
   // Guards confirm/status-update actions against a double-tap firing two
@@ -44,12 +45,34 @@ class _LoadingPageState extends State<LoadingPage> {
   bool _fetchInFlight = false;
   String? _loadError;
 
+  // Set (never via setState — must stay invisible) while a silent
+  // PollingMixin tick's fetch is outstanding, so its result/failure can be
+  // told apart from an explicit fetch (which drives the spinner/full-screen
+  // error) without ever touching those visible-UI flags itself.
+  bool _pollInFlight = false;
+
   @override
   void initState() {
     super.initState();
     // Set directly rather than via _fetchLoading()'s setState — calling
     // setState before the first build is redundant (nothing to rebuild yet).
     _fetchInFlight = true;
+    context.read<DelegateBloc>().add(DelegateLoadingFetched());
+    startPolling();
+  }
+
+  @override
+  void dispose() {
+    stopPolling();
+    super.dispose();
+  }
+
+  @override
+  void onPoll() {
+    // Never overlap with an explicit fetch/action already in flight —
+    // whichever is already running will settle this page's state on its own.
+    if (_fetchInFlight || _actionInFlight || _pollInFlight) return;
+    _pollInFlight = true;
     context.read<DelegateBloc>().add(DelegateLoadingFetched());
   }
 
@@ -113,6 +136,9 @@ class _LoadingPageState extends State<LoadingPage> {
                 _loadError = state.message;
               });
               AppSnackbar.showError(ctx, state.message);
+            } else if (_pollInFlight) {
+              // Silent poll tick failed — retry next tick, never surface it.
+              _pollInFlight = false;
             }
             // else: belongs to some unrelated dispatch on the shared
             // DelegateBloc (e.g. _HomeTab's own still-in-flight shipment
@@ -121,17 +147,29 @@ class _LoadingPageState extends State<LoadingPage> {
           }
 
           if (state is DelegateLoadingLoaded) {
-            if (!_fetchInFlight) return; // not ours — see note above
-            // No auto-navigate here: this page is now reached explicitly via
-            // "عرض التفاصيل" from DelegateHomePage, so simply fetching/
-            // displaying the loading must never redirect the user away from
-            // the details they asked to see. The confirm action still jumps
-            // to InvoicePage via DelegateLoadingConfirmedState above.
-            setState(() {
-              _currentLoading = state.loading;
-              _fetchInFlight = false;
-              _loadError = null;
-            });
+            if (_fetchInFlight) {
+              // No auto-navigate here: this page is now reached explicitly
+              // via "عرض التفاصيل" from DelegateHomePage, so simply fetching/
+              // displaying the loading must never redirect the user away
+              // from the details they asked to see. The confirm action
+              // still jumps to InvoicePage via DelegateLoadingConfirmedState.
+              setState(() {
+                _currentLoading = state.loading;
+                _fetchInFlight = false;
+                _loadError = null;
+              });
+            } else if (_pollInFlight) {
+              _pollInFlight = false;
+              // Silent refresh: update data with no spinner/flicker. Skip
+              // the rebuild entirely if nothing actually changed.
+              if (_currentLoading?.status != state.loading?.status ||
+                  _currentLoading?.items.length != state.loading?.items.length) {
+                setState(() => _currentLoading = state.loading);
+              } else {
+                _currentLoading = state.loading;
+              }
+            }
+            // else: not ours — see note above
           }
         },
         builder: (_, state) {

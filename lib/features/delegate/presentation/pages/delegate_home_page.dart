@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/app_snackbar.dart';
+import '../../../../core/utils/polling_mixin.dart';
 import '../../../../core/widgets/app_logo.dart';
 import '../../../../core/widgets/state_views.dart';
 import '../../../app_config/presentation/bloc/app_config_bloc.dart';
@@ -198,7 +199,7 @@ class _HomeTab extends StatefulWidget {
   State<_HomeTab> createState() => _HomeTabState();
 }
 
-class _HomeTabState extends State<_HomeTab> {
+class _HomeTabState extends State<_HomeTab> with PollingMixin<_HomeTab> {
   LoadingModel? _loading;
   String? _loadingError;
   bool _hasLoadingResult = false;
@@ -210,6 +211,31 @@ class _HomeTabState extends State<_HomeTab> {
   // own first Loaded/Failure, keeping the two requests non-overlapping and
   // their DelegateFailure results unambiguous.
   bool _dashboardSettled = false;
+
+  // Set while a silent PollingMixin tick's fetch is outstanding, so its
+  // result can be told apart from the explicit initial/manual fetch.
+  bool _pollInFlight = false;
+
+  @override
+  void initState() {
+    super.initState();
+    startPolling();
+  }
+
+  @override
+  void dispose() {
+    stopPolling();
+    super.dispose();
+  }
+
+  @override
+  void onPoll() {
+    // Nothing to refresh yet, or an explicit fetch/dashboard sequencing is
+    // still in progress — let that settle first rather than overlapping.
+    if (!_dashboardSettled || _pollInFlight) return;
+    _pollInFlight = true;
+    context.read<DelegateBloc>().add(DelegateLoadingFetched());
+  }
 
   void _fetchLoading() {
     setState(() => _loadingError = null);
@@ -229,6 +255,7 @@ class _HomeTabState extends State<_HomeTab> {
           return;
         }
         if (state is DelegateLoadingLoaded) {
+          _pollInFlight = false;
           setState(() {
             _loading = state.loading;
             _loadingError = null;
@@ -236,10 +263,23 @@ class _HomeTabState extends State<_HomeTab> {
           });
           widget.onLoadingChanged(state.loading);
         } else if (state is DelegateFailure) {
-          setState(() {
-            _loadingError = state.message;
-            _hasLoadingResult = true;
-          });
+          if (_pollInFlight) {
+            _pollInFlight = false;
+            if (_loading == null) {
+              // No good data to protect — safe to show/update the error.
+              setState(() {
+                _loadingError = state.message;
+                _hasLoadingResult = true;
+              });
+            }
+            // else: silent — keep showing the last-good shipment card,
+            // retry next tick, per PollingMixin's contract.
+          } else {
+            setState(() {
+              _loadingError = state.message;
+              _hasLoadingResult = true;
+            });
+          }
         }
       },
       child: SingleChildScrollView(

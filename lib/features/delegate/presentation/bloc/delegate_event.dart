@@ -25,16 +25,29 @@ class DelegateClientCreated extends DelegateEvent {
   final String name;
   final String phone;
   final String? region;
+  final int? customerRegionId;
   final double? initialBalance;
   DelegateClientCreated({
     required this.name,
     required this.phone,
     this.region,
+    this.customerRegionId,
     this.initialBalance,
   });
   @override
-  List<Object?> get props => [name, phone, region, initialBalance];
+  List<Object?> get props => [name, phone, region, customerRegionId, initialBalance];
 }
+
+class DelegateSellableProductsFetched extends DelegateEvent {
+  final int? customerId;
+  DelegateSellableProductsFetched({this.customerId});
+  @override
+  List<Object?> get props => [customerId];
+}
+
+class DelegateSalesCatalogFetched extends DelegateEvent {}
+
+class DelegateCustomerRegionsFetched extends DelegateEvent {}
 
 class DelegateInvoiceSubmitted extends DelegateEvent {
   final int clientId;

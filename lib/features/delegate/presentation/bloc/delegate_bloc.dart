@@ -19,6 +19,9 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
     on<DelegateInvoiceSubmitted>(_onSubmitInvoice);
     on<DelegateInvoicesFetched>(_onFetchInvoices);
     on<DelegateLoadingStatusUpdateRequested>(_onUpdateLoadingStatus);
+    on<DelegateSellableProductsFetched>(_onFetchSellableProducts);
+    on<DelegateSalesCatalogFetched>(_onFetchSalesCatalog);
+    on<DelegateCustomerRegionsFetched>(_onFetchCustomerRegions);
   }
 
   Future<void> _onFetchLoading(
@@ -105,9 +108,62 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
         name: event.name,
         phone: event.phone,
         region: event.region,
+        customerRegionId: event.customerRegionId,
         initialBalance: event.initialBalance,
       );
       emit(DelegateClientCreatedState(client));
+    } on DioException catch (e) {
+      final fieldErrors = e.response?.data?['errors'] as Map<String, dynamic>?;
+      if (e.response?.statusCode == 422 && fieldErrors != null) {
+        emit(DelegateClientValidationFailure(
+          fieldErrors.map((k, v) => MapEntry(k, (v as List).map((s) => s.toString()).toList())),
+          _parseError(e),
+        ));
+      } else {
+        emit(DelegateFailure(_parseError(e)));
+      }
+    } catch (_) {
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
+    }
+  }
+
+  Future<void> _onFetchSellableProducts(
+    DelegateSellableProductsFetched event,
+    Emitter<DelegateState> emit,
+  ) async {
+    emit(DelegateLoading());
+    try {
+      final products = await _repo.getSellableProducts(customerId: event.customerId);
+      emit(DelegateSellableProductsLoaded(products));
+    } on DioException catch (e) {
+      emit(DelegateFailure(_parseError(e)));
+    } catch (_) {
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
+    }
+  }
+
+  Future<void> _onFetchSalesCatalog(
+    DelegateSalesCatalogFetched event,
+    Emitter<DelegateState> emit,
+  ) async {
+    emit(DelegateLoading());
+    try {
+      final products = await _repo.getSalesCatalogProducts();
+      emit(DelegateSalesCatalogLoaded(products));
+    } on DioException catch (e) {
+      emit(DelegateFailure(_parseError(e)));
+    } catch (_) {
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
+    }
+  }
+
+  Future<void> _onFetchCustomerRegions(
+    DelegateCustomerRegionsFetched event,
+    Emitter<DelegateState> emit,
+  ) async {
+    try {
+      final regions = await _repo.getCustomerRegions();
+      emit(DelegateCustomerRegionsLoaded(regions));
     } on DioException catch (e) {
       emit(DelegateFailure(_parseError(e)));
     } catch (_) {

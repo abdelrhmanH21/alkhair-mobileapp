@@ -6,6 +6,8 @@ import '../bloc/delegate_event.dart';
 import '../bloc/delegate_state.dart';
 import '../../data/models/client_model.dart';
 import '../../data/models/invoice_model.dart';
+import '../../data/models/sellable_product_model.dart';
+import '../../data/models/catalog_product_model.dart';
 // ignore: unused_import
 import '../widgets/add_client_sheet.dart';
 import 'invoice_history_page.dart';
@@ -206,6 +208,7 @@ class _InvoicePageState extends State<InvoicePage> {
                   Expanded(
                     child: _SalesSection(
                       items: _salesItems,
+                      clientId: _selectedClient?.id,
                       onChange: () => setState(() {}),
                     ),
                   ),
@@ -406,16 +409,26 @@ class _ClientSearchSection extends StatelessWidget {
 
 class _SalesSection extends StatelessWidget {
   final List<InvoiceSaleItem> items;
+  final int? clientId;
   final VoidCallback onChange;
-  const _SalesSection({required this.items, required this.onChange});
+  const _SalesSection({required this.items, required this.clientId, required this.onChange});
 
   void _addItem(BuildContext context) {
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (_) => _AddSaleItemDialog(onAdd: (item) {
-        items.add(item);
-        onChange();
-      }),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => BlocProvider.value(
+        value: context.read<DelegateBloc>(),
+        child: _SellableProductPickerSheet(
+          clientId: clientId,
+          onAdd: (item) {
+            items.add(item);
+            onChange();
+          },
+        ),
+      ),
     );
   }
 
@@ -509,24 +522,18 @@ class _SaleItemRow extends StatelessWidget {
               children: [
                 Expanded(
                   child: _SmallNumberField(
-                    label: 'كمية',
+                    label: item.maxQty.isFinite ? 'كمية (حتى ${item.maxQty.toStringAsFixed(0)})' : 'كمية',
                     initialValue: item.quantity.toString(),
                     onChanged: (v) {
-                      item.quantity = double.tryParse(v) ?? 0;
+                      final qty = double.tryParse(v) ?? 0;
+                      item.quantity = qty.clamp(0, item.maxQty);
                       onChange();
                     },
                   ),
                 ),
                 const SizedBox(width: 4),
                 Expanded(
-                  child: _SmallNumberField(
-                    label: 'سعر',
-                    initialValue: item.unitPrice.toString(),
-                    onChanged: (v) {
-                      item.unitPrice = double.tryParse(v) ?? 0;
-                      onChange();
-                    },
-                  ),
+                  child: _ReadOnlyPriceField(price: item.unitPrice),
                 ),
               ],
             ),
@@ -547,12 +554,18 @@ class _ReturnsSection extends StatelessWidget {
   const _ReturnsSection({required this.items, required this.onChange});
 
   void _addItem(BuildContext context) {
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (_) => _AddReturnItemDialog(onAdd: (item) {
-        items.add(item);
-        onChange();
-      }),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => BlocProvider.value(
+        value: context.read<DelegateBloc>(),
+        child: _ReturnProductPickerSheet(onAdd: (item) {
+          items.add(item);
+          onChange();
+        }),
+      ),
     );
   }
 
@@ -661,14 +674,7 @@ class _ReturnItemRowState extends State<_ReturnItemRow> {
                 ),
                 const SizedBox(width: 4),
                 Expanded(
-                  child: _SmallNumberField(
-                    label: 'سعر',
-                    initialValue: widget.item.unitPrice.toString(),
-                    onChanged: (v) {
-                      widget.item.unitPrice = double.tryParse(v) ?? 0;
-                      widget.onChange();
-                    },
-                  ),
+                  child: _ReadOnlyPriceField(price: widget.item.unitPrice),
                 ),
               ],
             ),
@@ -818,151 +824,337 @@ class _TotalRow extends StatelessWidget {
       );
 }
 
-// ─── Dialogs for adding items ──────────────────────────────────────────────────
+// ─── Sellable-products picker (sales) ──────────────────────────────────────────
+//
+// Sourced ONLY from GET /delegate/sellable-products (the delegate's actual
+// truck stock, with server-resolved prices). Never free-typed — see the
+// backend fix in DelegateLoadingController::sellableProducts /
+// DelegateInvoiceController::store on the alkhair-erp repo.
 
-class _AddSaleItemDialog extends StatefulWidget {
+class _SellableProductPickerSheet extends StatefulWidget {
+  final int? clientId;
   final void Function(InvoiceSaleItem) onAdd;
-  const _AddSaleItemDialog({required this.onAdd});
+  const _SellableProductPickerSheet({required this.clientId, required this.onAdd});
 
   @override
-  State<_AddSaleItemDialog> createState() => _AddSaleItemDialogState();
+  State<_SellableProductPickerSheet> createState() => _SellableProductPickerSheetState();
 }
 
-class _AddSaleItemDialogState extends State<_AddSaleItemDialog> {
-  final _nameCtrl  = TextEditingController();
-  final _idCtrl    = TextEditingController();
-  final _qtyCtrl   = TextEditingController(text: '1');
-  final _priceCtrl = TextEditingController(text: '0');
+class _SellableProductPickerSheetState extends State<_SellableProductPickerSheet> {
+  List<SellableProductModel> _products = [];
+  SellableProductModel? _selected;
+  final _qtyCtrl = TextEditingController(text: '1');
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
-        title: const Text('إضافة منتج'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: _idCtrl,
-              decoration: const InputDecoration(labelText: 'رقم المنتج (ID)'),
-              keyboardType: TextInputType.number,
+  void initState() {
+    super.initState();
+    context.read<DelegateBloc>().add(
+        DelegateSellableProductsFetched(customerId: widget.clientId));
+  }
+
+  @override
+  void dispose() {
+    _qtyCtrl.dispose();
+    super.dispose();
+  }
+
+  void _confirmAdd() {
+    final product = _selected;
+    if (product == null) return;
+    final qty = (double.tryParse(_qtyCtrl.text) ?? 0).clamp(0, product.availableQty).toDouble();
+    if (qty <= 0) return;
+    widget.onAdd(InvoiceSaleItem(
+      productId: product.productId,
+      productName: product.name,
+      maxQty: product.availableQty,
+      quantity: qty,
+      unitPrice: product.unitPrice,
+    ));
+    Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+        left: 16,
+        right: 16,
+        top: 16,
+      ),
+      child: BlocConsumer<DelegateBloc, DelegateState>(
+        listener: (ctx, state) {
+          if (state is DelegateSellableProductsLoaded) {
+            setState(() => _products = state.products);
+          }
+        },
+        builder: (ctx, state) {
+          final loading = state is DelegateLoading && _products.isEmpty;
+          return SizedBox(
+            height: MediaQuery.of(context).size.height * 0.6,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    const Text('اختر منتجاً من مخزون الشاحنة',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    const Spacer(),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                ),
+                if (loading)
+                  const Expanded(child: Center(child: CircularProgressIndicator()))
+                else if (_products.isEmpty)
+                  const Expanded(
+                    child: Center(
+                      child: Text('لا يوجد مخزون متاح في الشاحنة',
+                          style: TextStyle(color: Colors.grey)),
+                    ),
+                  )
+                else
+                  Expanded(
+                    child: ListView.separated(
+                      itemCount: _products.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (_, i) {
+                        final p = _products[i];
+                        final isSelected = _selected?.productId == p.productId;
+                        return ListTile(
+                          selected: isSelected,
+                          selectedTileColor: AppTheme.primary.withValues(alpha: 0.08),
+                          title: Text(p.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                          subtitle: Text('متاح: ${p.availableQty.toStringAsFixed(2)} ${p.unit}'),
+                          trailing: Text(p.unitPrice.toStringAsFixed(2),
+                              style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primary)),
+                          onTap: () => setState(() {
+                            _selected = p;
+                            _qtyCtrl.text = '1';
+                          }),
+                        );
+                      },
+                    ),
+                  ),
+                if (_selected != null) ...[
+                  const Divider(),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text('الكمية (حتى ${_selected!.availableQty.toStringAsFixed(2)})',
+                            style: const TextStyle(fontSize: 12)),
+                      ),
+                      SizedBox(
+                        width: 90,
+                        child: TextField(
+                          controller: _qtyCtrl,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          textAlign: TextAlign.center,
+                          textDirection: TextDirection.ltr,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  ElevatedButton(
+                    onPressed: _confirmAdd,
+                    child: const Text('إضافة'),
+                  ),
+                ],
+                const SizedBox(height: 12),
+              ],
             ),
-            TextField(
-              controller: _nameCtrl,
-              decoration: const InputDecoration(labelText: 'اسم المنتج'),
-            ),
-            TextField(
-              controller: _qtyCtrl,
-              decoration: const InputDecoration(labelText: 'الكمية'),
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            ),
-            TextField(
-              controller: _priceCtrl,
-              decoration: const InputDecoration(labelText: 'سعر الوحدة'),
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('إلغاء')),
-          ElevatedButton(
-            onPressed: () {
-              final id = int.tryParse(_idCtrl.text);
-              if (id == null || _nameCtrl.text.isEmpty) return;
-              widget.onAdd(InvoiceSaleItem(
-                productId: id,
-                productName: _nameCtrl.text,
-                quantity: double.tryParse(_qtyCtrl.text) ?? 1,
-                unitPrice: double.tryParse(_priceCtrl.text) ?? 0,
-              ));
-              Navigator.pop(context);
-            },
-            child: const Text('إضافة'),
-          ),
-        ],
-      );
+          );
+        },
+      ),
+    );
+  }
 }
 
-class _AddReturnItemDialog extends StatefulWidget {
+// ─── Sales-catalog picker (returns) ────────────────────────────────────────────
+//
+// Sourced from GET /products?is_sales_item=true. The price shown is the
+// product's base sale_price for display only — the server always
+// re-resolves the authoritative price on submit (never trusts client input).
+
+class _ReturnProductPickerSheet extends StatefulWidget {
   final void Function(InvoiceReturnItem) onAdd;
-  const _AddReturnItemDialog({required this.onAdd});
+  const _ReturnProductPickerSheet({required this.onAdd});
 
   @override
-  State<_AddReturnItemDialog> createState() => _AddReturnItemDialogState();
+  State<_ReturnProductPickerSheet> createState() => _ReturnProductPickerSheetState();
 }
 
-class _AddReturnItemDialogState extends State<_AddReturnItemDialog> {
-  final _nameCtrl  = TextEditingController();
-  final _idCtrl    = TextEditingController();
-  final _qtyCtrl   = TextEditingController(text: '1');
-  final _priceCtrl = TextEditingController(text: '0');
+class _ReturnProductPickerSheetState extends State<_ReturnProductPickerSheet> {
+  List<CatalogProductModel> _products = [];
+  CatalogProductModel? _selected;
+  final _qtyCtrl = TextEditingController(text: '1');
   String _condition = 'سليم';
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
-        title: const Text('إضافة مرتجع'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: _idCtrl,
-              decoration: const InputDecoration(labelText: 'رقم المنتج (ID)'),
-              keyboardType: TextInputType.number,
-            ),
-            TextField(
-              controller: _nameCtrl,
-              decoration: const InputDecoration(labelText: 'اسم المنتج'),
-            ),
-            TextField(
-              controller: _qtyCtrl,
-              decoration: const InputDecoration(labelText: 'الكمية'),
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            ),
-            TextField(
-              controller: _priceCtrl,
-              decoration: const InputDecoration(labelText: 'سعر الوحدة'),
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            ),
-            const SizedBox(height: 8),
-            Row(
+  void initState() {
+    super.initState();
+    context.read<DelegateBloc>().add(DelegateSalesCatalogFetched());
+  }
+
+  @override
+  void dispose() {
+    _qtyCtrl.dispose();
+    super.dispose();
+  }
+
+  void _confirmAdd() {
+    final product = _selected;
+    if (product == null) return;
+    final qty = double.tryParse(_qtyCtrl.text) ?? 0;
+    if (qty <= 0) return;
+    widget.onAdd(InvoiceReturnItem(
+      productId: product.id,
+      productName: product.name,
+      quantity: qty,
+      unitPrice: product.salePrice,
+      condition: _condition,
+    ));
+    Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+        left: 16,
+        right: 16,
+        top: 16,
+      ),
+      child: BlocConsumer<DelegateBloc, DelegateState>(
+        listener: (ctx, state) {
+          if (state is DelegateSalesCatalogLoaded) {
+            setState(() => _products = state.products);
+          }
+        },
+        builder: (ctx, state) {
+          final loading = state is DelegateLoading && _products.isEmpty;
+          return SizedBox(
+            height: MediaQuery.of(context).size.height * 0.6,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Text('الحالة: '),
-                ChoiceChip(
-                  label: const Text('سليم'),
-                  selected: _condition == 'سليم',
-                  onSelected: (_) => setState(() => _condition = 'سليم'),
+                Row(
+                  children: [
+                    const Text('اختر منتجاً للمرتجع',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                    const Spacer(),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 8),
-                ChoiceChip(
-                  label: const Text('تالف'),
-                  selected: _condition == 'تالف',
-                  onSelected: (_) => setState(() => _condition = 'تالف'),
-                  selectedColor: AppTheme.danger.withValues(alpha: 0.3),
-                ),
+                if (loading)
+                  const Expanded(child: Center(child: CircularProgressIndicator()))
+                else if (_products.isEmpty)
+                  const Expanded(
+                    child: Center(
+                      child: Text('لا توجد منتجات متاحة',
+                          style: TextStyle(color: Colors.grey)),
+                    ),
+                  )
+                else
+                  Expanded(
+                    child: ListView.separated(
+                      itemCount: _products.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (_, i) {
+                        final p = _products[i];
+                        final isSelected = _selected?.id == p.id;
+                        return ListTile(
+                          selected: isSelected,
+                          selectedTileColor: AppTheme.accent.withValues(alpha: 0.08),
+                          title: Text(p.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                          subtitle: Text(p.unit),
+                          trailing: Text(p.salePrice.toStringAsFixed(2),
+                              style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.accent)),
+                          onTap: () => setState(() {
+                            _selected = p;
+                            _qtyCtrl.text = '1';
+                          }),
+                        );
+                      },
+                    ),
+                  ),
+                if (_selected != null) ...[
+                  const Divider(),
+                  Row(
+                    children: [
+                      const Expanded(child: Text('الكمية', style: TextStyle(fontSize: 12))),
+                      SizedBox(
+                        width: 90,
+                        child: TextField(
+                          controller: _qtyCtrl,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          textAlign: TextAlign.center,
+                          textDirection: TextDirection.ltr,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Text('الحالة: '),
+                      ChoiceChip(
+                        label: const Text('سليم'),
+                        selected: _condition == 'سليم',
+                        onSelected: (_) => setState(() => _condition = 'سليم'),
+                      ),
+                      const SizedBox(width: 8),
+                      ChoiceChip(
+                        label: const Text('تالف'),
+                        selected: _condition == 'تالف',
+                        onSelected: (_) => setState(() => _condition = 'تالف'),
+                        selectedColor: AppTheme.danger.withValues(alpha: 0.3),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  ElevatedButton(
+                    onPressed: _confirmAdd,
+                    child: const Text('إضافة'),
+                  ),
+                ],
+                const SizedBox(height: 12),
               ],
             ),
-          ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+// ─── Read-only price display (server-resolved, never free-typed) ─────────────
+
+class _ReadOnlyPriceField extends StatelessWidget {
+  final double price;
+  const _ReadOnlyPriceField({required this.price});
+
+  @override
+  Widget build(BuildContext context) => InputDecorator(
+        decoration: const InputDecoration(
+          labelText: 'سعر',
+          labelStyle: TextStyle(fontSize: 10),
+          isDense: true,
+          contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 8),
         ),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('إلغاء')),
-          ElevatedButton(
-            onPressed: () {
-              final id = int.tryParse(_idCtrl.text);
-              if (id == null || _nameCtrl.text.isEmpty) return;
-              widget.onAdd(InvoiceReturnItem(
-                productId: id,
-                productName: _nameCtrl.text,
-                quantity: double.tryParse(_qtyCtrl.text) ?? 1,
-                unitPrice: double.tryParse(_priceCtrl.text) ?? 0,
-                condition: _condition,
-              ));
-              Navigator.pop(context);
-            },
-            child: const Text('إضافة'),
-          ),
-        ],
+        child: Text(
+          price.toStringAsFixed(2),
+          textDirection: TextDirection.ltr,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 12),
+        ),
       );
 }
 

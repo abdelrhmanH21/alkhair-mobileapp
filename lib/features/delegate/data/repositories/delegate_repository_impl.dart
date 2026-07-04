@@ -3,6 +3,9 @@ import '../models/loading_model.dart';
 import '../models/client_model.dart';
 import '../models/invoice_model.dart';
 import '../models/dashboard_model.dart';
+import '../models/sellable_product_model.dart';
+import '../models/catalog_product_model.dart';
+import '../models/customer_region_model.dart';
 import '../../domain/repositories/delegate_repository.dart';
 
 class DelegateRepositoryImpl implements DelegateRepository {
@@ -30,14 +33,28 @@ class DelegateRepositoryImpl implements DelegateRepository {
     required String name,
     required String phone,
     String? region,
+    int? customerRegionId,
     double? initialBalance,
   }) =>
       _remote.createClient(
         name: name,
         phone: phone,
         region: region,
+        customerRegionId: customerRegionId,
         initialBalance: initialBalance,
       );
+
+  @override
+  Future<List<SellableProductModel>> getSellableProducts({int? customerId}) =>
+      _remote.fetchSellableProducts(customerId: customerId);
+
+  @override
+  Future<List<CatalogProductModel>> getSalesCatalogProducts() =>
+      _remote.fetchSalesCatalogProducts();
+
+  @override
+  Future<List<CustomerRegionModel>> getCustomerRegions() =>
+      _remote.fetchCustomerRegions();
 
   @override
   Future<DelegateInvoiceModel> submitInvoice({

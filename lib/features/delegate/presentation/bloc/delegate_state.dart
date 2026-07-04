@@ -3,6 +3,9 @@ import '../../data/models/loading_model.dart';
 import '../../data/models/client_model.dart';
 import '../../data/models/invoice_model.dart';
 import '../../data/models/dashboard_model.dart';
+import '../../data/models/sellable_product_model.dart';
+import '../../data/models/catalog_product_model.dart';
+import '../../data/models/customer_region_model.dart';
 
 abstract class DelegateState extends Equatable {
   @override
@@ -76,9 +79,42 @@ class DelegateDashboardLoaded extends DelegateState {
   List<Object?> get props => [dashboard];
 }
 
+class DelegateSellableProductsLoaded extends DelegateState {
+  final List<SellableProductModel> products;
+  DelegateSellableProductsLoaded(this.products);
+  @override
+  List<Object?> get props => [products];
+}
+
+class DelegateSalesCatalogLoaded extends DelegateState {
+  final List<CatalogProductModel> products;
+  DelegateSalesCatalogLoaded(this.products);
+  @override
+  List<Object?> get props => [products];
+}
+
+class DelegateCustomerRegionsLoaded extends DelegateState {
+  final List<CustomerRegionModel> regions;
+  DelegateCustomerRegionsLoaded(this.regions);
+  @override
+  List<Object?> get props => [regions];
+}
+
 class DelegateFailure extends DelegateState {
   final String message;
   DelegateFailure(this.message);
   @override
   List<Object?> get props => [message];
+}
+
+/// Field-level validation failure (Laravel 422 `errors` map), e.g. the
+/// phone-duplicate check in DelegateClientController::store. Kept separate
+/// from [DelegateFailure] so the UI can target a specific form field instead
+/// of only showing a generic snackbar.
+class DelegateClientValidationFailure extends DelegateState {
+  final Map<String, List<String>> errors;
+  final String message;
+  DelegateClientValidationFailure(this.errors, this.message);
+  @override
+  List<Object?> get props => [errors, message];
 }

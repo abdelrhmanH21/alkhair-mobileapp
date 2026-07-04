@@ -1,3 +1,13 @@
+/// Parses a field that may arrive as either a JSON number or a numeric
+/// string (Laravel's `decimal:N` Eloquent cast always serializes as a
+/// string, e.g. "55.00", unlike `float`/`double` casts).
+double _asDouble(dynamic value, [double fallback = 0]) {
+  if (value == null) return fallback;
+  if (value is num) return value.toDouble();
+  if (value is String) return double.tryParse(value) ?? fallback;
+  return fallback;
+}
+
 class DashboardStatsModel {
   final int todayInvoicesCount;
   final double todayGrossSales;
@@ -86,7 +96,9 @@ class SimpleProductModel {
         id: json['id'] as int,
         name: json['name'] as String,
         unit: json['unit'] as String? ?? '',
-        salePrice: (json['sale_price'] as num? ?? 0).toDouble(),
+        // Product.sale_price is an Eloquent `decimal:2` cast, which Laravel
+        // always serializes as a JSON string (e.g. "55.00"), not a number.
+        salePrice: _asDouble(json['sale_price']),
       );
 
   @override

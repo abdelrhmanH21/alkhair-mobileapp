@@ -21,7 +21,7 @@ class AdminBloc extends Bloc<AdminEvent, AdminState> {
     try {
       final stats = await _remote.fetchDashboard();
       emit(AdminDashboardLoaded(stats));
-    } on DioException catch (e) {
+    } catch (e) {
       emit(AdminFailure(_msg(e)));
     }
   }
@@ -32,7 +32,7 @@ class AdminBloc extends Bloc<AdminEvent, AdminState> {
     try {
       final delegates = await _remote.fetchDelegates();
       emit(AdminDelegatesLoaded(delegates));
-    } on DioException catch (e) {
+    } catch (e) {
       emit(AdminFailure(_msg(e)));
     }
   }
@@ -43,7 +43,7 @@ class AdminBloc extends Bloc<AdminEvent, AdminState> {
     try {
       final summary = await _remote.fetchShiftSummary(e.delegateId);
       emit(AdminShiftSummaryLoaded(summary));
-    } on DioException catch (e) {
+    } catch (e) {
       emit(AdminFailure(_msg(e)));
     }
   }
@@ -59,7 +59,7 @@ class AdminBloc extends Bloc<AdminEvent, AdminState> {
         notes: e.notes,
       );
       emit(AdminSettlementSuccess(result));
-    } on DioException catch (e) {
+    } catch (e) {
       emit(AdminFailure(_msg(e)));
     }
   }
@@ -76,7 +76,7 @@ class AdminBloc extends Bloc<AdminEvent, AdminState> {
         warehouses: warehouses,
         products: products,
       ));
-    } on DioException catch (e) {
+    } catch (e) {
       emit(AdminFailure(_msg(e)));
     }
   }
@@ -92,11 +92,15 @@ class AdminBloc extends Bloc<AdminEvent, AdminState> {
         notes: e.notes,
       );
       emit(AdminLoadingCreatedSuccess('تم إنشاء التحميلة وإرسالها للمندوب.'));
-    } on DioException catch (e) {
+    } catch (e) {
       emit(AdminFailure(_msg(e)));
     }
   }
 
-  String _msg(DioException e) =>
-      e.response?.data?['message'] as String? ?? 'فشل الاتصال بالخادم.';
+  String _msg(Object e) {
+    if (e is DioException) {
+      return e.response?.data?['message'] as String? ?? 'فشل الاتصال بالخادم.';
+    }
+    return 'حدث خطأ غير متوقع: $e';
+  }
 }

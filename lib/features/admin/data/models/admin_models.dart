@@ -49,8 +49,11 @@ class TopProductModel {
   factory TopProductModel.fromJson(Map<String, dynamic> json) =>
       TopProductModel(
         name: json['name'] as String,
-        totalQty: (json['total_qty'] as num).toDouble(),
-        totalRevenue: (json['total_revenue'] as num).toDouble(),
+        // total_qty/total_revenue come from a raw SUM() over decimal
+        // columns (dashboardStats()'s selectRaw query) — MySQL/PDO returns
+        // decimal aggregates as strings, bypassing Eloquent casts entirely.
+        totalQty: _asDouble(json['total_qty']),
+        totalRevenue: _asDouble(json['total_revenue']),
       );
 }
 

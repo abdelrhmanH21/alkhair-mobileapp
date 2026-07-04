@@ -55,6 +55,7 @@ class AdminBloc extends Bloc<AdminEvent, AdminState> {
       final result = await _remote.settleDelegate(
         delegateId: e.delegateId,
         treasuryId: e.treasuryId,
+        settlementRequestId: e.settlementRequestId,
         physicalCash: e.physicalCash,
         notes: e.notes,
       );

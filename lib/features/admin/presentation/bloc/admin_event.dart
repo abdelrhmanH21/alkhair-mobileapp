@@ -19,16 +19,18 @@ class AdminShiftSummaryFetched extends AdminEvent {
 class AdminDelegateSettled extends AdminEvent {
   final int delegateId;
   final int treasuryId;
+  final int settlementRequestId;
   final double physicalCash;
   final String? notes;
   AdminDelegateSettled({
     required this.delegateId,
     required this.treasuryId,
+    required this.settlementRequestId,
     required this.physicalCash,
     this.notes,
   });
   @override
-  List<Object?> get props => [delegateId, treasuryId, physicalCash];
+  List<Object?> get props => [delegateId, treasuryId, settlementRequestId, physicalCash];
 }
 
 class AdminLoadingFormRequested extends AdminEvent {}

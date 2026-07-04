@@ -140,6 +140,11 @@ class ShiftSummaryModel {
   final double totalDebtAdded;
   final List<Map<String, dynamic>> truckRemnants;
   final List<Map<String, dynamic>> damagedGoods;
+  // Settlement now requires a pending request the delegate submitted from
+  // the app — null means there's nothing to settle against yet.
+  final int? settlementRequestId;
+  final double? declaredCashAmount;
+  final double? declaredWalletAmount;
 
   const ShiftSummaryModel({
     required this.delegate,
@@ -151,6 +156,9 @@ class ShiftSummaryModel {
     required this.totalDebtAdded,
     required this.truckRemnants,
     required this.damagedGoods,
+    this.settlementRequestId,
+    this.declaredCashAmount,
+    this.declaredWalletAmount,
   });
 
   factory ShiftSummaryModel.fromJson(Map<String, dynamic> json) =>
@@ -166,5 +174,15 @@ class ShiftSummaryModel {
             json['truck_remnants'] as List? ?? []),
         damagedGoods: List<Map<String, dynamic>>.from(
             json['damaged_goods'] as List? ?? []),
+        settlementRequestId: json['settlement_request_id'] as int?,
+        // declared_cash_amount/declared_wallet_amount come from
+        // DelegateSettlementRequest's decimal:2-cast columns, which Laravel
+        // always serializes as strings.
+        declaredCashAmount: json['declared_cash_amount'] == null
+            ? null
+            : _asDouble(json['declared_cash_amount']),
+        declaredWalletAmount: json['declared_wallet_amount'] == null
+            ? null
+            : _asDouble(json['declared_wallet_amount']),
       );
 }

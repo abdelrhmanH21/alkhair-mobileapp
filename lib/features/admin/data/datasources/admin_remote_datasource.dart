@@ -9,6 +9,7 @@ abstract class AdminRemoteDataSource {
   Future<Map<String, dynamic>> settleDelegate({
     required int delegateId,
     required int treasuryId,
+    required int settlementRequestId,
     required double physicalCash,
     String? notes,
   });
@@ -54,12 +55,14 @@ class AdminRemoteDataSourceImpl implements AdminRemoteDataSource {
   Future<Map<String, dynamic>> settleDelegate({
     required int delegateId,
     required int treasuryId,
+    required int settlementRequestId,
     required double physicalCash,
     String? notes,
   }) async {
     final res = await _client.dio.post(ApiEndpoints.adminSettle, data: {
       'delegate_id': delegateId,
       'treasury_id': treasuryId,
+      'settlement_request_id': settlementRequestId,
       'physical_cash': physicalCash,
       if (notes != null) 'notes': notes,
     });

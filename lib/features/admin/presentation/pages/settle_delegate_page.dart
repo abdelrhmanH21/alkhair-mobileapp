@@ -36,6 +36,11 @@ class _SettleDelegatePageState extends State<SettleDelegatePage> {
   }
 
   void _settle() {
+    final settlementRequestId = _summary?.settlementRequestId;
+    if (settlementRequestId == null) {
+      _showError('يجب أن يقوم المندوب بإرسال طلب تسليم أولاً.');
+      return;
+    }
     final cash = double.tryParse(_cashCtrl.text);
     if (cash == null) {
       _showError('يرجى إدخال مبلغ النقد المستلم.');
@@ -74,6 +79,7 @@ class _SettleDelegatePageState extends State<SettleDelegatePage> {
               context.read<AdminBloc>().add(AdminDelegateSettled(
                     delegateId: widget.delegate.id,
                     treasuryId: _treasuryId!,
+                    settlementRequestId: settlementRequestId,
                     physicalCash: cash,
                     notes: _notesCtrl.text.isNotEmpty
                         ? _notesCtrl.text
@@ -219,6 +225,27 @@ class _SettleDelegatePageState extends State<SettleDelegatePage> {
                 ],
 
                 // Settlement form
+                if (_summary!.settlementRequestId == null)
+                  Card(
+                    color: AppTheme.danger.withValues(alpha: 0.08),
+                    child: const Padding(
+                      padding: EdgeInsets.all(14),
+                      child: Row(
+                        children: [
+                          Icon(Icons.info_outline, color: AppTheme.danger),
+                          SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'يجب أن يقوم المندوب بإرسال طلب تسليم أولاً من التطبيق قبل إمكانية التصفية.',
+                              style: TextStyle(color: AppTheme.danger),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                if (_summary!.settlementRequestId == null)
+                  const SizedBox(height: 12),
                 Card(
                   child: Padding(
                     padding: const EdgeInsets.all(14),
@@ -267,8 +294,10 @@ class _SettleDelegatePageState extends State<SettleDelegatePage> {
                             backgroundColor: AppTheme.primary,
                             minimumSize: const Size.fromHeight(52),
                           ),
-                          onPressed:
-                              state is AdminLoading ? null : _settle,
+                          onPressed: state is AdminLoading ||
+                                  _summary!.settlementRequestId == null
+                              ? null
+                              : _settle,
                           icon: state is AdminLoading
                               ? const SizedBox(
                                   width: 20,

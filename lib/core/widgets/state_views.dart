@@ -9,6 +9,11 @@ class AppErrorView extends StatelessWidget {
   final VoidCallback onRetry;
   final String title;
   final bool danger;
+  /// When true, keeps this same error view on screen but shows a small
+  /// inline spinner on the retry button instead of the caller blanking the
+  /// whole section back to a loading skeleton — avoids a jarring
+  /// disappear/reappear flicker when a retry just fails again.
+  final bool isRetrying;
 
   const AppErrorView({
     super.key,
@@ -16,6 +21,7 @@ class AppErrorView extends StatelessWidget {
     required this.onRetry,
     this.title = 'تعذر تحميل البيانات',
     this.danger = true,
+    this.isRetrying = false,
   });
 
   @override
@@ -53,9 +59,15 @@ class AppErrorView extends StatelessWidget {
             ),
             const SizedBox(height: 20),
             OutlinedButton.icon(
-              onPressed: onRetry,
-              icon: const Icon(Icons.refresh_rounded),
-              label: const Text('إعادة المحاولة'),
+              onPressed: isRetrying ? null : onRetry,
+              icon: isRetrying
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.refresh_rounded),
+              label: Text(isRetrying ? 'جاري إعادة المحاولة...' : 'إعادة المحاولة'),
             ),
           ],
         ),

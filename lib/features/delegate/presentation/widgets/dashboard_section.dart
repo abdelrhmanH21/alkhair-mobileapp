@@ -22,6 +22,7 @@ class DashboardSection extends StatefulWidget {
 class _DashboardSectionState extends State<DashboardSection> {
   DashboardModel? _dashboard;
   String? _errorMessage;
+  bool _retrying = false;
   // Guards against ever reacting to a DelegateFailure that belongs to some
   // unrelated fetch dispatched later by a sibling widget on the same shared
   // DelegateBloc (e.g. the shipment-status fetch on the home tab) — only the
@@ -36,7 +37,11 @@ class _DashboardSectionState extends State<DashboardSection> {
 
   void _refresh() {
     setState(() {
-      _errorMessage = null;
+      // Deliberately keep the previous _errorMessage in place (rather than
+      // clearing it) so a retry that fails again doesn't blank the error
+      // view back to the loading skeleton and flicker it right back —
+      // the retry button shows its own inline spinner instead.
+      _retrying = true;
       _settled = false;
     });
     context.read<DelegateBloc>().add(DelegateDashboardRequested());
@@ -52,10 +57,14 @@ class _DashboardSectionState extends State<DashboardSection> {
           setState(() {
             _dashboard = state.dashboard;
             _errorMessage = null;
+            _retrying = false;
           });
         } else if (state is DelegateFailure) {
           _settled = true;
-          setState(() => _errorMessage = state.message);
+          setState(() {
+            _errorMessage = state.message;
+            _retrying = false;
+          });
         }
       },
       child: Builder(builder: (context) {
@@ -72,6 +81,7 @@ class _DashboardSectionState extends State<DashboardSection> {
             title: 'تعذر عرض لوحة الأداء',
             message: _errorMessage!,
             danger: false,
+            isRetrying: _retrying,
             onRetry: _refresh,
           );
         }

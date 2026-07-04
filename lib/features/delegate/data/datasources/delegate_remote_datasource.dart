@@ -7,6 +7,7 @@ import '../models/dashboard_model.dart';
 import '../models/sellable_product_model.dart';
 import '../models/catalog_product_model.dart';
 import '../models/customer_region_model.dart';
+import '../models/settlement_summary_model.dart';
 
 abstract class DelegateRemoteDataSource {
   Future<LoadingModel?> fetchCurrentLoading();
@@ -35,6 +36,12 @@ abstract class DelegateRemoteDataSource {
   Future<List<DelegateInvoiceModel>> fetchInvoices();
   Future<DelegateInvoiceModel> fetchInvoice(int id);
   Future<LoadingModel> updateLoadingStatus(int id, String status);
+  Future<SettlementSummaryModel> fetchSettlementSummary();
+  Future<void> submitSettlementRequest({
+    required double cashAmount,
+    required double walletAmount,
+    String? notes,
+  });
 }
 
 class DelegateRemoteDataSourceImpl implements DelegateRemoteDataSource {
@@ -166,5 +173,24 @@ class DelegateRemoteDataSourceImpl implements DelegateRemoteDataSource {
       data: {'status': status},
     );
     return LoadingModel.fromJson(res.data['data'] as Map<String, dynamic>);
+  }
+
+  @override
+  Future<SettlementSummaryModel> fetchSettlementSummary() async {
+    final res = await _client.dio.get(ApiEndpoints.delegateShiftSummary);
+    return SettlementSummaryModel.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  @override
+  Future<void> submitSettlementRequest({
+    required double cashAmount,
+    required double walletAmount,
+    String? notes,
+  }) async {
+    await _client.dio.post(ApiEndpoints.delegateSettlementRequest, data: {
+      'cash_amount': cashAmount,
+      'wallet_amount': walletAmount,
+      if (notes != null && notes.isNotEmpty) 'notes': notes,
+    });
   }
 }

@@ -6,6 +6,7 @@ import '../models/dashboard_model.dart';
 import '../models/sellable_product_model.dart';
 import '../models/catalog_product_model.dart';
 import '../models/customer_region_model.dart';
+import '../models/settlement_summary_model.dart';
 import '../../domain/repositories/delegate_repository.dart';
 
 class DelegateRepositoryImpl implements DelegateRepository {
@@ -80,4 +81,20 @@ class DelegateRepositoryImpl implements DelegateRepository {
   @override
   Future<LoadingModel> updateLoadingStatus(int id, String status) =>
       _remote.updateLoadingStatus(id, status);
+
+  @override
+  Future<SettlementSummaryModel> getSettlementSummary() =>
+      _remote.fetchSettlementSummary();
+
+  @override
+  Future<void> submitSettlementRequest({
+    required double cashAmount,
+    required double walletAmount,
+    String? notes,
+  }) =>
+      _remote.submitSettlementRequest(
+        cashAmount: cashAmount,
+        walletAmount: walletAmount,
+        notes: notes,
+      );
 }

@@ -22,6 +22,8 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
     on<DelegateSellableProductsFetched>(_onFetchSellableProducts);
     on<DelegateSalesCatalogFetched>(_onFetchSalesCatalog);
     on<DelegateCustomerRegionsFetched>(_onFetchCustomerRegions);
+    on<DelegateSettlementSummaryRequested>(_onFetchSettlementSummary);
+    on<DelegateSettlementRequestSubmitted>(_onSubmitSettlementRequest);
   }
 
   Future<void> _onFetchLoading(
@@ -236,6 +238,41 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
     try {
       final loading = await _repo.updateLoadingStatus(event.loadingId, event.status);
       emit(DelegateLoadingStatusUpdated(loading));
+    } on DioException catch (e) {
+      emit(DelegateFailure(_parseError(e)));
+    } catch (_) {
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
+    }
+  }
+
+  Future<void> _onFetchSettlementSummary(
+    DelegateSettlementSummaryRequested event,
+    Emitter<DelegateState> emit,
+  ) async {
+    emit(DelegateLoading());
+    try {
+      final summary = await _repo.getSettlementSummary();
+      emit(DelegateSettlementSummaryLoaded(summary));
+    } on DioException catch (e) {
+      emit(DelegateFailure(_parseError(e)));
+    } catch (_) {
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
+    }
+  }
+
+  Future<void> _onSubmitSettlementRequest(
+    DelegateSettlementRequestSubmitted event,
+    Emitter<DelegateState> emit,
+  ) async {
+    emit(DelegateLoading());
+    try {
+      await _repo.submitSettlementRequest(
+        cashAmount: event.cashAmount,
+        walletAmount: event.walletAmount,
+        notes: event.notes,
+      );
+      emit(DelegateSettlementRequestSubmittedState(
+          'تم إرسال طلب التسليم، بانتظار تأكيد الإدارة.'));
     } on DioException catch (e) {
       emit(DelegateFailure(_parseError(e)));
     } catch (_) {

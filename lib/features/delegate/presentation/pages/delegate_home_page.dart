@@ -17,6 +17,7 @@ import 'invoice_page.dart';
 import 'truck_stock_page.dart';
 import 'invoice_history_page.dart';
 import 'loading_page.dart';
+import 'settlement_page.dart';
 
 /// Landing page for the delegate role. Always shows the performance dashboard
 /// plus a lightweight "current shipment" status card; the full loading /
@@ -34,6 +35,7 @@ class _DelegateHomePageState extends State<DelegateHomePage> {
   LoadingModel? _loading;
 
   bool get _canSell => _loading?.isActiveForSales == true;
+  bool get _hasActiveLoading => _loading != null;
 
   void _goToSell() => _selectTab(1);
 
@@ -41,6 +43,13 @@ class _DelegateHomePageState extends State<DelegateHomePage> {
     if (i == 1 && !_canSell) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
         content: Text('لا توجد تحميلة نشطة حالياً — لا يمكنك البيع الآن.'),
+        backgroundColor: Colors.grey,
+      ));
+      return;
+    }
+    if (i == 4 && !_hasActiveLoading) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('لا توجد تحميلة نشطة حالياً — لا يوجد ما يمكن تسليمه.'),
         backgroundColor: Colors.grey,
       ));
       return;
@@ -140,6 +149,12 @@ class _DelegateHomePageState extends State<DelegateHomePage> {
             selectedIcon: Icon(Icons.receipt_long),
             label: 'الفواتير',
           ),
+          NavigationDestination(
+            icon: Icon(Icons.assignment_turned_in_outlined,
+                color: _hasActiveLoading ? null : Colors.grey.shade400),
+            selectedIcon: const Icon(Icons.assignment_turned_in),
+            label: 'تسليم',
+          ),
         ],
       ),
       body: IndexedStack(
@@ -153,6 +168,8 @@ class _DelegateHomePageState extends State<DelegateHomePage> {
           BlocProvider.value(value: context.read<DelegateBloc>(), child: const TruckStockPage()),
           BlocProvider.value(
               value: context.read<DelegateBloc>(), child: const InvoiceHistoryPage()),
+          BlocProvider.value(
+              value: context.read<DelegateBloc>(), child: const SettlementPage()),
         ],
       ),
     );

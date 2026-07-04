@@ -5,6 +5,7 @@ import '../../data/models/dashboard_model.dart';
 import '../../data/models/sellable_product_model.dart';
 import '../../data/models/catalog_product_model.dart';
 import '../../data/models/customer_region_model.dart';
+import '../../data/models/settlement_summary_model.dart';
 
 abstract class DelegateRepository {
   Future<LoadingModel?> getCurrentLoading();
@@ -32,4 +33,10 @@ abstract class DelegateRepository {
   });
   Future<List<DelegateInvoiceModel>> getInvoices();
   Future<LoadingModel> updateLoadingStatus(int id, String status);
+  Future<SettlementSummaryModel> getSettlementSummary();
+  Future<void> submitSettlementRequest({
+    required double cashAmount,
+    required double walletAmount,
+    String? notes,
+  });
 }

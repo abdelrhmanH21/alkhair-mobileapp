@@ -79,3 +79,18 @@ class DelegateLoadingStatusUpdateRequested extends DelegateEvent {
   @override
   List<Object?> get props => [loadingId, status];
 }
+
+class DelegateSettlementSummaryRequested extends DelegateEvent {}
+
+class DelegateSettlementRequestSubmitted extends DelegateEvent {
+  final double cashAmount;
+  final double walletAmount;
+  final String? notes;
+  DelegateSettlementRequestSubmitted({
+    required this.cashAmount,
+    required this.walletAmount,
+    this.notes,
+  });
+  @override
+  List<Object?> get props => [cashAmount, walletAmount, notes];
+}

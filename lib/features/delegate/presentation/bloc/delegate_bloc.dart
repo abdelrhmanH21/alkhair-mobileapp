@@ -259,7 +259,11 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
       final summary = await _repo.getSettlementSummary();
       emit(DelegateSettlementSummaryLoaded(summary));
     } on DioException catch (e) {
-      emit(DelegateFailure(_parseError(e)));
+      if (e.response?.statusCode == 404) {
+        emit(DelegateNoActiveShift());
+      } else {
+        emit(DelegateFailure(_parseError(e)));
+      }
     } catch (_) {
       emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
     }

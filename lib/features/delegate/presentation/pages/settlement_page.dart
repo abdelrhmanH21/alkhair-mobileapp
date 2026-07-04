@@ -27,7 +27,14 @@ class SettlementPage extends StatefulWidget {
 class _SettlementPageState extends State<SettlementPage>
     with PollingMixin<SettlementPage> {
   SettlementSummaryModel? _summary;
+  // Genuine fetch failures only (network/server errors) — the "no active
+  // shift" 404 is a dedicated DelegateNoActiveShift state now, tracked
+  // separately via _noActiveShift below, never routed through here.
   String? _summaryError;
+  // A normal, expected, non-error state — the delegate simply has no
+  // active/unsettled loading right now. Shown as a calm info view, never
+  // an error card.
+  bool _noActiveShift = false;
   bool _submitting = false;
   String? _submittedMessage;
 
@@ -116,6 +123,7 @@ class _SettlementPageState extends State<SettlementPage>
             setState(() {
               _summary = state.summary;
               _summaryError = null;
+              _noActiveShift = false;
               if (isNewLoading) {
                 // A different loading than the one we last submitted/
                 // confirmed for means a NEW shipment was assigned — reset
@@ -141,18 +149,32 @@ class _SettlementPageState extends State<SettlementPage>
               _submittedLoadingId = _summary?.loadingId;
               _submittedMessage = state.message;
             });
+          } else if (state is DelegateNoActiveShift) {
+            if (_submittedLoadingId != null && !_confirmed) {
+              // No active/unsettled loading anymore while we were awaiting a
+              // submitted request's confirmation means admin just confirmed
+              // the settlement — not a real error.
+              setState(() {
+                _confirmed = true;
+                _summary = null;
+                _noActiveShift = false;
+              });
+            } else if (_summary == null) {
+              // Genuinely no active shift right now — a normal, calm state,
+              // never an error banner/toast.
+              setState(() {
+                _noActiveShift = true;
+                _summaryError = null;
+              });
+            }
+            // else: good data is already showing (a currently-loaded,
+            // not-yet-submitted shift) — a stale/out-of-order poll response
+            // claiming "no active shift" now would contradict what's on
+            // screen; ignore it and keep the current view, retry next tick.
           } else if (state is DelegateFailure) {
             if (_submitting) {
               setState(() => _submitting = false);
               AppSnackbar.showError(ctx, state.message);
-            } else if (_submittedLoadingId != null && !_confirmed) {
-              // myShiftSummary() only 404s when there's no active (unsettled)
-              // loading — while we're waiting on a submitted request, that
-              // means admin just confirmed the settlement, not a real error.
-              setState(() {
-                _confirmed = true;
-                _summary = null;
-              });
             } else if (_summary == null) {
               setState(() => _summaryError = state.message);
             }
@@ -212,6 +234,28 @@ class _SettlementPageState extends State<SettlementPage>
                 icon: const Icon(Icons.refresh_rounded),
                 label: const Text('تحقق الآن'),
               ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_noActiveShift) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.info_outline_rounded, size: 64, color: Colors.grey.shade400),
+              const SizedBox(height: 16),
+              Text('لا توجد وردية نشطة حاليًا',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 8),
+              const Text('سيتم تفعيل هذا القسم عند تعيين تحميلة لك.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.grey)),
             ],
           ),
         ),

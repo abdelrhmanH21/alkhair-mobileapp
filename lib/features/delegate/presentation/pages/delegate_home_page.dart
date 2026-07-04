@@ -232,6 +232,15 @@ class _HomeTabState extends State<_HomeTab> with PollingMixin<_HomeTab> {
   // result can be told apart from the explicit initial/manual fetch.
   bool _pollInFlight = false;
 
+  // Set while THIS widget's own explicit (non-poll) DelegateLoadingFetched()
+  // is outstanding. Without this, any DelegateFailure on the shared
+  // DelegateBloc — e.g. SettlementPage's own poll 404ing with "لا توجد وردية
+  // نشطة حاليًا" (a totally normal, expected state for that unrelated
+  // screen, since it stays mounted forever inside the IndexedStack) — would
+  // be misattributed here and rendered as a RED error card, even though
+  // this widget's own fetch never actually failed.
+  bool _fetchInFlight = false;
+
   @override
   void initState() {
     super.initState();
@@ -248,12 +257,13 @@ class _HomeTabState extends State<_HomeTab> with PollingMixin<_HomeTab> {
   void onPoll() {
     // Nothing to refresh yet, or an explicit fetch/dashboard sequencing is
     // still in progress — let that settle first rather than overlapping.
-    if (!_dashboardSettled || _pollInFlight) return;
+    if (!_dashboardSettled || _pollInFlight || _fetchInFlight) return;
     _pollInFlight = true;
     context.read<DelegateBloc>().add(DelegateLoadingFetched());
   }
 
   void _fetchLoading() {
+    _fetchInFlight = true;
     setState(() => _loadingError = null);
     context.read<DelegateBloc>().add(DelegateLoadingFetched());
   }
@@ -271,6 +281,8 @@ class _HomeTabState extends State<_HomeTab> with PollingMixin<_HomeTab> {
           return;
         }
         if (state is DelegateLoadingLoaded) {
+          if (!_fetchInFlight && !_pollInFlight) return; // not ours — see note above
+          _fetchInFlight = false;
           _pollInFlight = false;
           setState(() {
             _loading = state.loading;
@@ -279,7 +291,13 @@ class _HomeTabState extends State<_HomeTab> with PollingMixin<_HomeTab> {
           });
           widget.onLoadingChanged(state.loading);
         } else if (state is DelegateFailure) {
-          if (_pollInFlight) {
+          if (_fetchInFlight) {
+            _fetchInFlight = false;
+            setState(() {
+              _loadingError = state.message;
+              _hasLoadingResult = true;
+            });
+          } else if (_pollInFlight) {
             _pollInFlight = false;
             if (_loading == null) {
               // No good data to protect — safe to show/update the error.
@@ -290,12 +308,12 @@ class _HomeTabState extends State<_HomeTab> with PollingMixin<_HomeTab> {
             }
             // else: silent — keep showing the last-good shipment card,
             // retry next tick, per PollingMixin's contract.
-          } else {
-            setState(() {
-              _loadingError = state.message;
-              _hasLoadingResult = true;
-            });
           }
+          // else: not ours — belongs to some unrelated dispatch on the
+          // shared DelegateBloc (e.g. SettlementPage's own poll, which stays
+          // mounted forever inside the IndexedStack and 404s normally
+          // whenever there's no active loading) — ignore it entirely rather
+          // than misattributing it as this card's own error.
         }
       },
       child: SingleChildScrollView(

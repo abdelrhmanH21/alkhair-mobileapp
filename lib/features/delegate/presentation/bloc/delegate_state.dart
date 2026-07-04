@@ -109,6 +109,16 @@ class DelegateSettlementSummaryLoaded extends DelegateState {
   List<Object?> get props => [summary];
 }
 
+/// myShiftSummary() 404s whenever the delegate has no active/unsettled
+/// loading right now — a normal, expected, non-error state (not "the
+/// request failed"), so it gets its own dedicated state instead of being
+/// routed through DelegateFailure. This also means any OTHER widget sharing
+/// this bloc (e.g. _HomeTab, which stays mounted forever alongside
+/// SettlementPage inside DelegateHomePage's IndexedStack) can no longer
+/// mistake this for a real error meant for it — DelegateFailure listeners
+/// simply never see it at all.
+class DelegateNoActiveShift extends DelegateState {}
+
 class DelegateSettlementRequestSubmittedState extends DelegateState {
   final String message;
   DelegateSettlementRequestSubmittedState(this.message);

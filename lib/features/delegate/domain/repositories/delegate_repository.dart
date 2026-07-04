@@ -43,4 +43,16 @@ abstract class DelegateRepository {
   Future<List<PenaltyModel>> getPenalties();
   Future<List<AdvanceModel>> getAdvances();
   Future<List<CommissionDayModel>> getCommissionBreakdown();
+  Future<String> submitExpense({
+    required double amount,
+    required String description,
+    int? categoryId,
+    String? notes,
+  });
+  Future<String> submitCustomerCollection({
+    required int customerId,
+    required double amount,
+    required String paymentMethod,
+    String? notes,
+  });
 }

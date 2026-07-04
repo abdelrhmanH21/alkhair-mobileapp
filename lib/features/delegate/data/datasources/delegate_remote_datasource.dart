@@ -46,6 +46,18 @@ abstract class DelegateRemoteDataSource {
   Future<List<PenaltyModel>> fetchPenalties();
   Future<List<AdvanceModel>> fetchAdvances();
   Future<List<CommissionDayModel>> fetchCommissionBreakdown();
+  Future<String> submitExpense({
+    required double amount,
+    required String description,
+    int? categoryId,
+    String? notes,
+  });
+  Future<String> submitCustomerCollection({
+    required int customerId,
+    required double amount,
+    required String paymentMethod,
+    String? notes,
+  });
 }
 
 class DelegateRemoteDataSourceImpl implements DelegateRemoteDataSource {
@@ -217,5 +229,37 @@ class DelegateRemoteDataSourceImpl implements DelegateRemoteDataSource {
     final res = await _client.dio.get(ApiEndpoints.delegateCommissionBreakdown);
     final list = res.data['data'] as List? ?? [];
     return list.map((e) => CommissionDayModel.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  @override
+  Future<String> submitExpense({
+    required double amount,
+    required String description,
+    int? categoryId,
+    String? notes,
+  }) async {
+    final res = await _client.dio.post(ApiEndpoints.delegateExpenses, data: {
+      'amount': amount,
+      'description': description,
+      if (categoryId != null) 'category_id': categoryId,
+      if (notes != null && notes.isNotEmpty) 'notes': notes,
+    });
+    return (res.data['message'] as String?) ?? 'تم تسجيل المصروف بنجاح.';
+  }
+
+  @override
+  Future<String> submitCustomerCollection({
+    required int customerId,
+    required double amount,
+    required String paymentMethod,
+    String? notes,
+  }) async {
+    final res = await _client.dio.post(ApiEndpoints.delegateCustomerCollections, data: {
+      'customer_id': customerId,
+      'amount': amount,
+      'payment_method': paymentMethod,
+      if (notes != null && notes.isNotEmpty) 'notes': notes,
+    });
+    return (res.data['message'] as String?) ?? 'تم تسجيل التحصيل بنجاح.';
   }
 }

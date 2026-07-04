@@ -20,6 +20,7 @@ import 'truck_stock_page.dart';
 import 'invoice_history_page.dart';
 import 'loading_page.dart';
 import 'settlement_page.dart';
+import 'transactions_page.dart';
 
 /// Landing page for the delegate role. Always shows the performance dashboard
 /// plus a lightweight "current shipment" status card; the full loading /
@@ -66,6 +67,11 @@ class _DelegateHomePageState extends State<DelegateHomePage> {
       if (i == 3) _invoiceHistoryRefreshTick++;
     });
   }
+
+  // Unlike tabs 1/4, معاملات (index 5) is NOT gated at the tab-switch level:
+  // TransactionsPage itself shows a persistent banner + disables its action
+  // cards when !_canSell, which stays visible and explains why — clearer
+  // than a transient snackbar blocking entry to a tab the user never sees.
 
   void _confirmLogout() {
     showDialog(
@@ -165,6 +171,11 @@ class _DelegateHomePageState extends State<DelegateHomePage> {
             selectedIcon: const Icon(Icons.assignment_turned_in),
             label: 'تسليم',
           ),
+          const NavigationDestination(
+            icon: Icon(Icons.swap_horiz_outlined),
+            selectedIcon: Icon(Icons.swap_horiz),
+            label: 'معاملات',
+          ),
         ],
       ),
       body: IndexedStack(
@@ -182,6 +193,9 @@ class _DelegateHomePageState extends State<DelegateHomePage> {
           BlocProvider.value(
               value: context.read<DelegateBloc>(),
               child: SettlementPage(refreshTick: _settlementRefreshTick)),
+          BlocProvider.value(
+              value: context.read<DelegateBloc>(),
+              child: TransactionsPage(hasActiveLoading: _canSell)),
         ],
       ),
     );

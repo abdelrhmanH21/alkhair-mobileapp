@@ -37,6 +37,10 @@ class ApiEndpoints {
   static const String delegateInvoice  = '/delegate/invoice';
   static const String delegateInvoices = '/delegate/invoices';
 
+  // Delegate — transactions (معاملات)
+  static const String delegateExpenses            = '/delegate/expenses';
+  static const String delegateCustomerCollections = '/delegate/customer-collections';
+
   // Delegate — trip status update (id injected at call site)
   static String delegateLoadingStatus(int id) => '/delegate/loading/$id/status';
 

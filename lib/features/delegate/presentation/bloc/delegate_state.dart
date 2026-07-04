@@ -144,6 +144,20 @@ class DelegateFailure extends DelegateState {
   List<Object?> get props => [message];
 }
 
+class DelegateExpenseSubmittedState extends DelegateState {
+  final String message;
+  DelegateExpenseSubmittedState(this.message);
+  @override
+  List<Object?> get props => [message];
+}
+
+class DelegateCustomerCollectionSubmittedState extends DelegateState {
+  final String message;
+  DelegateCustomerCollectionSubmittedState(this.message);
+  @override
+  List<Object?> get props => [message];
+}
+
 /// Field-level validation failure (Laravel 422 `errors` map), e.g. the
 /// phone-duplicate check in DelegateClientController::store. Kept separate
 /// from [DelegateFailure] so the UI can target a specific form field instead

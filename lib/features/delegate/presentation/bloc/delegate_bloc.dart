@@ -27,6 +27,8 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
     on<DelegatePenaltiesFetched>(_onFetchPenalties);
     on<DelegateAdvancesFetched>(_onFetchAdvances);
     on<DelegateCommissionBreakdownFetched>(_onFetchCommissionBreakdown);
+    on<DelegateExpenseSubmitted>(_onSubmitExpense);
+    on<DelegateCustomerCollectionSubmitted>(_onSubmitCustomerCollection);
   }
 
   Future<void> _onFetchLoading(
@@ -321,6 +323,46 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
     try {
       final days = await _repo.getCommissionBreakdown();
       emit(DelegateCommissionBreakdownLoaded(days));
+    } on DioException catch (e) {
+      emit(DelegateFailure(_parseError(e)));
+    } catch (_) {
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
+    }
+  }
+
+  Future<void> _onSubmitExpense(
+    DelegateExpenseSubmitted event,
+    Emitter<DelegateState> emit,
+  ) async {
+    emit(DelegateLoading());
+    try {
+      final message = await _repo.submitExpense(
+        amount: event.amount,
+        description: event.description,
+        categoryId: event.categoryId,
+        notes: event.notes,
+      );
+      emit(DelegateExpenseSubmittedState(message));
+    } on DioException catch (e) {
+      emit(DelegateFailure(_parseError(e)));
+    } catch (_) {
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
+    }
+  }
+
+  Future<void> _onSubmitCustomerCollection(
+    DelegateCustomerCollectionSubmitted event,
+    Emitter<DelegateState> emit,
+  ) async {
+    emit(DelegateLoading());
+    try {
+      final message = await _repo.submitCustomerCollection(
+        customerId: event.customerId,
+        amount: event.amount,
+        paymentMethod: event.paymentMethod,
+        notes: event.notes,
+      );
+      emit(DelegateCustomerCollectionSubmittedState(message));
     } on DioException catch (e) {
       emit(DelegateFailure(_parseError(e)));
     } catch (_) {

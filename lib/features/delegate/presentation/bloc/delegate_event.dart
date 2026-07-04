@@ -100,3 +100,33 @@ class DelegatePenaltiesFetched extends DelegateEvent {}
 class DelegateAdvancesFetched extends DelegateEvent {}
 
 class DelegateCommissionBreakdownFetched extends DelegateEvent {}
+
+class DelegateExpenseSubmitted extends DelegateEvent {
+  final double amount;
+  final String description;
+  final int? categoryId;
+  final String? notes;
+  DelegateExpenseSubmitted({
+    required this.amount,
+    required this.description,
+    this.categoryId,
+    this.notes,
+  });
+  @override
+  List<Object?> get props => [amount, description, categoryId, notes];
+}
+
+class DelegateCustomerCollectionSubmitted extends DelegateEvent {
+  final int customerId;
+  final double amount;
+  final String paymentMethod;
+  final String? notes;
+  DelegateCustomerCollectionSubmitted({
+    required this.customerId,
+    required this.amount,
+    required this.paymentMethod,
+    this.notes,
+  });
+  @override
+  List<Object?> get props => [customerId, amount, paymentMethod, notes];
+}

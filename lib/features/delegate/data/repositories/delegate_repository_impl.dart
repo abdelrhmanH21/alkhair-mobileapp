@@ -108,4 +108,32 @@ class DelegateRepositoryImpl implements DelegateRepository {
   @override
   Future<List<CommissionDayModel>> getCommissionBreakdown() =>
       _remote.fetchCommissionBreakdown();
+
+  @override
+  Future<String> submitExpense({
+    required double amount,
+    required String description,
+    int? categoryId,
+    String? notes,
+  }) =>
+      _remote.submitExpense(
+        amount: amount,
+        description: description,
+        categoryId: categoryId,
+        notes: notes,
+      );
+
+  @override
+  Future<String> submitCustomerCollection({
+    required int customerId,
+    required double amount,
+    required String paymentMethod,
+    String? notes,
+  }) =>
+      _remote.submitCustomerCollection(
+        customerId: customerId,
+        amount: amount,
+        paymentMethod: paymentMethod,
+        notes: notes,
+      );
 }

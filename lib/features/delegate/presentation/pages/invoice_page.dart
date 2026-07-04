@@ -26,8 +26,18 @@ class _InvoicePageState extends State<InvoicePage> {
   // ── Client selection ───────────────────────────────────────────────────────
   ClientModel? _selectedClient;
   final _searchCtrl = TextEditingController();
+  final _searchFocus = FocusNode();
   List<ClientModel> _searchResults = [];
   bool _searchLoading = false;
+
+  void _onSearchFocusChanged() {
+    // Opening the search field with no query yet shows the full, browsable
+    // client list instead of nothing until the delegate starts typing.
+    if (_searchFocus.hasFocus && _searchCtrl.text.isEmpty) {
+      setState(() => _searchLoading = true);
+      context.read<DelegateBloc>().add(DelegateClientSearchRequested(''));
+    }
+  }
 
   // ── Sales line items ───────────────────────────────────────────────────────
   final List<InvoiceSaleItem> _salesItems = [];
@@ -39,7 +49,15 @@ class _InvoicePageState extends State<InvoicePage> {
   final _cashCtrl = TextEditingController(text: '0');
 
   @override
+  void initState() {
+    super.initState();
+    _searchFocus.addListener(_onSearchFocusChanged);
+  }
+
+  @override
   void dispose() {
+    _searchFocus.removeListener(_onSearchFocusChanged);
+    _searchFocus.dispose();
     _searchCtrl.dispose();
     _cashCtrl.dispose();
     super.dispose();
@@ -185,6 +203,7 @@ class _InvoicePageState extends State<InvoicePage> {
             children: [
               _ClientSearchSection(
                 controller: _searchCtrl,
+                focusNode: _searchFocus,
                 results: _searchResults,
                 isLoading: _searchLoading,
                 selectedClient: _selectedClient,
@@ -265,6 +284,7 @@ class _InvoicePageState extends State<InvoicePage> {
 
 class _ClientSearchSection extends StatelessWidget {
   final TextEditingController controller;
+  final FocusNode focusNode;
   final List<ClientModel> results;
   final bool isLoading;
   final ClientModel? selectedClient;
@@ -274,6 +294,7 @@ class _ClientSearchSection extends StatelessWidget {
 
   const _ClientSearchSection({
     required this.controller,
+    required this.focusNode,
     required this.results,
     required this.isLoading,
     required this.selectedClient,
@@ -291,6 +312,7 @@ class _ClientSearchSection extends StatelessWidget {
               Expanded(
                 child: TextField(
                   controller: controller,
+                  focusNode: focusNode,
                   decoration: InputDecoration(
                     hintText: 'ابحث عن العميل (اسم أو هاتف)...',
                     prefixIcon: isLoading
@@ -312,7 +334,7 @@ class _ClientSearchSection extends StatelessWidget {
                         : null,
                   ),
                   onChanged: (v) {
-                    if (v.length >= 2) onSearch(v);
+                    if (v.isEmpty || v.length >= 2) onSearch(v);
                   },
                 ),
               ),

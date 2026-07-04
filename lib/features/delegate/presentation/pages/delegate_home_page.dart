@@ -40,6 +40,9 @@ class _DelegateHomePageState extends State<DelegateHomePage> {
   // SettlementPage detect "I just became visible again" via didUpdateWidget
   // and refetch, instead of showing the stale first-load snapshot forever.
   int _settlementRefreshTick = 0;
+  // Same IndexedStack-staleness issue affects the invoice history tab: a
+  // freshly-submitted invoice wouldn't show up there until app restart.
+  int _invoiceHistoryRefreshTick = 0;
 
   bool get _canSell => _loading?.isActiveForSales == true;
   bool get _hasActiveLoading => _loading != null;
@@ -64,6 +67,7 @@ class _DelegateHomePageState extends State<DelegateHomePage> {
     setState(() {
       _tab = i;
       if (i == 4) _settlementRefreshTick++;
+      if (i == 3) _invoiceHistoryRefreshTick++;
     });
   }
 
@@ -177,7 +181,8 @@ class _DelegateHomePageState extends State<DelegateHomePage> {
           BlocProvider.value(value: context.read<DelegateBloc>(), child: const InvoicePage()),
           BlocProvider.value(value: context.read<DelegateBloc>(), child: const TruckStockPage()),
           BlocProvider.value(
-              value: context.read<DelegateBloc>(), child: const InvoiceHistoryPage()),
+              value: context.read<DelegateBloc>(),
+              child: InvoiceHistoryPage(refreshTick: _invoiceHistoryRefreshTick)),
           BlocProvider.value(
               value: context.read<DelegateBloc>(),
               child: SettlementPage(refreshTick: _settlementRefreshTick)),

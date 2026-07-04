@@ -9,7 +9,12 @@ import '../../data/models/invoice_model.dart';
 import 'print_invoice_page.dart';
 
 class InvoiceHistoryPage extends StatefulWidget {
-  const InvoiceHistoryPage({super.key});
+  /// Bumped by DelegateHomePage each time this tab is (re)selected — when
+  /// pushed as its own route (from the invoice screen's app bar, or from the
+  /// completed-loading view) this stays at its default and has no effect,
+  /// since a fresh push already re-runs initState() on its own.
+  final int refreshTick;
+  const InvoiceHistoryPage({super.key, this.refreshTick = 0});
 
   @override
   State<InvoiceHistoryPage> createState() => _InvoiceHistoryPageState();
@@ -22,6 +27,14 @@ class _InvoiceHistoryPageState extends State<InvoiceHistoryPage> {
   void initState() {
     super.initState();
     context.read<DelegateBloc>().add(DelegateInvoicesFetched());
+  }
+
+  @override
+  void didUpdateWidget(covariant InvoiceHistoryPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.refreshTick != oldWidget.refreshTick) {
+      context.read<DelegateBloc>().add(DelegateInvoicesFetched());
+    }
   }
 
   @override

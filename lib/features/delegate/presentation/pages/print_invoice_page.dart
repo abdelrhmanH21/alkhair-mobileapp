@@ -6,6 +6,7 @@ import '../../../../core/di/service_locator.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/network/api_endpoints.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/utils/app_snackbar.dart';
 import '../../../../core/utils/bluetooth_printer.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../auth/presentation/bloc/auth_state.dart';
@@ -67,10 +68,11 @@ class _PrintInvoicePageState extends State<PrintInvoicePage> {
     final ok = await _printer.connect(_selectedDevice!.macAdress);
     setState(() => _connected = ok);
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(ok ? 'متصل بالطابعة' : 'فشل الاتصال بالطابعة'),
-      backgroundColor: ok ? AppTheme.secondary : AppTheme.danger,
-    ));
+    if (ok) {
+      AppSnackbar.showSuccess(context, 'متصل بالطابعة');
+    } else {
+      AppSnackbar.showError(context, 'فشل الاتصال بالطابعة');
+    }
   }
 
   Future<void> _print() async {
@@ -126,10 +128,11 @@ class _PrintInvoicePageState extends State<PrintInvoicePage> {
     final ok = await _printer.printInvoice(data);
     if (!mounted) return;
     setState(() => _printing = false);
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(ok ? 'تم الطباعة بنجاح' : 'فشل الطباعة'),
-      backgroundColor: ok ? AppTheme.secondary : AppTheme.danger,
-    ));
+    if (ok) {
+      AppSnackbar.showSuccess(context, 'تم الطباعة بنجاح');
+    } else {
+      AppSnackbar.showError(context, 'فشل الطباعة');
+    }
   }
 
   @override

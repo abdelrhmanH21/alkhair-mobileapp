@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/utils/app_snackbar.dart';
 import '../../../../core/widgets/app_logo.dart';
 import '../../../../core/widgets/state_views.dart';
 import '../../../app_config/presentation/bloc/app_config_bloc.dart';
@@ -51,17 +52,11 @@ class _DelegateHomePageState extends State<DelegateHomePage> {
 
   void _selectTab(int i) {
     if (i == 1 && !_canSell) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('لا توجد تحميلة نشطة حالياً — لا يمكنك البيع الآن.'),
-        backgroundColor: Colors.grey,
-      ));
+      AppSnackbar.showInfo(context, 'لا توجد تحميلة نشطة حالياً — لا يمكنك البيع الآن.');
       return;
     }
     if (i == 4 && !_hasActiveLoading) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('لا توجد تحميلة نشطة حالياً — لا يوجد ما يمكن تسليمه.'),
-        backgroundColor: Colors.grey,
-      ));
+      AppSnackbar.showInfo(context, 'لا توجد تحميلة نشطة حالياً — لا يوجد ما يمكن تسليمه.');
       return;
     }
     setState(() {

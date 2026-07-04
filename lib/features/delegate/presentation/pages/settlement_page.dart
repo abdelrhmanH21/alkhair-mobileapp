@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/utils/app_snackbar.dart';
 import '../../../../core/widgets/state_views.dart';
 import '../bloc/delegate_bloc.dart';
 import '../bloc/delegate_event.dart';
@@ -62,10 +63,7 @@ class _SettlementPageState extends State<SettlementPage> {
     final cash = double.tryParse(_cashCtrl.text) ?? -1;
     final wallet = double.tryParse(_walletCtrl.text) ?? -1;
     if (cash < 0 || wallet < 0) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-        content: Text('يرجى إدخال مبالغ صحيحة للنقدي والمحفظة الإلكترونية.'),
-        backgroundColor: AppTheme.danger,
-      ));
+      AppSnackbar.showError(context, 'يرجى إدخال مبالغ صحيحة للنقدي والمحفظة الإلكترونية.');
       return;
     }
     setState(() => _submitting = true);
@@ -105,10 +103,7 @@ class _SettlementPageState extends State<SettlementPage> {
           } else if (state is DelegateFailure) {
             if (_submitting) {
               setState(() => _submitting = false);
-              ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
-                content: Text(state.message),
-                backgroundColor: AppTheme.danger,
-              ));
+              AppSnackbar.showError(ctx, state.message);
             } else if (_summary == null) {
               setState(() => _summaryError = state.message);
             }

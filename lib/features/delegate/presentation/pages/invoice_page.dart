@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/utils/app_snackbar.dart';
 import '../bloc/delegate_bloc.dart';
 import '../bloc/delegate_event.dart';
 import '../bloc/delegate_state.dart';
@@ -100,10 +101,7 @@ class _InvoicePageState extends State<InvoicePage> {
   }
 
   void _showError(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg),
-      backgroundColor: AppTheme.danger,
-    ));
+    AppSnackbar.showError(context, msg);
   }
 
   void _openAddClientSheet() {
@@ -179,10 +177,7 @@ class _InvoicePageState extends State<InvoicePage> {
               _searchCtrl.clear();
               _searchResults.clear();
             });
-            ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
-              content: Text('تم حفظ الفاتورة بنجاح'),
-              backgroundColor: AppTheme.secondary,
-            ));
+            AppSnackbar.showSuccess(ctx, 'تم حفظ الفاتورة بنجاح');
             // Offer print
             Navigator.push(
               ctx,

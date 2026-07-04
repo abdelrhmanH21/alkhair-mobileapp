@@ -40,13 +40,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     try {
       final result = await _login(email: event.email, password: event.password);
       emit(AuthAuthenticated(result.user));
-    } on DioException catch (e) {
-      final msg = e.response?.data?['message'] as String? ??
-          e.response?.data?['errors']?['email']?[0] as String? ??
-          'فشل الاتصال بالخادم.';
-      emit(AuthFailure(msg));
     } catch (e) {
-      emit(AuthFailure('حدث خطأ غير متوقع.'));
+      emit(AuthFailure(_msg(e)));
     }
   }
 
@@ -56,5 +51,20 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   ) async {
     await _repo.logout();
     emit(AuthUnauthenticated());
+  }
+
+  String _msg(Object e) {
+    if (e is DioException) {
+      // Wrong-credentials (422) responses carry BOTH a generic top-level
+      // message ("بيانات غير صالحة.") and the specific one in errors.email —
+      // the field-specific message must win, or the user only ever sees the
+      // generic one. The inactive-account response (403) has no errors key
+      // at all, so it falls through to the top-level message correctly.
+      final data = e.response?.data;
+      final fieldMsg = data?['errors']?['email']?[0] as String?;
+      final topMsg = data?['message'] as String?;
+      return fieldMsg ?? topMsg ?? 'فشل الاتصال بالخادم.';
+    }
+    return 'حدث خطأ غير متوقع: $e';
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/utils/app_snackbar.dart';
 import '../bloc/delegate_bloc.dart';
 import '../bloc/delegate_event.dart';
 import '../bloc/delegate_state.dart';
@@ -40,10 +41,7 @@ class _TruckStockPageState extends State<TruckStockPage> {
           if (state is DelegateTruckStockLoaded) {
             setState(() => _stocks = state.stocks);
           } else if (state is DelegateFailure) {
-            ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
-              content: Text(state.message),
-              backgroundColor: AppTheme.danger,
-            ));
+            AppSnackbar.showError(ctx, state.message);
           }
         },
         builder: (_, state) {

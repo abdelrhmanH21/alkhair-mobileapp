@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/utils/app_snackbar.dart';
 import '../bloc/delegate_bloc.dart';
 import '../bloc/delegate_event.dart';
 import '../bloc/delegate_state.dart';
@@ -46,10 +47,7 @@ class _InvoiceHistoryPageState extends State<InvoiceHistoryPage> {
           if (state is DelegateInvoicesLoaded) {
             setState(() => _invoices = state.invoices);
           } else if (state is DelegateFailure) {
-            ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
-              content: Text(state.message),
-              backgroundColor: AppTheme.danger,
-            ));
+            AppSnackbar.showError(ctx, state.message);
           }
         },
         builder: (_, state) {

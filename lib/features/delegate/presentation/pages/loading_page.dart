@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/utils/app_snackbar.dart';
 import '../bloc/delegate_bloc.dart';
 import '../bloc/delegate_event.dart';
 import '../bloc/delegate_state.dart';
@@ -18,10 +19,28 @@ class LoadingPage extends StatefulWidget {
 class _LoadingPageState extends State<LoadingPage> {
   LoadingModel? _currentLoading;
 
+  // Guards confirm/status-update actions against a double-tap firing two
+  // overlapping requests. Without this, a fast second tap could dispatch a
+  // second DelegateLoadingConfirmed() before the button visually disables
+  // (bloc state propagation lands a frame after the tap) — the SECOND
+  // request always fails server-side (the loading is no longer
+  // pending_pickup by then), and if that failure response happens to arrive
+  // before the FIRST request's success, the user sees a spurious error right
+  // before the real success navigates them away. Setting this synchronously
+  // in the tap handler (not waiting for the bloc) closes that window
+  // entirely, rather than just hiding whichever error shows up.
+  bool _actionInFlight = false;
+
   @override
   void initState() {
     super.initState();
     context.read<DelegateBloc>().add(DelegateLoadingFetched());
+  }
+
+  void _runAction(VoidCallback dispatch) {
+    if (_actionInFlight) return;
+    setState(() => _actionInFlight = true);
+    dispatch();
   }
 
   @override
@@ -40,32 +59,30 @@ class _LoadingPageState extends State<LoadingPage> {
       body: BlocConsumer<DelegateBloc, DelegateState>(
         listener: (ctx, state) {
           if (state is DelegateLoadingConfirmedState) {
-            setState(() => _currentLoading = state.loading);
-            ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
-              content: Text('تم تأكيد الاستلام. يمكنك البدء بالبيع.'),
-              backgroundColor: AppTheme.secondary,
-            ));
+            setState(() {
+              _currentLoading = state.loading;
+              _actionInFlight = false;
+            });
+            AppSnackbar.showSuccess(ctx, 'تم تأكيد الاستلام. يمكنك البدء بالبيع.');
             Navigator.of(ctx).pushReplacement(
               MaterialPageRoute(builder: (_) => const InvoicePage()),
             );
           }
 
           if (state is DelegateLoadingStatusUpdated) {
-            setState(() => _currentLoading = state.loading);
+            setState(() {
+              _currentLoading = state.loading;
+              _actionInFlight = false;
+            });
             final label = state.loading.isInTransit
                 ? 'تم تغيير الحالة إلى: في الطريق'
                 : 'تم إنهاء الجولة بنجاح';
-            ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
-              content: Text(label),
-              backgroundColor: AppTheme.secondary,
-            ));
+            AppSnackbar.showSuccess(ctx, label);
           }
 
           if (state is DelegateFailure) {
-            ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
-              content: Text(state.message),
-              backgroundColor: AppTheme.danger,
-            ));
+            setState(() => _actionInFlight = false);
+            AppSnackbar.showError(ctx, state.message);
           }
 
           if (state is DelegateLoadingLoaded) {
@@ -78,7 +95,7 @@ class _LoadingPageState extends State<LoadingPage> {
           }
         },
         builder: (_, state) {
-          if (state is DelegateLoading) {
+          if (state is DelegateLoading && _currentLoading == null) {
             return const Center(child: CircularProgressIndicator());
           }
 
@@ -101,7 +118,7 @@ class _LoadingPageState extends State<LoadingPage> {
           }
 
           final loading = _currentLoading!;
-          final isBusy = state is DelegateLoading;
+          final isBusy = _actionInFlight;
 
           if (loading.isInTransit) {
             return _InTransitView(
@@ -110,12 +127,13 @@ class _LoadingPageState extends State<LoadingPage> {
               onContinueSales: () => Navigator.of(context).push(
                 MaterialPageRoute(builder: (_) => const InvoicePage()),
               ),
-              onMarkCompleted: () => context.read<DelegateBloc>().add(
-                    DelegateLoadingStatusUpdateRequested(
-                      loadingId: loading.id,
-                      status: 'completed',
-                    ),
-                  ),
+              onMarkCompleted: () => _runAction(() =>
+                  context.read<DelegateBloc>().add(
+                        DelegateLoadingStatusUpdateRequested(
+                          loadingId: loading.id,
+                          status: 'completed',
+                        ),
+                      )),
             );
           }
 
@@ -132,16 +150,16 @@ class _LoadingPageState extends State<LoadingPage> {
             loading: loading,
             isBusy: isBusy,
             onConfirm: loading.isPendingPickup
-                ? () =>
-                    context.read<DelegateBloc>().add(DelegateLoadingConfirmed())
+                ? () => _runAction(() =>
+                    context.read<DelegateBloc>().add(DelegateLoadingConfirmed()))
                 : null,
             onMarkInTransit: loading.canUpdateToInTransit
-                ? () => context.read<DelegateBloc>().add(
+                ? () => _runAction(() => context.read<DelegateBloc>().add(
                       DelegateLoadingStatusUpdateRequested(
                         loadingId: loading.id,
                         status: 'in_transit',
                       ),
-                    )
+                    ))
                 : null,
           );
         },

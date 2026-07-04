@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/utils/app_snackbar.dart';
 import '../../data/models/admin_models.dart';
 import '../bloc/admin_bloc.dart';
 import '../bloc/admin_event.dart';
@@ -81,10 +82,7 @@ class _CreateLoadingPageState extends State<CreateLoadingPage> {
   }
 
   void _showError(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg),
-      backgroundColor: AppTheme.danger,
-    ));
+    AppSnackbar.showError(context, msg);
   }
 
   @override
@@ -94,17 +92,11 @@ class _CreateLoadingPageState extends State<CreateLoadingPage> {
       body: BlocConsumer<AdminBloc, AdminState>(
         listener: (ctx, state) {
           if (state is AdminLoadingCreatedSuccess) {
-            ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
-              content: Text(state.message),
-              backgroundColor: AppTheme.secondary,
-            ));
+            AppSnackbar.showSuccess(ctx, state.message);
             Navigator.of(ctx).pop(true);
           }
           if (state is AdminFailure) {
-            ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
-              content: Text(state.message),
-              backgroundColor: AppTheme.danger,
-            ));
+            AppSnackbar.showError(ctx, state.message);
           }
         },
         builder: (ctx, state) {

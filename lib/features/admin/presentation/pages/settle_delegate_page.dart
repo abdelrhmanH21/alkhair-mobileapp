@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/utils/app_snackbar.dart';
 import '../bloc/admin_bloc.dart';
 import '../bloc/admin_event.dart';
 import '../bloc/admin_state.dart';
@@ -94,10 +95,7 @@ class _SettleDelegatePageState extends State<SettleDelegatePage> {
   }
 
   void _showError(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(msg),
-      backgroundColor: AppTheme.danger,
-    ));
+    AppSnackbar.showError(context, msg);
   }
 
   @override
@@ -115,10 +113,7 @@ class _SettleDelegatePageState extends State<SettleDelegatePage> {
                 state.summary.totalCash.toStringAsFixed(2);
           }
           if (state is AdminSettlementSuccess) {
-            ScaffoldMessenger.of(ctx).showSnackBar(const SnackBar(
-              content: Text('تمت التصفية بنجاح'),
-              backgroundColor: AppTheme.secondary,
-            ));
+            AppSnackbar.showSuccess(ctx, 'تمت التصفية بنجاح');
             Navigator.of(ctx).pop();
           }
           if (state is AdminFailure) {

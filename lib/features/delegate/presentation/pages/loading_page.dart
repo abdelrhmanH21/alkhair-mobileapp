@@ -69,15 +69,12 @@ class _LoadingPageState extends State<LoadingPage> {
           }
 
           if (state is DelegateLoadingLoaded) {
+            // No auto-navigate here: this page is now reached explicitly via
+            // "عرض التفاصيل" from DelegateHomePage, so simply fetching/
+            // displaying the loading must never redirect the user away from
+            // the details they asked to see. The confirm action still jumps
+            // to InvoicePage via DelegateLoadingConfirmedState above.
             setState(() => _currentLoading = state.loading);
-            // Only auto-navigate on the initial accepted state (fresh pickup confirm).
-            // in_transit and completed show their own UI on this page.
-            if (state.loading?.isAccepted == true) {
-              final nav = Navigator.of(ctx);
-              Future.microtask(() => nav.pushReplacement(
-                    MaterialPageRoute(builder: (_) => const InvoicePage()),
-                  ));
-            }
           }
         },
         builder: (_, state) {

@@ -36,9 +36,14 @@ class _TruckStockPageState extends State<TruckStockPage> {
         ],
       ),
       body: BlocConsumer<DelegateBloc, DelegateState>(
-        listener: (_, state) {
+        listener: (ctx, state) {
           if (state is DelegateTruckStockLoaded) {
             setState(() => _stocks = state.stocks);
+          } else if (state is DelegateFailure) {
+            ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+              content: Text(state.message),
+              backgroundColor: AppTheme.danger,
+            ));
           }
         },
         builder: (_, state) {

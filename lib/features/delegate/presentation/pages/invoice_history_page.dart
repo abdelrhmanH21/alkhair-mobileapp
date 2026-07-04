@@ -29,9 +29,14 @@ class _InvoiceHistoryPageState extends State<InvoiceHistoryPage> {
     return Scaffold(
       appBar: AppBar(title: const Text('سجل الفواتير')),
       body: BlocConsumer<DelegateBloc, DelegateState>(
-        listener: (_, state) {
+        listener: (ctx, state) {
           if (state is DelegateInvoicesLoaded) {
             setState(() => _invoices = state.invoices);
+          } else if (state is DelegateFailure) {
+            ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(
+              content: Text(state.message),
+              backgroundColor: AppTheme.danger,
+            ));
           }
         },
         builder: (_, state) {

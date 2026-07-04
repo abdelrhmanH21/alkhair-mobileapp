@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:dio/dio.dart';
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 import '../../../../core/di/service_locator.dart';
 import '../../../../core/network/api_client.dart';
@@ -22,6 +23,7 @@ class _PrintInvoicePageState extends State<PrintInvoicePage> {
   final _api     = sl<ApiClient>();
   Map<String, dynamic>? _invoiceData;
   bool _loading = true;
+  String? _loadError;
   List<BluetoothInfo> _devices = [];
   BluetoothInfo? _selectedDevice;
   bool _printing = false;
@@ -42,8 +44,16 @@ class _PrintInvoicePageState extends State<PrintInvoicePage> {
         _invoiceData = res.data['data'] as Map<String, dynamic>?;
         _loading = false;
       });
+    } on DioException catch (e) {
+      setState(() {
+        _loading = false;
+        _loadError = e.response?.data?['message'] as String? ?? 'فشل تحميل بيانات الفاتورة.';
+      });
     } catch (_) {
-      setState(() => _loading = false);
+      setState(() {
+        _loading = false;
+        _loadError = 'حدث خطأ غير متوقع أثناء تحميل الفاتورة.';
+      });
     }
   }
 
@@ -128,6 +138,29 @@ class _PrintInvoicePageState extends State<PrintInvoicePage> {
       appBar: AppBar(title: const Text('طباعة الفاتورة')),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
+          : _loadError != null
+          ? Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.error_outline, size: 48, color: AppTheme.danger),
+                    const SizedBox(height: 12),
+                    Text(_loadError!, textAlign: TextAlign.center),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: () => setState(() {
+                        _loading = true;
+                        _loadError = null;
+                        _loadInvoice();
+                      }),
+                      child: const Text('إعادة المحاولة'),
+                    ),
+                  ],
+                ),
+              ),
+            )
           : Padding(
               padding: const EdgeInsets.all(16),
               child: Column(

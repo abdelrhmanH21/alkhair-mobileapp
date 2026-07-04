@@ -377,6 +377,41 @@ class _SummaryCard extends StatelessWidget {
                         label: 'دين مضاف', value: summary.totalDebtAdded)),
               ],
             ),
+            if (summary.totalExpenses > 0 || summary.totalCollections > 0) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                      child: _Stat(
+                          label: 'مصروفات مسجّلة',
+                          value: summary.totalExpenses,
+                          color: AppTheme.danger)),
+                  Expanded(
+                      child: _Stat(
+                          label: 'تحصيلات من عملاء',
+                          value: summary.totalCollections,
+                          color: AppTheme.secondary)),
+                ],
+              ),
+            ],
+            const Divider(height: 24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('النقد المتوقع تسليمه',
+                    style: Theme.of(context)
+                        .textTheme
+                        .titleMedium
+                        ?.copyWith(fontWeight: FontWeight.bold)),
+                Text(
+                  summary.expectedCash.toStringAsFixed(2),
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleLarge
+                      ?.copyWith(color: AppTheme.primary, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
             if (summary.damagedGoods.isNotEmpty) ...[
               const Divider(height: 24),
               Row(
@@ -438,7 +473,8 @@ class _SummaryCard extends StatelessWidget {
 class _Stat extends StatelessWidget {
   final String label;
   final double value;
-  const _Stat({required this.label, required this.value});
+  final Color? color;
+  const _Stat({required this.label, required this.value, this.color});
 
   @override
   Widget build(BuildContext context) => Column(
@@ -450,7 +486,7 @@ class _Stat extends StatelessWidget {
               style: Theme.of(context)
                   .textTheme
                   .titleMedium
-                  ?.copyWith(color: AppTheme.primary)),
+                  ?.copyWith(color: color ?? AppTheme.primary)),
         ],
       );
 }

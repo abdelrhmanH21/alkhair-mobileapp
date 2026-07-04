@@ -55,6 +55,16 @@ class SettlementSummaryModel {
   final double totalNet;
   final double totalCash;
   final double totalDebtAdded;
+  // Cash the delegate paid out of pocket during the route (fuel, tolls, ...)
+  // and cash collected from a customer's OLD debt (unrelated to today's
+  // sales) — both change how much cash the delegate should actually be
+  // holding, on top of totalCash alone.
+  final double totalExpenses;
+  final double totalCollections;
+  // = totalCash - totalExpenses + totalCollections — same reconciliation
+  // formula settleDelegate() uses admin-side, shown here so the delegate
+  // sees the same expected number before submitting their declared amount.
+  final double expectedCash;
   final List<TruckRemnantModel> truckRemnants;
   final List<DamagedGoodModel> damagedGoods;
   // Non-null when a settlement request is already pending for this loading —
@@ -70,6 +80,9 @@ class SettlementSummaryModel {
     required this.totalNet,
     required this.totalCash,
     required this.totalDebtAdded,
+    required this.totalExpenses,
+    required this.totalCollections,
+    required this.expectedCash,
     required this.truckRemnants,
     required this.damagedGoods,
     this.settlementRequestId,
@@ -85,6 +98,13 @@ class SettlementSummaryModel {
       totalNet: (json['total_net'] as num? ?? 0).toDouble(),
       totalCash: (json['total_cash'] as num? ?? 0).toDouble(),
       totalDebtAdded: (json['total_debt_added'] as num? ?? 0).toDouble(),
+      totalExpenses: (json['total_expenses'] as num? ?? 0).toDouble(),
+      totalCollections: (json['total_collections'] as num? ?? 0).toDouble(),
+      expectedCash: (json['expected_cash'] as num? ??
+              ((json['total_cash'] as num? ?? 0) -
+                  (json['total_expenses'] as num? ?? 0) +
+                  (json['total_collections'] as num? ?? 0)))
+          .toDouble(),
       truckRemnants: (json['truck_remnants'] as List? ?? [])
           .map((e) => TruckRemnantModel.fromJson(e as Map<String, dynamic>))
           .toList(),

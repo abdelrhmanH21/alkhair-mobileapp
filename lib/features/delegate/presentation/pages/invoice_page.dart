@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/app_snackbar.dart';
+import '../../../app_config/presentation/bloc/app_config_bloc.dart';
+import '../../../app_config/presentation/bloc/app_config_state.dart';
 import '../bloc/delegate_bloc.dart';
 import '../bloc/delegate_event.dart';
 import '../bloc/delegate_state.dart';
@@ -861,6 +863,16 @@ class _SellableProductPickerSheetState extends State<_SellableProductPickerSheet
   List<SellableProductModel> _products = [];
   SellableProductModel? _selected;
   final _qtyCtrl = TextEditingController(text: '1');
+  final _priceCtrl = TextEditingController();
+  String? _priceError;
+
+  double get _maxOverridePct {
+    final state = context.read<AppConfigBloc>().state;
+    return state is AppConfigLoaded ? state.config.maxPriceOverridePct : 10;
+  }
+
+  double get _minAllowedPrice => (_selected!.unitPrice * (1 - _maxOverridePct / 100));
+  double get _maxAllowedPrice => (_selected!.unitPrice * (1 + _maxOverridePct / 100));
 
   @override
   void initState() {
@@ -872,6 +884,7 @@ class _SellableProductPickerSheetState extends State<_SellableProductPickerSheet
   @override
   void dispose() {
     _qtyCtrl.dispose();
+    _priceCtrl.dispose();
     super.dispose();
   }
 
@@ -880,12 +893,20 @@ class _SellableProductPickerSheetState extends State<_SellableProductPickerSheet
     if (product == null) return;
     final qty = (double.tryParse(_qtyCtrl.text) ?? 0).clamp(0, product.availableQty).toDouble();
     if (qty <= 0) return;
+
+    final price = double.tryParse(_priceCtrl.text);
+    if (price == null || price < _minAllowedPrice || price > _maxAllowedPrice) {
+      setState(() => _priceError =
+          'السعر يجب أن يكون بين ${_minAllowedPrice.toStringAsFixed(2)} و ${_maxAllowedPrice.toStringAsFixed(2)}');
+      return;
+    }
+
     widget.onAdd(InvoiceSaleItem(
       productId: product.productId,
       productName: product.name,
       maxQty: product.availableQty,
       quantity: qty,
-      unitPrice: product.unitPrice,
+      unitPrice: price,
     ));
     Navigator.pop(context);
   }
@@ -950,6 +971,8 @@ class _SellableProductPickerSheetState extends State<_SellableProductPickerSheet
                           onTap: () => setState(() {
                             _selected = p;
                             _qtyCtrl.text = '1';
+                            _priceCtrl.text = p.unitPrice.toStringAsFixed(2);
+                            _priceError = null;
                           }),
                         );
                       },
@@ -974,6 +997,33 @@ class _SellableProductPickerSheetState extends State<_SellableProductPickerSheet
                       ),
                     ],
                   ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                            'السعر (بين ${_minAllowedPrice.toStringAsFixed(2)} و ${_maxAllowedPrice.toStringAsFixed(2)})',
+                            style: const TextStyle(fontSize: 12)),
+                      ),
+                      SizedBox(
+                        width: 90,
+                        child: TextField(
+                          controller: _priceCtrl,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          textAlign: TextAlign.center,
+                          textDirection: TextDirection.ltr,
+                          onChanged: (_) {
+                            if (_priceError != null) setState(() => _priceError = null);
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (_priceError != null) ...[
+                    const SizedBox(height: 4),
+                    Text(_priceError!,
+                        style: const TextStyle(fontSize: 11, color: AppTheme.danger)),
+                  ],
                   const SizedBox(height: 8),
                   ElevatedButton(
                     onPressed: _confirmAdd,

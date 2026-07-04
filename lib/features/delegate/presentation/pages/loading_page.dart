@@ -31,9 +31,33 @@ class _LoadingPageState extends State<LoadingPage> {
   // entirely, rather than just hiding whichever error shows up.
   bool _actionInFlight = false;
 
+  // This page is normally reached via "عرض التفاصيل" pushed on top of
+  // DelegateHomePage, whose _HomeTab stays mounted (and its BlocListener
+  // stays subscribed to the same shared DelegateBloc) underneath. _HomeTab
+  // dispatches its own DelegateLoadingFetched() once, right after the
+  // dashboard settles at Home-tab mount — if this page is opened quickly
+  // after landing on Home, that fetch can still be in flight. Without this
+  // guard, a DelegateFailure/DelegateLoadingLoaded from THAT unrelated,
+  // still-pending request (bloc state carries no dispatch identity) would
+  // be misattributed to this page's own fetch, flashing a spurious error
+  // banner even though this page's own data loads fine moments later.
+  bool _fetchInFlight = false;
+  String? _loadError;
+
   @override
   void initState() {
     super.initState();
+    // Set directly rather than via _fetchLoading()'s setState — calling
+    // setState before the first build is redundant (nothing to rebuild yet).
+    _fetchInFlight = true;
+    context.read<DelegateBloc>().add(DelegateLoadingFetched());
+  }
+
+  void _fetchLoading() {
+    setState(() {
+      _fetchInFlight = true;
+      _loadError = null;
+    });
     context.read<DelegateBloc>().add(DelegateLoadingFetched());
   }
 
@@ -51,8 +75,7 @@ class _LoadingPageState extends State<LoadingPage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: () =>
-                context.read<DelegateBloc>().add(DelegateLoadingFetched()),
+            onPressed: _fetchLoading,
           ),
         ],
       ),
@@ -81,39 +104,54 @@ class _LoadingPageState extends State<LoadingPage> {
           }
 
           if (state is DelegateFailure) {
-            setState(() => _actionInFlight = false);
-            AppSnackbar.showError(ctx, state.message);
+            if (_actionInFlight) {
+              setState(() => _actionInFlight = false);
+              AppSnackbar.showError(ctx, state.message);
+            } else if (_fetchInFlight) {
+              setState(() {
+                _fetchInFlight = false;
+                _loadError = state.message;
+              });
+              AppSnackbar.showError(ctx, state.message);
+            }
+            // else: belongs to some unrelated dispatch on the shared
+            // DelegateBloc (e.g. _HomeTab's own still-in-flight shipment
+            // fetch) — not ours, ignore it rather than showing a spurious
+            // error for a request this page never made.
           }
 
           if (state is DelegateLoadingLoaded) {
+            if (!_fetchInFlight) return; // not ours — see note above
             // No auto-navigate here: this page is now reached explicitly via
             // "عرض التفاصيل" from DelegateHomePage, so simply fetching/
             // displaying the loading must never redirect the user away from
             // the details they asked to see. The confirm action still jumps
             // to InvoicePage via DelegateLoadingConfirmedState above.
-            setState(() => _currentLoading = state.loading);
+            setState(() {
+              _currentLoading = state.loading;
+              _fetchInFlight = false;
+              _loadError = null;
+            });
           }
         },
         builder: (_, state) {
-          if (state is DelegateLoading && _currentLoading == null) {
+          if (_fetchInFlight && _currentLoading == null) {
             return const Center(child: CircularProgressIndicator());
           }
 
           // Full-screen error only when we have no data to show (initial fetch failed).
           // Action failures (confirm, status update) use the SnackBar from the listener
           // and keep the loading detail visible via _currentLoading.
-          if (state is DelegateFailure && _currentLoading == null) {
+          if (_loadError != null && _currentLoading == null) {
             return _ErrorView(
-              message: state.message,
-              onRetry: () =>
-                  context.read<DelegateBloc>().add(DelegateLoadingFetched()),
+              message: _loadError!,
+              onRetry: _fetchLoading,
             );
           }
 
           if (_currentLoading == null) {
             return _EmptyLoadingView(
-              onRefresh: () =>
-                  context.read<DelegateBloc>().add(DelegateLoadingFetched()),
+              onRefresh: _fetchLoading,
             );
           }
 

@@ -94,3 +94,9 @@ class DelegateSettlementRequestSubmitted extends DelegateEvent {
   @override
   List<Object?> get props => [cashAmount, walletAmount, notes];
 }
+
+class DelegatePenaltiesFetched extends DelegateEvent {}
+
+class DelegateAdvancesFetched extends DelegateEvent {}
+
+class DelegateCommissionBreakdownFetched extends DelegateEvent {}

@@ -24,6 +24,9 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
     on<DelegateCustomerRegionsFetched>(_onFetchCustomerRegions);
     on<DelegateSettlementSummaryRequested>(_onFetchSettlementSummary);
     on<DelegateSettlementRequestSubmitted>(_onSubmitSettlementRequest);
+    on<DelegatePenaltiesFetched>(_onFetchPenalties);
+    on<DelegateAdvancesFetched>(_onFetchAdvances);
+    on<DelegateCommissionBreakdownFetched>(_onFetchCommissionBreakdown);
   }
 
   Future<void> _onFetchLoading(
@@ -273,6 +276,51 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
       );
       emit(DelegateSettlementRequestSubmittedState(
           'تم إرسال طلب التسليم، بانتظار تأكيد الإدارة.'));
+    } on DioException catch (e) {
+      emit(DelegateFailure(_parseError(e)));
+    } catch (_) {
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
+    }
+  }
+
+  Future<void> _onFetchPenalties(
+    DelegatePenaltiesFetched event,
+    Emitter<DelegateState> emit,
+  ) async {
+    emit(DelegateLoading());
+    try {
+      final penalties = await _repo.getPenalties();
+      emit(DelegatePenaltiesLoaded(penalties));
+    } on DioException catch (e) {
+      emit(DelegateFailure(_parseError(e)));
+    } catch (_) {
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
+    }
+  }
+
+  Future<void> _onFetchAdvances(
+    DelegateAdvancesFetched event,
+    Emitter<DelegateState> emit,
+  ) async {
+    emit(DelegateLoading());
+    try {
+      final advances = await _repo.getAdvances();
+      emit(DelegateAdvancesLoaded(advances));
+    } on DioException catch (e) {
+      emit(DelegateFailure(_parseError(e)));
+    } catch (_) {
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
+    }
+  }
+
+  Future<void> _onFetchCommissionBreakdown(
+    DelegateCommissionBreakdownFetched event,
+    Emitter<DelegateState> emit,
+  ) async {
+    emit(DelegateLoading());
+    try {
+      final days = await _repo.getCommissionBreakdown();
+      emit(DelegateCommissionBreakdownLoaded(days));
     } on DioException catch (e) {
       emit(DelegateFailure(_parseError(e)));
     } catch (_) {

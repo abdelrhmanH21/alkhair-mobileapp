@@ -7,6 +7,9 @@ import '../bloc/delegate_bloc.dart';
 import '../bloc/delegate_event.dart';
 import '../bloc/delegate_state.dart';
 import '../../data/models/dashboard_model.dart';
+import '../pages/penalties_page.dart';
+import '../pages/advances_page.dart';
+import '../pages/commission_breakdown_page.dart';
 
 /// Reusable delegate-performance dashboard. Self-contained: dispatches its own
 /// fetch and owns its own loading/error/data lifecycle, so it can be dropped
@@ -101,6 +104,7 @@ class _DashboardSectionState extends State<DashboardSection> {
                     label: 'العمولة المكتسبة',
                     value: dashboard.commissionEarned,
                     color: AppTheme.secondary,
+                    onTap: () => _openPage(context, const CommissionBreakdownPage()),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -123,6 +127,7 @@ class _DashboardSectionState extends State<DashboardSection> {
                     label: 'إجمالي الجزاءات',
                     value: dashboard.penaltiesTotal,
                     color: AppTheme.danger,
+                    onTap: () => _openPage(context, const PenaltiesPage()),
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -132,6 +137,7 @@ class _DashboardSectionState extends State<DashboardSection> {
                     label: 'إجمالي السلف',
                     value: dashboard.advancesTotal,
                     color: AppTheme.accent,
+                    onTap: () => _openPage(context, const AdvancesPage()),
                   ),
                 ),
               ],
@@ -143,6 +149,18 @@ class _DashboardSectionState extends State<DashboardSection> {
       }),
     );
   }
+}
+
+void _openPage(BuildContext context, Widget page) {
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (_) => BlocProvider.value(
+        value: context.read<DelegateBloc>(),
+        child: page,
+      ),
+    ),
+  );
 }
 
 // ─── Loading skeleton ────────────────────────────────────────────────────────
@@ -300,39 +318,53 @@ class _StatCard extends StatelessWidget {
   final String label;
   final double value;
   final Color color;
+  final VoidCallback? onTap;
   const _StatCard({
     required this.icon,
     required this.label,
     required this.value,
     required this.color,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) => Card(
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(10),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Icon(icon, color: color, size: 20),
+                    ),
+                    if (onTap != null) ...[
+                      const Spacer(),
+                      Icon(Icons.chevron_left_rounded, color: Colors.grey.shade400, size: 18),
+                    ],
+                  ],
                 ),
-                child: Icon(icon, color: color, size: 20),
-              ),
-              const SizedBox(height: 10),
-              Text(label, style: Theme.of(context).textTheme.labelSmall),
-              const SizedBox(height: 4),
-              Text(
-                value.toStringAsFixed(2),
-                style: Theme.of(context)
-                    .textTheme
-                    .titleLarge
-                    ?.copyWith(color: color, fontSize: 18),
-              ),
-            ],
+                const SizedBox(height: 10),
+                Text(label, style: Theme.of(context).textTheme.labelSmall),
+                const SizedBox(height: 4),
+                Text(
+                  value.toStringAsFixed(2),
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleLarge
+                      ?.copyWith(color: color, fontSize: 18),
+                ),
+              ],
+            ),
           ),
         ),
       );

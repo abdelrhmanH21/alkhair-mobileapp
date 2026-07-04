@@ -6,6 +6,7 @@ import '../../data/models/sellable_product_model.dart';
 import '../../data/models/catalog_product_model.dart';
 import '../../data/models/customer_region_model.dart';
 import '../../data/models/settlement_summary_model.dart';
+import '../../data/models/breakdown_models.dart';
 
 abstract class DelegateRepository {
   Future<LoadingModel?> getCurrentLoading();
@@ -39,4 +40,7 @@ abstract class DelegateRepository {
     required double walletAmount,
     String? notes,
   });
+  Future<List<PenaltyModel>> getPenalties();
+  Future<List<AdvanceModel>> getAdvances();
+  Future<List<CommissionDayModel>> getCommissionBreakdown();
 }

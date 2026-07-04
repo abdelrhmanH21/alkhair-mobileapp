@@ -8,6 +8,7 @@ import '../models/sellable_product_model.dart';
 import '../models/catalog_product_model.dart';
 import '../models/customer_region_model.dart';
 import '../models/settlement_summary_model.dart';
+import '../models/breakdown_models.dart';
 
 abstract class DelegateRemoteDataSource {
   Future<LoadingModel?> fetchCurrentLoading();
@@ -42,6 +43,9 @@ abstract class DelegateRemoteDataSource {
     required double walletAmount,
     String? notes,
   });
+  Future<List<PenaltyModel>> fetchPenalties();
+  Future<List<AdvanceModel>> fetchAdvances();
+  Future<List<CommissionDayModel>> fetchCommissionBreakdown();
 }
 
 class DelegateRemoteDataSourceImpl implements DelegateRemoteDataSource {
@@ -192,5 +196,26 @@ class DelegateRemoteDataSourceImpl implements DelegateRemoteDataSource {
       'wallet_amount': walletAmount,
       if (notes != null && notes.isNotEmpty) 'notes': notes,
     });
+  }
+
+  @override
+  Future<List<PenaltyModel>> fetchPenalties() async {
+    final res = await _client.dio.get(ApiEndpoints.delegatePenalties);
+    final list = res.data['data'] as List? ?? [];
+    return list.map((e) => PenaltyModel.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  @override
+  Future<List<AdvanceModel>> fetchAdvances() async {
+    final res = await _client.dio.get(ApiEndpoints.delegateAdvances);
+    final list = res.data['data'] as List? ?? [];
+    return list.map((e) => AdvanceModel.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  @override
+  Future<List<CommissionDayModel>> fetchCommissionBreakdown() async {
+    final res = await _client.dio.get(ApiEndpoints.delegateCommissionBreakdown);
+    final list = res.data['data'] as List? ?? [];
+    return list.map((e) => CommissionDayModel.fromJson(e as Map<String, dynamic>)).toList();
   }
 }

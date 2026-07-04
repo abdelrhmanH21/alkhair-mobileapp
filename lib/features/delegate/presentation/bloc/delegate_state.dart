@@ -7,6 +7,7 @@ import '../../data/models/sellable_product_model.dart';
 import '../../data/models/catalog_product_model.dart';
 import '../../data/models/customer_region_model.dart';
 import '../../data/models/settlement_summary_model.dart';
+import '../../data/models/breakdown_models.dart';
 
 abstract class DelegateState extends Equatable {
   @override
@@ -113,6 +114,27 @@ class DelegateSettlementRequestSubmittedState extends DelegateState {
   DelegateSettlementRequestSubmittedState(this.message);
   @override
   List<Object?> get props => [message];
+}
+
+class DelegatePenaltiesLoaded extends DelegateState {
+  final List<PenaltyModel> penalties;
+  DelegatePenaltiesLoaded(this.penalties);
+  @override
+  List<Object?> get props => [penalties];
+}
+
+class DelegateAdvancesLoaded extends DelegateState {
+  final List<AdvanceModel> advances;
+  DelegateAdvancesLoaded(this.advances);
+  @override
+  List<Object?> get props => [advances];
+}
+
+class DelegateCommissionBreakdownLoaded extends DelegateState {
+  final List<CommissionDayModel> days;
+  DelegateCommissionBreakdownLoaded(this.days);
+  @override
+  List<Object?> get props => [days];
 }
 
 class DelegateFailure extends DelegateState {

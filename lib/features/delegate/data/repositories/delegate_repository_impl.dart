@@ -7,6 +7,7 @@ import '../models/sellable_product_model.dart';
 import '../models/catalog_product_model.dart';
 import '../models/customer_region_model.dart';
 import '../models/settlement_summary_model.dart';
+import '../models/breakdown_models.dart';
 import '../../domain/repositories/delegate_repository.dart';
 
 class DelegateRepositoryImpl implements DelegateRepository {
@@ -97,4 +98,14 @@ class DelegateRepositoryImpl implements DelegateRepository {
         walletAmount: walletAmount,
         notes: notes,
       );
+
+  @override
+  Future<List<PenaltyModel>> getPenalties() => _remote.fetchPenalties();
+
+  @override
+  Future<List<AdvanceModel>> getAdvances() => _remote.fetchAdvances();
+
+  @override
+  Future<List<CommissionDayModel>> getCommissionBreakdown() =>
+      _remote.fetchCommissionBreakdown();
 }

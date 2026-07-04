@@ -57,6 +57,10 @@ class SettlementSummaryModel {
   final double totalDebtAdded;
   final List<TruckRemnantModel> truckRemnants;
   final List<DamagedGoodModel> damagedGoods;
+  // Non-null when a settlement request is already pending for this loading —
+  // lets the app restore the "awaiting confirmation" state on a fresh app
+  // start/tab mount, not just while the app stayed open after submitting.
+  final int? settlementRequestId;
 
   const SettlementSummaryModel({
     required this.loadingId,
@@ -68,6 +72,7 @@ class SettlementSummaryModel {
     required this.totalDebtAdded,
     required this.truckRemnants,
     required this.damagedGoods,
+    this.settlementRequestId,
   });
 
   factory SettlementSummaryModel.fromJson(Map<String, dynamic> json) {
@@ -86,6 +91,7 @@ class SettlementSummaryModel {
       damagedGoods: (json['damaged_goods'] as List? ?? [])
           .map((e) => DamagedGoodModel.fromJson(e as Map<String, dynamic>))
           .toList(),
+      settlementRequestId: json['settlement_request_id'] as int?,
     );
   }
 }

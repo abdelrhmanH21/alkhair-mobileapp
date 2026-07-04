@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/theme/app_theme.dart';
@@ -27,8 +28,15 @@ class _SettlementPageState extends State<SettlementPage> {
   SettlementSummaryModel? _summary;
   String? _summaryError;
   bool _submitting = false;
-  bool _submitted = false;
   String? _submittedMessage;
+
+  // The loading a settlement request was submitted for, and whether admin
+  // has since confirmed it. Kept distinct from _summary (which goes null
+  // the moment the loading is settled) so we can still show a definite
+  // "confirmed" state instead of just reverting to "no active loading".
+  int? _submittedLoadingId;
+  bool _confirmed = false;
+  Timer? _pollTimer;
 
   final _cashCtrl = TextEditingController(text: '0');
   final _walletCtrl = TextEditingController(text: '0');
@@ -42,13 +50,14 @@ class _SettlementPageState extends State<SettlementPage> {
   @override
   void didUpdateWidget(covariant SettlementPage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.refreshTick != oldWidget.refreshTick && !_submitted) {
+    if (widget.refreshTick != oldWidget.refreshTick) {
       _fetchSummary();
     }
   }
 
   @override
   void dispose() {
+    _pollTimer?.cancel();
     _cashCtrl.dispose();
     _walletCtrl.dispose();
     super.dispose();
@@ -57,6 +66,16 @@ class _SettlementPageState extends State<SettlementPage> {
   void _fetchSummary() {
     setState(() => _summaryError = null);
     context.read<DelegateBloc>().add(DelegateSettlementSummaryRequested());
+  }
+
+  /// While awaiting admin confirmation, poll periodically so the delegate
+  /// sees confirmation as soon as it happens instead of only after manually
+  /// reopening the app or switching tabs.
+  void _startPolling() {
+    _pollTimer?.cancel();
+    _pollTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (!_confirmed) _fetchSummary();
+    });
   }
 
   void _submit() {
@@ -79,7 +98,7 @@ class _SettlementPageState extends State<SettlementPage> {
       appBar: AppBar(
         title: const Text('تسليم الوردية'),
         actions: [
-          if (_summary != null && !_submitted)
+          if (_summary != null && _submittedLoadingId == null)
             IconButton(
               icon: const Icon(Icons.refresh),
               tooltip: 'تحديث',
@@ -90,20 +109,56 @@ class _SettlementPageState extends State<SettlementPage> {
       body: BlocListener<DelegateBloc, DelegateState>(
         listener: (ctx, state) {
           if (state is DelegateSettlementSummaryLoaded) {
+            final newLoadingId = state.summary.loadingId;
+            final isNewLoading = _submittedLoadingId != null && _submittedLoadingId != newLoadingId;
+            final hasPendingRequest = _submittedLoadingId == null && state.summary.settlementRequestId != null;
+
+            if (isNewLoading) _pollTimer?.cancel();
+
             setState(() {
               _summary = state.summary;
               _summaryError = null;
+              if (isNewLoading) {
+                // A different loading than the one we last submitted/
+                // confirmed for means a NEW shipment was assigned — reset
+                // entirely rather than showing stale state.
+                _submittedLoadingId = null;
+                _confirmed = false;
+                _submittedMessage = null;
+                _cashCtrl.text = '0';
+                _walletCtrl.text = '0';
+              } else if (hasPendingRequest) {
+                // A pending request already exists for this loading (e.g.
+                // the delegate submitted, then fully closed and reopened
+                // the app) — restore "awaiting confirmation" instead of
+                // showing the entry form again and risking a duplicate
+                // submit attempt.
+                _submittedLoadingId = newLoadingId;
+                _submittedMessage = 'يوجد طلب تسليم قيد الانتظار لهذه التحميلة.';
+              }
             });
+
+            if (hasPendingRequest) _startPolling();
           } else if (state is DelegateSettlementRequestSubmittedState) {
             setState(() {
               _submitting = false;
-              _submitted = true;
+              _submittedLoadingId = _summary?.loadingId;
               _submittedMessage = state.message;
             });
+            _startPolling();
           } else if (state is DelegateFailure) {
             if (_submitting) {
               setState(() => _submitting = false);
               AppSnackbar.showError(ctx, state.message);
+            } else if (_submittedLoadingId != null && !_confirmed) {
+              // myShiftSummary() only 404s when there's no active (unsettled)
+              // loading — while we're waiting on a submitted request, that
+              // means admin just confirmed the settlement, not a real error.
+              _pollTimer?.cancel();
+              setState(() {
+                _confirmed = true;
+                _summary = null;
+              });
             } else if (_summary == null) {
               setState(() => _summaryError = state.message);
             }
@@ -115,7 +170,7 @@ class _SettlementPageState extends State<SettlementPage> {
   }
 
   Widget _buildBody(BuildContext context) {
-    if (_submitted) {
+    if (_submittedLoadingId != null && _confirmed) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -125,6 +180,29 @@ class _SettlementPageState extends State<SettlementPage> {
               const Icon(Icons.check_circle_rounded,
                   size: 64, color: AppTheme.secondary),
               const SizedBox(height: 16),
+              Text('تم تأكيد التسليم من الإدارة',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 8),
+              const Text('تمت تصفية الوردية بنجاح.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.grey)),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_submittedLoadingId != null && !_confirmed) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.hourglass_top_rounded,
+                  size: 64, color: AppTheme.accent),
+              const SizedBox(height: 16),
               Text(_submittedMessage ?? 'تم إرسال طلب التسليم.',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.titleMedium),
@@ -132,6 +210,12 @@ class _SettlementPageState extends State<SettlementPage> {
               const Text('بانتظار تأكيد الإدارة لإتمام تصفية الوردية.',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: Colors.grey)),
+              const SizedBox(height: 20),
+              OutlinedButton.icon(
+                onPressed: _fetchSummary,
+                icon: const Icon(Icons.refresh_rounded),
+                label: const Text('تحقق الآن'),
+              ),
             ],
           ),
         ),

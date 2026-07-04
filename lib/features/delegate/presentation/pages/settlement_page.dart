@@ -38,8 +38,8 @@ class _SettlementPageState extends State<SettlementPage>
   int? _submittedLoadingId;
   bool _confirmed = false;
 
-  final _cashCtrl = TextEditingController(text: '0');
-  final _walletCtrl = TextEditingController(text: '0');
+  final _cashCtrl = TextEditingController();
+  final _walletCtrl = TextEditingController();
 
   @override
   void initState() {
@@ -123,8 +123,8 @@ class _SettlementPageState extends State<SettlementPage>
                 _submittedLoadingId = null;
                 _confirmed = false;
                 _submittedMessage = null;
-                _cashCtrl.text = '0';
-                _walletCtrl.text = '0';
+                _cashCtrl.clear();
+                _walletCtrl.clear();
               } else if (hasPendingRequest) {
                 // A pending request already exists for this loading (e.g.
                 // the delegate submitted, then fully closed and reopened
@@ -256,6 +256,7 @@ class _SettlementPageState extends State<SettlementPage>
                           const TextInputType.numberWithOptions(decimal: true),
                       decoration: const InputDecoration(
                         labelText: 'نقدي',
+                        hintText: '0',
                         prefixIcon: Icon(Icons.payments_outlined),
                       ),
                     ),
@@ -266,6 +267,7 @@ class _SettlementPageState extends State<SettlementPage>
                           const TextInputType.numberWithOptions(decimal: true),
                       decoration: const InputDecoration(
                         labelText: 'محفظة إلكترونية',
+                        hintText: '0',
                         prefixIcon: Icon(Icons.account_balance_wallet_outlined),
                       ),
                     ),

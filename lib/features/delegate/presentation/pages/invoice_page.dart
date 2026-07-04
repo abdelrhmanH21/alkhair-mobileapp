@@ -49,7 +49,7 @@ class _InvoicePageState extends State<InvoicePage> {
   final List<InvoiceReturnItem> _returnItems = [];
 
   // ── Cash received ──────────────────────────────────────────────────────────
-  final _cashCtrl = TextEditingController(text: '0');
+  final _cashCtrl = TextEditingController();
 
   @override
   void initState() {
@@ -175,7 +175,7 @@ class _InvoicePageState extends State<InvoicePage> {
               _selectedClient = null;
               _salesItems.clear();
               _returnItems.clear();
-              _cashCtrl.text = '0';
+              _cashCtrl.clear();
               _searchCtrl.clear();
               _searchResults.clear();
             });
@@ -773,6 +773,7 @@ class _TotalsCard extends StatelessWidget {
                       textAlign: TextAlign.center,
                       decoration: const InputDecoration(
                         isDense: true,
+                        hintText: '0',
                         contentPadding:
                             EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                       ),

@@ -47,6 +47,20 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^4.0.0
+  flutter_launcher_icons: ^0.14.4
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/icon/icon.png"
+  # Source logo has genuine alpha transparency (~76% of pixels) around the
+  # mark — iOS requires opaque icons (Apple flattens transparency to black
+  # otherwise), so flatten to white here to match how the logo already
+  # displays against light backgrounds elsewhere in the app.
+  remove_alpha_ios: true
+  background_color_ios: "#ffffff"
+  adaptive_icon_background: "#ffffff"
+  adaptive_icon_foreground: "assets/icon/icon.png"
 
 flutter:
   uses-material-design: true

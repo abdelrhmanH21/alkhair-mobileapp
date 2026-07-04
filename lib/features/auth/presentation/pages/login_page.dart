@@ -78,16 +78,16 @@ class _LoginPageState extends State<LoginPage> {
                           : 'الخير للألبان';
                       return Text(
                         name,
-                        style: const TextStyle(
-                            fontSize: 26,
-                            fontWeight: FontWeight.bold,
-                            color: AppTheme.primary),
+                        style: Theme.of(context)
+                            .textTheme
+                            .headlineMedium
+                            ?.copyWith(color: AppTheme.primary),
                       );
                     },
                   ),
                   const SizedBox(height: 6),
-                  const Text('تطبيق العمليات الميدانية',
-                      style: TextStyle(fontSize: 14, color: Colors.grey)),
+                  Text('تطبيق العمليات الميدانية',
+                      style: Theme.of(context).textTheme.bodyMedium),
                   const SizedBox(height: 32),
 
                   // Role toggle tabs
@@ -117,7 +117,7 @@ class _LoginPageState extends State<LoginPage> {
 
                   // Login form
                   Card(
-                    elevation: 3,
+                    elevation: AppTheme.elevationHigh,
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16)),
                     child: Padding(
@@ -131,8 +131,7 @@ class _LoginPageState extends State<LoginPage> {
                               _roleTab == 0
                                   ? 'دخول المندوب'
                                   : 'دخول الإدارة',
-                              style: const TextStyle(
-                                  fontSize: 18, fontWeight: FontWeight.bold),
+                              style: Theme.of(context).textTheme.titleLarge,
                               textAlign: TextAlign.center,
                             ),
                             const SizedBox(height: 20),

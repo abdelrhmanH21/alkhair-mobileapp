@@ -368,10 +368,11 @@ class _ClientSearchSection extends StatelessWidget {
           if (results.isNotEmpty)
             Container(
               constraints: const BoxConstraints(maxHeight: 180),
+              margin: const EdgeInsets.only(top: 8),
               decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(10),
-                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 8)],
+                color: AppTheme.cardBg,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: const [BoxShadow(color: AppTheme.shadowColor, blurRadius: 10)],
               ),
               child: ListView.separated(
                 shrinkWrap: true,

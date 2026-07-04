@@ -14,7 +14,7 @@ import 'features/auth/presentation/bloc/auth_state.dart';
 import 'features/auth/presentation/pages/login_page.dart';
 
 import 'features/delegate/presentation/bloc/delegate_bloc.dart';
-import 'features/delegate/presentation/pages/loading_page.dart';
+import 'features/delegate/presentation/pages/delegate_home_page.dart';
 
 import 'features/admin/presentation/bloc/admin_bloc.dart';
 import 'features/admin/presentation/pages/admin_dashboard_page.dart';
@@ -85,9 +85,10 @@ class _RootNavigator extends StatelessWidget {
       return const AdminDashboardPage();
     }
     if (state.user.isDelegate) {
-      // Delegate enters loading receipt screen first;
-      // if loading already accepted, LoadingPage auto-redirects to InvoicePage.
-      return const LoadingPage();
+      // Delegate lands on the home dashboard, which always shows performance
+      // stats plus a non-blocking shipment-status card; the loading /
+      // sell / truck-stock / invoice workflows are reached from there.
+      return const DelegateHomePage();
     }
     // Unsupported role — show login with message
     return const LoginPage();

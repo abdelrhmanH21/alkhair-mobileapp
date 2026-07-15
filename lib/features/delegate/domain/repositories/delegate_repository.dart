@@ -7,6 +7,8 @@ import '../../data/models/catalog_product_model.dart';
 import '../../data/models/customer_region_model.dart';
 import '../../data/models/settlement_summary_model.dart';
 import '../../data/models/breakdown_models.dart';
+import '../../data/models/transaction_record_models.dart';
+import '../../data/models/report_models.dart';
 
 abstract class DelegateRepository {
   Future<LoadingModel?> getCurrentLoading();
@@ -55,4 +57,18 @@ abstract class DelegateRepository {
     required String paymentMethod,
     String? notes,
   });
+  Future<List<ExpenseRecordModel>> getExpenseRecords();
+  Future<ExpenseRecordModel> updateExpenseRecord({
+    required int id,
+    required double amount,
+    required String description,
+  });
+  Future<List<CustomerCollectionRecordModel>> getCustomerCollectionRecords();
+  Future<CustomerCollectionRecordModel> updateCustomerCollectionRecord({
+    required int id,
+    required double amount,
+    String? notes,
+  });
+  Future<List<RegionReportRowModel>> getReportByRegion({String? period, String? dateFrom, String? dateTo});
+  Future<List<ProductReportRowModel>> getReportByProduct({String? period, String? dateFrom, String? dateTo});
 }

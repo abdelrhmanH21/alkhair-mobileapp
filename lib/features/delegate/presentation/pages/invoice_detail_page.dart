@@ -155,10 +155,36 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
                 _TotalRow('النقد المستلم', invoice['cash_received']),
                 if (((invoice['balance_added_to_debt'] as num?) ?? 0) > 0)
                   _TotalRow('دين مضاف', invoice['balance_added_to_debt'], color: AppTheme.danger),
+                if (((invoice['debt_reduction'] as num?) ?? 0) > 0)
+                  _TotalRow('سداد من الدين السابق', invoice['debt_reduction'],
+                      color: AppTheme.secondary),
               ],
             ),
           ),
         ),
+        if (((invoice['debt_reduction'] as num?) ?? 0) > 0) ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppTheme.secondary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppTheme.secondary.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.check_circle_outline, color: AppTheme.secondary, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'تم سداد ${((invoice['debt_reduction'] as num)).toStringAsFixed(2)} جنيه من دين العميل السابق.',
+                    style: const TextStyle(color: AppTheme.secondary, fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ],
     );
   }

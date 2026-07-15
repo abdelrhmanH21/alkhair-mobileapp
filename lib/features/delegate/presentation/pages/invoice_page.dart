@@ -180,7 +180,12 @@ class _InvoicePageState extends State<InvoicePage> {
               _searchCtrl.clear();
               _searchResults.clear();
             });
-            AppSnackbar.showSuccess(ctx, 'تم حفظ الفاتورة بنجاح');
+            AppSnackbar.showSuccess(
+              ctx,
+              invoice.debtReduction > 0
+                  ? 'تم حفظ الفاتورة بنجاح — تم سداد ${invoice.debtReduction.toStringAsFixed(2)} جنيه من دين العميل السابق.'
+                  : 'تم حفظ الفاتورة بنجاح',
+            );
             // Offer print
             Navigator.push(
               ctx,

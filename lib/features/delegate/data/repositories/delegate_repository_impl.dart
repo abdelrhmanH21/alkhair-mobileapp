@@ -8,6 +8,8 @@ import '../models/catalog_product_model.dart';
 import '../models/customer_region_model.dart';
 import '../models/settlement_summary_model.dart';
 import '../models/breakdown_models.dart';
+import '../models/transaction_record_models.dart';
+import '../models/report_models.dart';
 import '../../domain/repositories/delegate_repository.dart';
 
 class DelegateRepositoryImpl implements DelegateRepository {
@@ -136,4 +138,35 @@ class DelegateRepositoryImpl implements DelegateRepository {
         paymentMethod: paymentMethod,
         notes: notes,
       );
+
+  @override
+  Future<List<ExpenseRecordModel>> getExpenseRecords() => _remote.fetchExpenseRecords();
+
+  @override
+  Future<ExpenseRecordModel> updateExpenseRecord({
+    required int id,
+    required double amount,
+    required String description,
+  }) =>
+      _remote.updateExpenseRecord(id: id, amount: amount, description: description);
+
+  @override
+  Future<List<CustomerCollectionRecordModel>> getCustomerCollectionRecords() =>
+      _remote.fetchCustomerCollectionRecords();
+
+  @override
+  Future<CustomerCollectionRecordModel> updateCustomerCollectionRecord({
+    required int id,
+    required double amount,
+    String? notes,
+  }) =>
+      _remote.updateCustomerCollectionRecord(id: id, amount: amount, notes: notes);
+
+  @override
+  Future<List<RegionReportRowModel>> getReportByRegion({String? period, String? dateFrom, String? dateTo}) =>
+      _remote.fetchReportByRegion(period: period, dateFrom: dateFrom, dateTo: dateTo);
+
+  @override
+  Future<List<ProductReportRowModel>> getReportByProduct({String? period, String? dateFrom, String? dateTo}) =>
+      _remote.fetchReportByProduct(period: period, dateFrom: dateFrom, dateTo: dateTo);
 }

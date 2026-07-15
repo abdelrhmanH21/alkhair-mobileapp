@@ -21,6 +21,7 @@ import 'invoice_history_page.dart';
 import 'loading_page.dart';
 import 'settlement_page.dart';
 import 'transactions_page.dart';
+import 'delegate_reports_page.dart';
 
 /// Landing page for the delegate role. Always shows the performance dashboard
 /// plus a lightweight "current shipment" status card; the full loading /
@@ -46,6 +47,9 @@ class _DelegateHomePageState extends State<DelegateHomePage> {
   // Same IndexedStack-staleness issue affects the invoice history tab: a
   // freshly-submitted invoice wouldn't show up there until app restart.
   int _invoiceHistoryRefreshTick = 0;
+  // Same for معاملات: its shift expense/collection lists should reflect
+  // whatever happened on OTHER tabs (e.g. settlement) since it was last seen.
+  int _transactionsRefreshTick = 0;
 
   bool get _canSell => _loading?.isActiveForSales == true;
   bool get _hasActiveLoading => _loading != null;
@@ -65,6 +69,7 @@ class _DelegateHomePageState extends State<DelegateHomePage> {
       _tab = i;
       if (i == 4) _settlementRefreshTick++;
       if (i == 3) _invoiceHistoryRefreshTick++;
+      if (i == 5) _transactionsRefreshTick++;
     });
   }
 
@@ -197,7 +202,8 @@ class _DelegateHomePageState extends State<DelegateHomePage> {
               child: SettlementPage(refreshTick: _settlementRefreshTick)),
           BlocProvider.value(
               value: context.read<DelegateBloc>(),
-              child: TransactionsPage(hasActiveLoading: _canSell)),
+              child: TransactionsPage(
+                  hasActiveLoading: _canSell, refreshTick: _transactionsRefreshTick)),
         ],
       ),
     );
@@ -329,6 +335,18 @@ class _HomeTabState extends State<_HomeTab> with PollingMixin<_HomeTab> {
             ),
             const SizedBox(height: 8),
             _buildShipmentCard(context),
+            const SizedBox(height: 12),
+            _ReportsEntryCard(
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => BlocProvider.value(
+                    value: context.read<DelegateBloc>(),
+                    child: const DelegateReportsPage(),
+                  ),
+                ),
+              ),
+            ),
             const SizedBox(height: 16),
           ],
         ),
@@ -397,6 +415,55 @@ class _HomeTabState extends State<_HomeTab> with PollingMixin<_HomeTab> {
       onRefresh: _fetchLoading,
     );
   }
+}
+
+// ─── Reports entry point ─────────────────────────────────────────────────────
+
+/// Reached from a Home-tab card rather than a 7th bottom-nav destination —
+/// six tabs (الرئيسية/البيع/المخزون/الفواتير/تسليم/معاملات) is already a lot
+/// for a NavigationBar to carry legibly, and unlike those, reports isn't a
+/// workflow step a delegate repeats many times a shift; it's an occasional
+/// look-up, same category as العمولة/الجزاءات/السلف which already live as
+/// tappable cards off the dashboard rather than as tabs.
+class _ReportsEntryCard extends StatelessWidget {
+  final VoidCallback onTap;
+  const _ReportsEntryCard({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) => Card(
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.bar_chart_rounded, color: AppTheme.primary, size: 26),
+                ),
+                const SizedBox(width: 14),
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('التقارير', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      SizedBox(height: 2),
+                      Text('تقارير المناطق والأصناف لمبيعاتك',
+                          style: TextStyle(fontSize: 12, color: Colors.grey)),
+                    ],
+                  ),
+                ),
+                Icon(Icons.chevron_left_rounded, color: Colors.grey.shade400),
+              ],
+            ),
+          ),
+        ),
+      );
 }
 
 // ─── Shipment summary card (links out to the untouched LoadingPage) ────────

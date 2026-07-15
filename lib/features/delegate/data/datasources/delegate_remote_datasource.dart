@@ -9,6 +9,8 @@ import '../models/catalog_product_model.dart';
 import '../models/customer_region_model.dart';
 import '../models/settlement_summary_model.dart';
 import '../models/breakdown_models.dart';
+import '../models/transaction_record_models.dart';
+import '../models/report_models.dart';
 
 abstract class DelegateRemoteDataSource {
   Future<LoadingModel?> fetchCurrentLoading();
@@ -58,6 +60,20 @@ abstract class DelegateRemoteDataSource {
     required String paymentMethod,
     String? notes,
   });
+  Future<List<ExpenseRecordModel>> fetchExpenseRecords();
+  Future<ExpenseRecordModel> updateExpenseRecord({
+    required int id,
+    required double amount,
+    required String description,
+  });
+  Future<List<CustomerCollectionRecordModel>> fetchCustomerCollectionRecords();
+  Future<CustomerCollectionRecordModel> updateCustomerCollectionRecord({
+    required int id,
+    required double amount,
+    String? notes,
+  });
+  Future<List<RegionReportRowModel>> fetchReportByRegion({String? period, String? dateFrom, String? dateTo});
+  Future<List<ProductReportRowModel>> fetchReportByProduct({String? period, String? dateFrom, String? dateTo});
 }
 
 class DelegateRemoteDataSourceImpl implements DelegateRemoteDataSource {
@@ -261,5 +277,67 @@ class DelegateRemoteDataSourceImpl implements DelegateRemoteDataSource {
       if (notes != null && notes.isNotEmpty) 'notes': notes,
     });
     return (res.data['message'] as String?) ?? 'تم تسجيل التحصيل بنجاح.';
+  }
+
+  @override
+  Future<List<ExpenseRecordModel>> fetchExpenseRecords() async {
+    final res = await _client.dio.get(ApiEndpoints.delegateExpenses);
+    final list = res.data['data'] as List? ?? [];
+    return list.map((e) => ExpenseRecordModel.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  @override
+  Future<ExpenseRecordModel> updateExpenseRecord({
+    required int id,
+    required double amount,
+    required String description,
+  }) async {
+    final res = await _client.dio.put(ApiEndpoints.delegateExpense(id), data: {
+      'amount': amount,
+      'description': description,
+    });
+    return ExpenseRecordModel.fromJson(res.data['data'] as Map<String, dynamic>);
+  }
+
+  @override
+  Future<List<CustomerCollectionRecordModel>> fetchCustomerCollectionRecords() async {
+    final res = await _client.dio.get(ApiEndpoints.delegateCustomerCollections);
+    final list = res.data['data'] as List? ?? [];
+    return list.map((e) => CustomerCollectionRecordModel.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  @override
+  Future<CustomerCollectionRecordModel> updateCustomerCollectionRecord({
+    required int id,
+    required double amount,
+    String? notes,
+  }) async {
+    final res = await _client.dio.put(ApiEndpoints.delegateCustomerCollection(id), data: {
+      'amount': amount,
+      if (notes != null) 'notes': notes,
+    });
+    return CustomerCollectionRecordModel.fromJson(res.data['data'] as Map<String, dynamic>);
+  }
+
+  @override
+  Future<List<RegionReportRowModel>> fetchReportByRegion({String? period, String? dateFrom, String? dateTo}) async {
+    final res = await _client.dio.get(ApiEndpoints.delegateReportsByRegion, queryParameters: {
+      if (period != null) 'period': period,
+      if (dateFrom != null) 'date_from': dateFrom,
+      if (dateTo != null) 'date_to': dateTo,
+    });
+    final list = res.data['data'] as List? ?? [];
+    return list.map((e) => RegionReportRowModel.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  @override
+  Future<List<ProductReportRowModel>> fetchReportByProduct({String? period, String? dateFrom, String? dateTo}) async {
+    final res = await _client.dio.get(ApiEndpoints.delegateReportsByProduct, queryParameters: {
+      if (period != null) 'period': period,
+      if (dateFrom != null) 'date_from': dateFrom,
+      if (dateTo != null) 'date_to': dateTo,
+    });
+    final list = res.data['data'] as List? ?? [];
+    return list.map((e) => ProductReportRowModel.fromJson(e as Map<String, dynamic>)).toList();
   }
 }

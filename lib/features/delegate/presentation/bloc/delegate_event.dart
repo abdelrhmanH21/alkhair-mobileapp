@@ -130,3 +130,51 @@ class DelegateCustomerCollectionSubmitted extends DelegateEvent {
   @override
   List<Object?> get props => [customerId, amount, paymentMethod, notes];
 }
+
+class DelegateExpenseRecordsFetched extends DelegateEvent {}
+
+class DelegateExpenseRecordUpdateRequested extends DelegateEvent {
+  final int id;
+  final double amount;
+  final String description;
+  DelegateExpenseRecordUpdateRequested({
+    required this.id,
+    required this.amount,
+    required this.description,
+  });
+  @override
+  List<Object?> get props => [id, amount, description];
+}
+
+class DelegateCustomerCollectionRecordsFetched extends DelegateEvent {}
+
+class DelegateCustomerCollectionRecordUpdateRequested extends DelegateEvent {
+  final int id;
+  final double amount;
+  final String? notes;
+  DelegateCustomerCollectionRecordUpdateRequested({
+    required this.id,
+    required this.amount,
+    this.notes,
+  });
+  @override
+  List<Object?> get props => [id, amount, notes];
+}
+
+class DelegateReportByRegionRequested extends DelegateEvent {
+  final String? period;
+  final String? dateFrom;
+  final String? dateTo;
+  DelegateReportByRegionRequested({this.period, this.dateFrom, this.dateTo});
+  @override
+  List<Object?> get props => [period, dateFrom, dateTo];
+}
+
+class DelegateReportByProductRequested extends DelegateEvent {
+  final String? period;
+  final String? dateFrom;
+  final String? dateTo;
+  DelegateReportByProductRequested({this.period, this.dateFrom, this.dateTo});
+  @override
+  List<Object?> get props => [period, dateFrom, dateTo];
+}

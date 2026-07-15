@@ -43,6 +43,7 @@ class DelegateInvoiceModel {
   final double netTotal;
   final double cashReceived;
   final double balanceAddedToDebt;
+  final double debtReduction;
   final DateTime createdAt;
 
   const DelegateInvoiceModel({
@@ -56,6 +57,7 @@ class DelegateInvoiceModel {
     required this.netTotal,
     required this.cashReceived,
     required this.balanceAddedToDebt,
+    this.debtReduction = 0,
     required this.createdAt,
   });
 
@@ -72,6 +74,7 @@ class DelegateInvoiceModel {
       netTotal: (json['net_total'] as num? ?? 0).toDouble(),
       cashReceived: (json['cash_received'] as num? ?? 0).toDouble(),
       balanceAddedToDebt: (json['balance_added_to_debt'] as num? ?? 0).toDouble(),
+      debtReduction: (json['debt_reduction'] as num? ?? 0).toDouble(),
       createdAt: DateTime.tryParse(json['created_at'] as String? ?? '') ?? DateTime.now(),
     );
   }

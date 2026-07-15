@@ -8,6 +8,8 @@ import '../../data/models/catalog_product_model.dart';
 import '../../data/models/customer_region_model.dart';
 import '../../data/models/settlement_summary_model.dart';
 import '../../data/models/breakdown_models.dart';
+import '../../data/models/transaction_record_models.dart';
+import '../../data/models/report_models.dart';
 
 abstract class DelegateState extends Equatable {
   @override
@@ -166,6 +168,48 @@ class DelegateCustomerCollectionSubmittedState extends DelegateState {
   DelegateCustomerCollectionSubmittedState(this.message);
   @override
   List<Object?> get props => [message];
+}
+
+class DelegateExpenseRecordsLoaded extends DelegateState {
+  final List<ExpenseRecordModel> expenses;
+  DelegateExpenseRecordsLoaded(this.expenses);
+  @override
+  List<Object?> get props => [expenses];
+}
+
+class DelegateExpenseRecordUpdatedState extends DelegateState {
+  final ExpenseRecordModel expense;
+  DelegateExpenseRecordUpdatedState(this.expense);
+  @override
+  List<Object?> get props => [expense];
+}
+
+class DelegateCustomerCollectionRecordsLoaded extends DelegateState {
+  final List<CustomerCollectionRecordModel> collections;
+  DelegateCustomerCollectionRecordsLoaded(this.collections);
+  @override
+  List<Object?> get props => [collections];
+}
+
+class DelegateCustomerCollectionRecordUpdatedState extends DelegateState {
+  final CustomerCollectionRecordModel collection;
+  DelegateCustomerCollectionRecordUpdatedState(this.collection);
+  @override
+  List<Object?> get props => [collection];
+}
+
+class DelegateReportByRegionLoaded extends DelegateState {
+  final List<RegionReportRowModel> rows;
+  DelegateReportByRegionLoaded(this.rows);
+  @override
+  List<Object?> get props => [rows];
+}
+
+class DelegateReportByProductLoaded extends DelegateState {
+  final List<ProductReportRowModel> rows;
+  DelegateReportByProductLoaded(this.rows);
+  @override
+  List<Object?> get props => [rows];
 }
 
 /// Field-level validation failure (Laravel 422 `errors` map), e.g. the

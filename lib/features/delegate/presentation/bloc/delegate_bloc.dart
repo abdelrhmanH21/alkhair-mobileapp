@@ -29,6 +29,12 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
     on<DelegateCommissionBreakdownFetched>(_onFetchCommissionBreakdown);
     on<DelegateExpenseSubmitted>(_onSubmitExpense);
     on<DelegateCustomerCollectionSubmitted>(_onSubmitCustomerCollection);
+    on<DelegateExpenseRecordsFetched>(_onFetchExpenseRecords);
+    on<DelegateExpenseRecordUpdateRequested>(_onUpdateExpenseRecord);
+    on<DelegateCustomerCollectionRecordsFetched>(_onFetchCustomerCollectionRecords);
+    on<DelegateCustomerCollectionRecordUpdateRequested>(_onUpdateCustomerCollectionRecord);
+    on<DelegateReportByRegionRequested>(_onFetchReportByRegion);
+    on<DelegateReportByProductRequested>(_onFetchReportByProduct);
   }
 
   Future<void> _onFetchLoading(
@@ -367,6 +373,112 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
         notes: event.notes,
       );
       emit(DelegateCustomerCollectionSubmittedState(message));
+    } on DioException catch (e) {
+      emit(DelegateFailure(_parseError(e)));
+    } catch (_) {
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
+    }
+  }
+
+  Future<void> _onFetchExpenseRecords(
+    DelegateExpenseRecordsFetched event,
+    Emitter<DelegateState> emit,
+  ) async {
+    emit(DelegateLoading());
+    try {
+      final expenses = await _repo.getExpenseRecords();
+      emit(DelegateExpenseRecordsLoaded(expenses));
+    } on DioException catch (e) {
+      emit(DelegateFailure(_parseError(e)));
+    } catch (_) {
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
+    }
+  }
+
+  Future<void> _onUpdateExpenseRecord(
+    DelegateExpenseRecordUpdateRequested event,
+    Emitter<DelegateState> emit,
+  ) async {
+    emit(DelegateLoading());
+    try {
+      final expense = await _repo.updateExpenseRecord(
+        id: event.id,
+        amount: event.amount,
+        description: event.description,
+      );
+      emit(DelegateExpenseRecordUpdatedState(expense));
+    } on DioException catch (e) {
+      emit(DelegateFailure(_parseError(e)));
+    } catch (_) {
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
+    }
+  }
+
+  Future<void> _onFetchCustomerCollectionRecords(
+    DelegateCustomerCollectionRecordsFetched event,
+    Emitter<DelegateState> emit,
+  ) async {
+    emit(DelegateLoading());
+    try {
+      final collections = await _repo.getCustomerCollectionRecords();
+      emit(DelegateCustomerCollectionRecordsLoaded(collections));
+    } on DioException catch (e) {
+      emit(DelegateFailure(_parseError(e)));
+    } catch (_) {
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
+    }
+  }
+
+  Future<void> _onUpdateCustomerCollectionRecord(
+    DelegateCustomerCollectionRecordUpdateRequested event,
+    Emitter<DelegateState> emit,
+  ) async {
+    emit(DelegateLoading());
+    try {
+      final collection = await _repo.updateCustomerCollectionRecord(
+        id: event.id,
+        amount: event.amount,
+        notes: event.notes,
+      );
+      emit(DelegateCustomerCollectionRecordUpdatedState(collection));
+    } on DioException catch (e) {
+      emit(DelegateFailure(_parseError(e)));
+    } catch (_) {
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
+    }
+  }
+
+  Future<void> _onFetchReportByRegion(
+    DelegateReportByRegionRequested event,
+    Emitter<DelegateState> emit,
+  ) async {
+    emit(DelegateLoading());
+    try {
+      final rows = await _repo.getReportByRegion(
+        period: event.period,
+        dateFrom: event.dateFrom,
+        dateTo: event.dateTo,
+      );
+      emit(DelegateReportByRegionLoaded(rows));
+    } on DioException catch (e) {
+      emit(DelegateFailure(_parseError(e)));
+    } catch (_) {
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
+    }
+  }
+
+  Future<void> _onFetchReportByProduct(
+    DelegateReportByProductRequested event,
+    Emitter<DelegateState> emit,
+  ) async {
+    emit(DelegateLoading());
+    try {
+      final rows = await _repo.getReportByProduct(
+        period: event.period,
+        dateFrom: event.dateFrom,
+        dateTo: event.dateTo,
+      );
+      emit(DelegateReportByProductLoaded(rows));
     } on DioException catch (e) {
       emit(DelegateFailure(_parseError(e)));
     } catch (_) {

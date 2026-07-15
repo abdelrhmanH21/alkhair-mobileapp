@@ -66,6 +66,7 @@ class DelegateRepositoryImpl implements DelegateRepository {
     required List<Map<String, dynamic>> salesItems,
     required List<Map<String, dynamic>> returnedItems,
     required double cashReceived,
+    double discountAmount = 0,
     double? latitude,
     double? longitude,
   }) =>
@@ -74,6 +75,7 @@ class DelegateRepositoryImpl implements DelegateRepository {
         salesItems: salesItems,
         returnedItems: returnedItems,
         cashReceived: cashReceived,
+        discountAmount: discountAmount,
         latitude: latitude,
         longitude: longitude,
       );

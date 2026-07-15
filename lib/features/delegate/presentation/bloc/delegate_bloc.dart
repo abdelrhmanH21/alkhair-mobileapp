@@ -215,6 +215,7 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
         salesItems: salesItems,
         returnedItems: returnedItems,
         cashReceived: event.cashReceived,
+        discountAmount: event.discountAmount,
         latitude: coords.lat,
         longitude: coords.lng,
       );

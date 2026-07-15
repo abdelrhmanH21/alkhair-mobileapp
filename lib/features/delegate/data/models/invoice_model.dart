@@ -39,11 +39,13 @@ class DelegateInvoiceModel {
   final String customerName;
   final String customerPhone;
   final double grossSalesTotal;
+  final double discountAmount;
   final double totalReturns;
   final double netTotal;
   final double cashReceived;
   final double balanceAddedToDebt;
   final double debtReduction;
+  final double customerBalance;
   final DateTime createdAt;
 
   const DelegateInvoiceModel({
@@ -53,11 +55,13 @@ class DelegateInvoiceModel {
     required this.customerName,
     required this.customerPhone,
     required this.grossSalesTotal,
+    this.discountAmount = 0,
     required this.totalReturns,
     required this.netTotal,
     required this.cashReceived,
     required this.balanceAddedToDebt,
     this.debtReduction = 0,
+    this.customerBalance = 0,
     required this.createdAt,
   });
 
@@ -70,11 +74,13 @@ class DelegateInvoiceModel {
       customerName: customer['name'] as String? ?? '',
       customerPhone: customer['phone'] as String? ?? '',
       grossSalesTotal: (json['gross_sales_total'] as num? ?? 0).toDouble(),
+      discountAmount: (json['discount_amount'] as num? ?? 0).toDouble(),
       totalReturns: (json['total_returns'] as num? ?? 0).toDouble(),
       netTotal: (json['net_total'] as num? ?? 0).toDouble(),
       cashReceived: (json['cash_received'] as num? ?? 0).toDouble(),
       balanceAddedToDebt: (json['balance_added_to_debt'] as num? ?? 0).toDouble(),
       debtReduction: (json['debt_reduction'] as num? ?? 0).toDouble(),
+      customerBalance: (customer['balance'] as num? ?? 0).toDouble(),
       createdAt: DateTime.tryParse(json['created_at'] as String? ?? '') ?? DateTime.now(),
     );
   }

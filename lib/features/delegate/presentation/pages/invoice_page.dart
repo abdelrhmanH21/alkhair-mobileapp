@@ -52,6 +52,9 @@ class _InvoicePageState extends State<InvoicePage> {
   // ── Cash received ──────────────────────────────────────────────────────────
   final _cashCtrl = TextEditingController();
 
+  // ── Discount (empty by default — never prefilled with 0) ──────────────────
+  final _discountCtrl = TextEditingController();
+
   @override
   void initState() {
     super.initState();
@@ -64,6 +67,7 @@ class _InvoicePageState extends State<InvoicePage> {
     _searchFocus.dispose();
     _searchCtrl.dispose();
     _cashCtrl.dispose();
+    _discountCtrl.dispose();
     super.dispose();
   }
 
@@ -73,7 +77,20 @@ class _InvoicePageState extends State<InvoicePage> {
   double get _totalReturns =>
       _returnItems.fold(0.0, (s, i) => s + i.subtotal);
 
-  double get _netTotal => _grossSales - _totalReturns;
+  double get _discountAmount => double.tryParse(_discountCtrl.text) ?? 0;
+
+  double get _maxOverridePct {
+    final state = context.read<AppConfigBloc>().state;
+    return state is AppConfigLoaded ? state.config.maxPriceOverridePct : 10;
+  }
+
+  double get _maxDiscount => _grossSales * (_maxOverridePct / 100);
+
+  String? get _discountError => _discountAmount > _maxDiscount
+      ? 'الخصم يتجاوز الحد المسموح (${_maxOverridePct.toStringAsFixed(0)}% = ${_maxDiscount.toStringAsFixed(2)})'
+      : null;
+
+  double get _netTotal => _grossSales - _discountAmount - _totalReturns;
 
   double get _cashReceived => double.tryParse(_cashCtrl.text) ?? 0;
 
@@ -94,12 +111,17 @@ class _InvoicePageState extends State<InvoicePage> {
         return;
       }
     }
+    if (_discountError != null) {
+      _showError(_discountError!);
+      return;
+    }
 
     context.read<DelegateBloc>().add(DelegateInvoiceSubmitted(
           clientId: _selectedClient!.id,
           salesItems: _salesItems,
           returnedItems: _returnItems,
           cashReceived: _cashReceived,
+          discountAmount: _discountAmount,
         ));
   }
 
@@ -177,6 +199,7 @@ class _InvoicePageState extends State<InvoicePage> {
               _salesItems.clear();
               _returnItems.clear();
               _cashCtrl.clear();
+              _discountCtrl.clear();
               _searchCtrl.clear();
               _searchResults.clear();
             });
@@ -249,10 +272,13 @@ class _InvoicePageState extends State<InvoicePage> {
               _TotalsCard(
                 grossSales: _grossSales,
                 totalReturns: _totalReturns,
+                discountCtrl: _discountCtrl,
+                discountError: _discountError,
                 netTotal: _netTotal,
                 cashCtrl: _cashCtrl,
                 remainingDebt: _remainingDebt,
                 onCashChanged: () => setState(() {}),
+                onDiscountChanged: () => setState(() {}),
               ),
               const SizedBox(height: 16),
 
@@ -594,18 +620,24 @@ class _ReturnItemRowState extends State<_ReturnItemRow> {
 class _TotalsCard extends StatelessWidget {
   final double grossSales;
   final double totalReturns;
+  final TextEditingController discountCtrl;
+  final String? discountError;
   final double netTotal;
   final TextEditingController cashCtrl;
   final double remainingDebt;
   final VoidCallback onCashChanged;
+  final VoidCallback onDiscountChanged;
 
   const _TotalsCard({
     required this.grossSales,
     required this.totalReturns,
+    required this.discountCtrl,
+    required this.discountError,
     required this.netTotal,
     required this.cashCtrl,
     required this.remainingDebt,
     required this.onCashChanged,
+    required this.onDiscountChanged,
   });
 
   @override
@@ -616,6 +648,30 @@ class _TotalsCard extends StatelessWidget {
             children: [
               _TotalRow('إجمالي المبيعات', grossSales, AppTheme.primary),
               _TotalRow('إجمالي المرتجعات', -totalReturns, AppTheme.accent),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  const Text('الخصم:',
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: TextField(
+                      controller: discountCtrl,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      textDirection: TextDirection.ltr,
+                      textAlign: TextAlign.center,
+                      decoration: InputDecoration(
+                        isDense: true,
+                        hintText: '0',
+                        errorText: discountError,
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 10),
+                      ),
+                      onChanged: (_) => onDiscountChanged(),
+                    ),
+                  ),
+                ],
+              ),
               const Divider(thickness: 2),
               _TotalRow('الصافي', netTotal, AppTheme.primary, bold: true),
               const SizedBox(height: 10),

@@ -4,6 +4,7 @@ import '../network/api_client.dart';
 import '../utils/secure_session.dart';
 import '../utils/gps_service.dart';
 import '../utils/bluetooth_printer.dart';
+import '../utils/push_notification_service.dart';
 
 import '../../features/app_config/data/datasources/app_config_remote_datasource.dart';
 import '../../features/app_config/data/repositories/app_config_repository_impl.dart';
@@ -32,6 +33,7 @@ void setupServiceLocator() {
   sl.registerLazySingleton<ApiClient>(() => ApiClient());
   sl.registerLazySingleton<GpsService>(() => GpsService());
   sl.registerLazySingleton<BluetoothPrinterService>(() => BluetoothPrinterService());
+  sl.registerLazySingleton<PushNotificationService>(() => PushNotificationService(sl()));
 
   // ── AppConfig feature ────────────────────────────────────────────────────
   sl.registerLazySingleton<AppConfigRemoteDataSource>(() => AppConfigRemoteDataSourceImpl(sl()));
@@ -42,7 +44,7 @@ void setupServiceLocator() {
   sl.registerLazySingleton<AuthRemoteDataSource>(() => AuthRemoteDataSourceImpl(sl()));
   sl.registerLazySingleton<AuthRepository>(() => AuthRepositoryImpl(sl(), sl()));
   sl.registerLazySingleton<LoginUseCase>(() => LoginUseCase(sl()));
-  sl.registerFactory<AuthBloc>(() => AuthBloc(sl(), sl()));
+  sl.registerFactory<AuthBloc>(() => AuthBloc(sl(), sl(), sl()));
 
   // ── Delegate feature ─────────────────────────────────────────────────────
   sl.registerLazySingleton<DelegateRemoteDataSource>(() => DelegateRemoteDataSourceImpl(sl()));

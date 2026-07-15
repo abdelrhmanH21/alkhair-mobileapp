@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../../../core/di/service_locator.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/utils/app_snackbar.dart';
 import '../../../../core/widgets/app_logo.dart';
 import '../../../app_config/presentation/bloc/app_config_bloc.dart';
 import '../../../app_config/presentation/bloc/app_config_state.dart';
@@ -10,6 +12,7 @@ import '../../../auth/presentation/bloc/auth_state.dart';
 import '../bloc/admin_bloc.dart';
 import '../bloc/admin_event.dart';
 import '../bloc/admin_state.dart';
+import '../../data/datasources/admin_remote_datasource.dart';
 import '../../data/models/admin_models.dart';
 // delegates_page.dart is a re-export barrel; no additional imports needed
 import 'settle_delegate_page.dart';
@@ -115,9 +118,42 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
 
 // ─── Admin Drawer ──────────────────────────────────────────────────────────────
 
-class _AdminDrawer extends StatelessWidget {
+class _AdminDrawer extends StatefulWidget {
   final String userName;
   const _AdminDrawer({required this.userName});
+
+  @override
+  State<_AdminDrawer> createState() => _AdminDrawerState();
+}
+
+class _AdminDrawerState extends State<_AdminDrawer> {
+  bool _salesNotificationsEnabled = true;
+  bool _updatingPreference = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final authState = context.read<AuthBloc>().state;
+    if (authState is AuthAuthenticated) {
+      _salesNotificationsEnabled = authState.user.salesNotificationsEnabled;
+    }
+  }
+
+  Future<void> _togglePreference(bool value) async {
+    setState(() {
+      _salesNotificationsEnabled = value;
+      _updatingPreference = true;
+    });
+    try {
+      await sl<AdminRemoteDataSource>().updateNotificationPreference(value);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _salesNotificationsEnabled = !value);
+      AppSnackbar.showError(context, 'فشل تحديث تفضيلات الإشعارات.');
+    } finally {
+      if (mounted) setState(() => _updatingPreference = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -149,13 +185,19 @@ class _AdminDrawer extends StatelessWidget {
                           fontWeight: FontWeight.bold),
                     ),
                     Text(
-                      userName,
+                      widget.userName,
                       style: TextStyle(
                           color: Colors.white.withValues(alpha: 0.8),
                           fontSize: 12),
                     ),
                   ],
                 ),
+              ),
+              SwitchListTile(
+                secondary: const Icon(Icons.notifications_active_outlined),
+                title: const Text('إشعارات المبيعات'),
+                value: _salesNotificationsEnabled,
+                onChanged: _updatingPreference ? null : _togglePreference,
               ),
               ListTile(
                 leading: const Icon(Icons.logout_rounded),

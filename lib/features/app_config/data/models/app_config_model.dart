@@ -8,12 +8,18 @@ class AppConfigModel {
   // this is never null when logoUrl isn't.
   final String? logoColorUrl;
   final double maxPriceOverridePct;
+  final String headerText;
+  final String footerText;
+  final bool showPhone;
 
   const AppConfigModel({
     required this.companyName,
     this.logoUrl,
     this.logoColorUrl,
     this.maxPriceOverridePct = 10,
+    this.headerText = '',
+    this.footerText = '',
+    this.showPhone = true,
   });
 
   factory AppConfigModel.fromJson(Map<String, dynamic> json) => AppConfigModel(
@@ -22,5 +28,8 @@ class AppConfigModel {
         logoColorUrl: json['logo_color_url'] as String?,
         maxPriceOverridePct:
             (json['max_price_override_pct'] as num?)?.toDouble() ?? 10,
+        headerText: json['header_text'] as String? ?? '',
+        footerText: json['footer_text'] as String? ?? '',
+        showPhone: json['show_phone'] as bool? ?? true,
       );
 }

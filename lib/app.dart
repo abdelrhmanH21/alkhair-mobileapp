@@ -19,6 +19,10 @@ import 'features/delegate/presentation/pages/delegate_home_page.dart';
 import 'features/admin/presentation/bloc/admin_bloc.dart';
 import 'features/admin/presentation/pages/admin_dashboard_page.dart';
 
+/// Lets services with no BuildContext of their own (e.g. a foreground FCM
+/// message listener) show a SnackBar on whatever screen is currently active.
+final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
+
 class AlKhairApp extends StatelessWidget {
   const AlKhairApp({super.key});
 
@@ -36,6 +40,7 @@ class AlKhairApp extends StatelessWidget {
         BlocProvider<AdminBloc>(create: (_) => sl<AdminBloc>()),
       ],
       child: MaterialApp(
+        navigatorKey: appNavigatorKey,
         title: 'الخير للألبان',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.theme,

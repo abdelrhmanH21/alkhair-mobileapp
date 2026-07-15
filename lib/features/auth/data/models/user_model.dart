@@ -8,6 +8,7 @@ class UserModel {
   final List<String> permissions;
   final bool hasActiveLoading;
   final int truckStockCount;
+  final bool salesNotificationsEnabled;
 
   const UserModel({
     required this.id,
@@ -19,6 +20,7 @@ class UserModel {
     required this.permissions,
     required this.hasActiveLoading,
     required this.truckStockCount,
+    this.salesNotificationsEnabled = true,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) => UserModel(
@@ -31,6 +33,8 @@ class UserModel {
         permissions: List<String>.from(json['permissions'] ?? []),
         hasActiveLoading: json['has_active_loading'] as bool? ?? false,
         truckStockCount: json['truck_stock_count'] as int? ?? 0,
+        salesNotificationsEnabled:
+            json['sales_notifications_enabled'] as bool? ?? true,
       );
 
   bool get isDelegate => role == 'delegate';

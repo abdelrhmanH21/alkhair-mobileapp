@@ -31,6 +31,7 @@ abstract class DelegateRepository {
     required List<Map<String, dynamic>> salesItems,
     required List<Map<String, dynamic>> returnedItems,
     required double cashReceived,
+    double discountAmount = 0,
     double? latitude,
     double? longitude,
   });

@@ -33,6 +33,7 @@ abstract class DelegateRemoteDataSource {
     required List<Map<String, dynamic>> salesItems,
     required List<Map<String, dynamic>> returnedItems,
     required double cashReceived,
+    double discountAmount = 0,
     double? latitude,
     double? longitude,
   });
@@ -171,6 +172,7 @@ class DelegateRemoteDataSourceImpl implements DelegateRemoteDataSource {
     required List<Map<String, dynamic>> salesItems,
     required List<Map<String, dynamic>> returnedItems,
     required double cashReceived,
+    double discountAmount = 0,
     double? latitude,
     double? longitude,
   }) async {
@@ -179,6 +181,7 @@ class DelegateRemoteDataSourceImpl implements DelegateRemoteDataSource {
       if (salesItems.isNotEmpty) 'sales_items': salesItems,
       if (returnedItems.isNotEmpty) 'returned_items': returnedItems,
       'cash_received': cashReceived,
+      if (discountAmount > 0) 'discount_amount': discountAmount,
       if (latitude != null) 'latitude': latitude,
       if (longitude != null) 'longitude': longitude,
     });

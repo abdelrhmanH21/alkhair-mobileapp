@@ -54,6 +54,7 @@ class DelegateInvoiceSubmitted extends DelegateEvent {
   final List<InvoiceSaleItem> salesItems;
   final List<InvoiceReturnItem> returnedItems;
   final double cashReceived;
+  final double discountAmount;
   final double? latitude;
   final double? longitude;
 
@@ -62,12 +63,14 @@ class DelegateInvoiceSubmitted extends DelegateEvent {
     required this.salesItems,
     required this.returnedItems,
     required this.cashReceived,
+    this.discountAmount = 0,
     this.latitude,
     this.longitude,
   });
 
   @override
-  List<Object?> get props => [clientId, cashReceived, latitude, longitude];
+  List<Object?> get props =>
+      [clientId, cashReceived, discountAmount, latitude, longitude];
 }
 
 class DelegateInvoicesFetched extends DelegateEvent {}

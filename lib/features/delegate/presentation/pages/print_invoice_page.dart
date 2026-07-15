@@ -8,8 +8,8 @@ import '../../../../core/network/api_endpoints.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/app_snackbar.dart';
 import '../../../../core/utils/bluetooth_printer.dart';
-import '../../../auth/presentation/bloc/auth_bloc.dart';
-import '../../../auth/presentation/bloc/auth_state.dart';
+import '../../../app_config/presentation/bloc/app_config_bloc.dart';
+import '../../../app_config/presentation/bloc/app_config_state.dart';
 
 class PrintInvoicePage extends StatefulWidget {
   final int invoiceId;
@@ -79,12 +79,12 @@ class _PrintInvoicePageState extends State<PrintInvoicePage> {
     if (_invoiceData == null) return;
     setState(() => _printing = true);
 
-    final authState = context.read<AuthBloc>().state;
-    final delegateName =
-        authState is AuthAuthenticated ? authState.user.name : 'مندوب';
+    final configState = context.read<AppConfigBloc>().state;
+    final config = configState is AppConfigLoaded ? configState.config : null;
 
     final customer =
         _invoiceData!['customer'] as Map<String, dynamic>? ?? {};
+    final delegate  = _invoiceData!['delegate'] as Map<String, dynamic>? ?? {};
     final items     = _invoiceData!['items'] as List? ?? [];
     final returns   = _invoiceData!['returns'] as List? ?? [];
 
@@ -92,7 +92,8 @@ class _PrintInvoicePageState extends State<PrintInvoicePage> {
       invoiceNumber: _invoiceData!['invoice_number'] as String? ?? '',
       clientName: customer['name'] as String? ?? '',
       clientPhone: customer['phone'] as String? ?? '',
-      delegateName: delegateName,
+      showPhone: config?.showPhone ?? true,
+      delegateName: delegate['name'] as String? ?? 'مندوب',
       issuedAt: DateTime.tryParse(
               _invoiceData!['created_at'] as String? ?? '') ??
           DateTime.now(),
@@ -101,6 +102,7 @@ class _PrintInvoicePageState extends State<PrintInvoicePage> {
         final p = m['product'] as Map<String, dynamic>? ?? {};
         return PrintLineItem(
           productName: p['name'] as String? ?? '',
+          unit: p['unit'] as String? ?? '',
           quantity: (m['quantity'] as num).toDouble(),
           unitPrice: (m['unit_price'] as num).toDouble(),
           subtotal: (m['subtotal'] as num).toDouble(),
@@ -111,6 +113,7 @@ class _PrintInvoicePageState extends State<PrintInvoicePage> {
         final p = m['product'] as Map<String, dynamic>? ?? {};
         return PrintLineItem(
           productName: p['name'] as String? ?? '',
+          unit: p['unit'] as String? ?? '',
           quantity: (m['quantity'] as num).toDouble(),
           unitPrice: (m['unit_price'] as num).toDouble(),
           subtotal: (m['subtotal'] as num).toDouble(),
@@ -118,11 +121,18 @@ class _PrintInvoicePageState extends State<PrintInvoicePage> {
       }).toList(),
       grossSales:
           (_invoiceData!['gross_sales_total'] as num? ?? 0).toDouble(),
+      discountAmount:
+          (_invoiceData!['discount_amount'] as num? ?? 0).toDouble(),
       totalReturns: (_invoiceData!['total_returns'] as num? ?? 0).toDouble(),
       netTotal: (_invoiceData!['net_total'] as num? ?? 0).toDouble(),
       cashReceived: (_invoiceData!['cash_received'] as num? ?? 0).toDouble(),
       balanceAddedToDebt:
           (_invoiceData!['balance_added_to_debt'] as num? ?? 0).toDouble(),
+      customerBalanceAfter: (customer['balance'] as num? ?? 0).toDouble(),
+      companyName: config?.companyName ?? '',
+      headerText: config?.headerText,
+      footerText: config?.footerText,
+      logoUrl: config?.logoUrl,
     );
 
     final ok = await _printer.printInvoice(data);

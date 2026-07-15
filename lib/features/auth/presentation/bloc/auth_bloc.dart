@@ -1,5 +1,8 @@
+import 'dart:async';
+
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:dio/dio.dart';
+import '../../../../core/utils/push_notification_service.dart';
 import '../../domain/usecases/login_usecase.dart';
 import '../../domain/repositories/auth_repository.dart';
 import 'auth_event.dart';
@@ -8,8 +11,9 @@ import 'auth_state.dart';
 class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final LoginUseCase _login;
   final AuthRepository _repo;
+  final PushNotificationService _pushNotifications;
 
-  AuthBloc(this._login, this._repo) : super(AuthInitial()) {
+  AuthBloc(this._login, this._repo, this._pushNotifications) : super(AuthInitial()) {
     on<AuthSessionRestoreRequested>(_onRestoreSession);
     on<AuthLoginRequested>(_onLogin);
     on<AuthLogoutRequested>(_onLogout);
@@ -40,6 +44,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     try {
       final result = await _login(email: event.email, password: event.password);
       emit(AuthAuthenticated(result.user));
+      // Best-effort — a push-registration failure shouldn't block login.
+      unawaited(_pushNotifications.registerForCurrentUser());
     } catch (e) {
       emit(AuthFailure(_msg(e)));
     }

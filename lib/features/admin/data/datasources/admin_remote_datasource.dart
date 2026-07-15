@@ -21,6 +21,7 @@ abstract class AdminRemoteDataSource {
     required List<Map<String, dynamic>> items,
     String? notes,
   });
+  Future<void> updateNotificationPreference(bool enabled);
 }
 
 class AdminRemoteDataSourceImpl implements AdminRemoteDataSource {
@@ -99,6 +100,13 @@ class AdminRemoteDataSourceImpl implements AdminRemoteDataSource {
       'warehouse_id': warehouseId,
       'items': items,
       if (notes != null && notes.isNotEmpty) 'notes': notes,
+    });
+  }
+
+  @override
+  Future<void> updateNotificationPreference(bool enabled) async {
+    await _client.dio.put(ApiEndpoints.notificationPreferences, data: {
+      'sales_notifications_enabled': enabled,
     });
   }
 }

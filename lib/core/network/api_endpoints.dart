@@ -13,6 +13,10 @@ class ApiEndpoints {
   static const String logout = '/auth/logout';
   static const String me     = '/auth/me';
 
+  // Push notifications
+  static const String registerDeviceToken     = '/register-device-token';
+  static const String notificationPreferences = '/notification-preferences';
+
   // Delegate — loading
   static const String delegateLoading        = '/delegate/loading';
   static const String delegateLoadingConfirm = '/delegate/loading/confirm';

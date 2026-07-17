@@ -174,6 +174,9 @@ class DelegateRepositoryImpl implements DelegateRepository {
       _remote.updateExpenseRecord(id: id, amount: amount, description: description);
 
   @override
+  Future<String> deleteExpenseRecord(int id) => _remote.deleteExpenseRecord(id);
+
+  @override
   Future<List<CustomerCollectionRecordModel>> getCustomerCollectionRecords() =>
       _remote.fetchCustomerCollectionRecords();
 
@@ -184,6 +187,9 @@ class DelegateRepositoryImpl implements DelegateRepository {
     String? notes,
   }) =>
       _remote.updateCustomerCollectionRecord(id: id, amount: amount, notes: notes);
+
+  @override
+  Future<String> deleteCustomerCollectionRecord(int id) => _remote.deleteCustomerCollectionRecord(id);
 
   @override
   Future<List<RegionReportRowModel>> getReportByRegion({String? period, String? dateFrom, String? dateTo}) =>

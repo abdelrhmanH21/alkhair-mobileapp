@@ -113,6 +113,54 @@ class _TransactionsPageState extends State<TransactionsPage> {
     );
   }
 
+  void _confirmDeleteExpense(ExpenseRecordModel expense) {
+    if (!widget.hasActiveLoading) {
+      AppSnackbar.showInfo(context, 'لا يمكن الحذف بعد تسليم الوردية');
+      return;
+    }
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text('تأكيد الحذف'),
+        content: const Text('هل أنت متأكد؟'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogCtx), child: const Text('إلغاء')),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(dialogCtx);
+              context.read<DelegateBloc>().add(DelegateExpenseRecordDeleteRequested(id: expense.id));
+            },
+            child: const Text('حذف'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmDeleteCollection(CustomerCollectionRecordModel collection) {
+    if (!widget.hasActiveLoading) {
+      AppSnackbar.showInfo(context, 'لا يمكن الحذف بعد تسليم الوردية');
+      return;
+    }
+    showDialog(
+      context: context,
+      builder: (dialogCtx) => AlertDialog(
+        title: const Text('تأكيد الحذف'),
+        content: const Text('هل أنت متأكد؟'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(dialogCtx), child: const Text('إلغاء')),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(dialogCtx);
+              context.read<DelegateBloc>().add(DelegateCustomerCollectionRecordDeleteRequested(id: collection.id));
+            },
+            child: const Text('حذف'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -128,6 +176,12 @@ class _TransactionsPageState extends State<TransactionsPage> {
             _fetchLists();
           } else if (state is DelegateCustomerCollectionSubmittedState ||
               state is DelegateCustomerCollectionRecordUpdatedState) {
+            _fetchLists();
+          } else if (state is DelegateExpenseRecordDeletedState) {
+            AppSnackbar.showSuccess(ctx, state.message);
+            _fetchLists();
+          } else if (state is DelegateCustomerCollectionRecordDeletedState) {
+            AppSnackbar.showSuccess(ctx, state.message);
             _fetchLists();
           }
         },
@@ -194,9 +248,19 @@ class _TransactionsPageState extends State<TransactionsPage> {
                         ].join(' • '),
                         style: const TextStyle(fontSize: 11),
                       ),
-                      trailing: Text(
-                        e.amount.toStringAsFixed(2),
-                        style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.danger),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            e.amount.toStringAsFixed(2),
+                            style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.danger),
+                          ),
+                          if (widget.hasActiveLoading)
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline, color: AppTheme.danger),
+                              onPressed: () => _confirmDeleteExpense(e),
+                            ),
+                        ],
                       ),
                       onTap: () => _openExpenseEditSheet(e),
                     ),
@@ -217,9 +281,19 @@ class _TransactionsPageState extends State<TransactionsPage> {
                       title: Text(c.customerName, style: const TextStyle(fontWeight: FontWeight.bold)),
                       subtitle: Text(DateFormat('HH:mm').format(c.createdAt),
                           style: const TextStyle(fontSize: 11)),
-                      trailing: Text(
-                        c.amount.toStringAsFixed(2),
-                        style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.secondary),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            c.amount.toStringAsFixed(2),
+                            style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.secondary),
+                          ),
+                          if (widget.hasActiveLoading)
+                            IconButton(
+                              icon: const Icon(Icons.delete_outline, color: AppTheme.secondary),
+                              onPressed: () => _confirmDeleteCollection(c),
+                            ),
+                        ],
                       ),
                       onTap: () => _openCollectionEditSheet(c),
                     ),

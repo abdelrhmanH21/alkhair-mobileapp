@@ -73,12 +73,14 @@ abstract class DelegateRepository {
     required double amount,
     required String description,
   });
+  Future<String> deleteExpenseRecord(int id);
   Future<List<CustomerCollectionRecordModel>> getCustomerCollectionRecords();
   Future<CustomerCollectionRecordModel> updateCustomerCollectionRecord({
     required int id,
     required double amount,
     String? notes,
   });
+  Future<String> deleteCustomerCollectionRecord(int id);
   Future<List<RegionReportRowModel>> getReportByRegion({String? period, String? dateFrom, String? dateTo});
   Future<List<ProductReportRowModel>> getReportByProduct({String? period, String? dateFrom, String? dateTo});
 }

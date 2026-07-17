@@ -76,12 +76,14 @@ abstract class DelegateRemoteDataSource {
     required double amount,
     required String description,
   });
+  Future<String> deleteExpenseRecord(int id);
   Future<List<CustomerCollectionRecordModel>> fetchCustomerCollectionRecords();
   Future<CustomerCollectionRecordModel> updateCustomerCollectionRecord({
     required int id,
     required double amount,
     String? notes,
   });
+  Future<String> deleteCustomerCollectionRecord(int id);
   Future<List<RegionReportRowModel>> fetchReportByRegion({String? period, String? dateFrom, String? dateTo});
   Future<List<ProductReportRowModel>> fetchReportByProduct({String? period, String? dateFrom, String? dateTo});
 }
@@ -338,6 +340,12 @@ class DelegateRemoteDataSourceImpl implements DelegateRemoteDataSource {
   }
 
   @override
+  Future<String> deleteExpenseRecord(int id) async {
+    final res = await _client.dio.delete(ApiEndpoints.delegateExpense(id));
+    return (res.data['message'] as String?) ?? 'تم حذف المصروف بنجاح.';
+  }
+
+  @override
   Future<List<CustomerCollectionRecordModel>> fetchCustomerCollectionRecords() async {
     final res = await _client.dio.get(ApiEndpoints.delegateCustomerCollections);
     final list = res.data['data'] as List? ?? [];
@@ -355,6 +363,12 @@ class DelegateRemoteDataSourceImpl implements DelegateRemoteDataSource {
       if (notes != null) 'notes': notes,
     });
     return CustomerCollectionRecordModel.fromJson(res.data['data'] as Map<String, dynamic>);
+  }
+
+  @override
+  Future<String> deleteCustomerCollectionRecord(int id) async {
+    final res = await _client.dio.delete(ApiEndpoints.delegateCustomerCollection(id));
+    return (res.data['message'] as String?) ?? 'تم حذف التحصيل بنجاح.';
   }
 
   @override

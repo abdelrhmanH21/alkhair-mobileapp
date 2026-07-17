@@ -191,6 +191,14 @@ class DelegateExpenseRecordUpdatedState extends DelegateState {
   List<Object?> get props => [expense];
 }
 
+class DelegateExpenseRecordDeletedState extends DelegateState {
+  final int id;
+  final String message;
+  DelegateExpenseRecordDeletedState(this.id, this.message);
+  @override
+  List<Object?> get props => [id, message];
+}
+
 class DelegateCustomerCollectionRecordsLoaded extends DelegateState {
   final List<CustomerCollectionRecordModel> collections;
   DelegateCustomerCollectionRecordsLoaded(this.collections);
@@ -203,6 +211,14 @@ class DelegateCustomerCollectionRecordUpdatedState extends DelegateState {
   DelegateCustomerCollectionRecordUpdatedState(this.collection);
   @override
   List<Object?> get props => [collection];
+}
+
+class DelegateCustomerCollectionRecordDeletedState extends DelegateState {
+  final int id;
+  final String message;
+  DelegateCustomerCollectionRecordDeletedState(this.id, this.message);
+  @override
+  List<Object?> get props => [id, message];
 }
 
 class DelegateReportByRegionLoaded extends DelegateState {

@@ -168,6 +168,13 @@ class DelegateExpenseRecordUpdateRequested extends DelegateEvent {
   List<Object?> get props => [id, amount, description];
 }
 
+class DelegateExpenseRecordDeleteRequested extends DelegateEvent {
+  final int id;
+  DelegateExpenseRecordDeleteRequested({required this.id});
+  @override
+  List<Object?> get props => [id];
+}
+
 class DelegateCustomerCollectionRecordsFetched extends DelegateEvent {}
 
 class DelegateCustomerCollectionRecordUpdateRequested extends DelegateEvent {
@@ -181,6 +188,13 @@ class DelegateCustomerCollectionRecordUpdateRequested extends DelegateEvent {
   });
   @override
   List<Object?> get props => [id, amount, notes];
+}
+
+class DelegateCustomerCollectionRecordDeleteRequested extends DelegateEvent {
+  final int id;
+  DelegateCustomerCollectionRecordDeleteRequested({required this.id});
+  @override
+  List<Object?> get props => [id];
 }
 
 class DelegateReportByRegionRequested extends DelegateEvent {

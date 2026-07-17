@@ -32,8 +32,10 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
     on<DelegateCustomerCollectionSubmitted>(_onSubmitCustomerCollection);
     on<DelegateExpenseRecordsFetched>(_onFetchExpenseRecords);
     on<DelegateExpenseRecordUpdateRequested>(_onUpdateExpenseRecord);
+    on<DelegateExpenseRecordDeleteRequested>(_onDeleteExpenseRecord);
     on<DelegateCustomerCollectionRecordsFetched>(_onFetchCustomerCollectionRecords);
     on<DelegateCustomerCollectionRecordUpdateRequested>(_onUpdateCustomerCollectionRecord);
+    on<DelegateCustomerCollectionRecordDeleteRequested>(_onDeleteCustomerCollectionRecord);
     on<DelegateReportByRegionRequested>(_onFetchReportByRegion);
     on<DelegateReportByProductRequested>(_onFetchReportByProduct);
   }
@@ -454,6 +456,21 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
     }
   }
 
+  Future<void> _onDeleteExpenseRecord(
+    DelegateExpenseRecordDeleteRequested event,
+    Emitter<DelegateState> emit,
+  ) async {
+    emit(DelegateLoading());
+    try {
+      final message = await _repo.deleteExpenseRecord(event.id);
+      emit(DelegateExpenseRecordDeletedState(event.id, message));
+    } on DioException catch (e) {
+      emit(DelegateFailure(_parseError(e)));
+    } catch (_) {
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
+    }
+  }
+
   Future<void> _onFetchCustomerCollectionRecords(
     DelegateCustomerCollectionRecordsFetched event,
     Emitter<DelegateState> emit,
@@ -481,6 +498,21 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
         notes: event.notes,
       );
       emit(DelegateCustomerCollectionRecordUpdatedState(collection));
+    } on DioException catch (e) {
+      emit(DelegateFailure(_parseError(e)));
+    } catch (_) {
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
+    }
+  }
+
+  Future<void> _onDeleteCustomerCollectionRecord(
+    DelegateCustomerCollectionRecordDeleteRequested event,
+    Emitter<DelegateState> emit,
+  ) async {
+    emit(DelegateLoading());
+    try {
+      final message = await _repo.deleteCustomerCollectionRecord(event.id);
+      emit(DelegateCustomerCollectionRecordDeletedState(event.id, message));
     } on DioException catch (e) {
       emit(DelegateFailure(_parseError(e)));
     } catch (_) {

@@ -16,6 +16,10 @@ class ClientSearchField extends StatelessWidget {
   final void Function(String) onSearch;
   final void Function(ClientModel) onSelect;
   final VoidCallback onAddNew;
+  /// Opens سجل الفواتير السابقة for a client. Optional — callers that don't
+  /// need this entry point (e.g. the معاملات tab's collection form) simply
+  /// omit it and no history icon is shown.
+  final void Function(ClientModel)? onViewHistory;
 
   const ClientSearchField({
     super.key,
@@ -27,6 +31,7 @@ class ClientSearchField extends StatelessWidget {
     required this.onSearch,
     required this.onSelect,
     required this.onAddNew,
+    this.onViewHistory,
   });
 
   @override
@@ -98,6 +103,13 @@ class ClientSearchField extends StatelessWidget {
                       ],
                     ),
                   ),
+                  if (onViewHistory != null)
+                    IconButton(
+                      icon: const Icon(Icons.history, color: AppTheme.primary, size: 20),
+                      tooltip: 'عرض السجل',
+                      visualDensity: VisualDensity.compact,
+                      onPressed: () => onViewHistory!(selectedClient!),
+                    ),
                   if (selectedClient!.balance > 0)
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -137,13 +149,29 @@ class ClientSearchField extends StatelessWidget {
                     title: Text(c.name, style: const TextStyle(fontWeight: FontWeight.w600)),
                     subtitle: Text(c.phone,
                         style: const TextStyle(fontSize: 11, color: Colors.grey)),
-                    trailing: c.balance > 0
-                        ? Text(
-                            '${c.balance.toStringAsFixed(0)} دين',
-                            style: const TextStyle(
-                                color: AppTheme.danger, fontSize: 11),
-                          )
-                        : null,
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (c.balance > 0)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 4),
+                            child: Text(
+                              '${c.balance.toStringAsFixed(0)} دين',
+                              style: const TextStyle(
+                                  color: AppTheme.danger, fontSize: 11),
+                            ),
+                          ),
+                        if (onViewHistory != null)
+                          IconButton(
+                            icon: const Icon(Icons.history, size: 18),
+                            tooltip: 'عرض السجل',
+                            visualDensity: VisualDensity.compact,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                            onPressed: () => onViewHistory!(c),
+                          ),
+                      ],
+                    ),
                     onTap: () => onSelect(c),
                   );
                 },

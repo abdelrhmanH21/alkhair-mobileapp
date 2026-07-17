@@ -32,6 +32,8 @@ class ApiEndpoints {
   // Delegate — clients
   static const String delegateClients       = '/delegate/clients';
   static const String delegateClientSearch  = '/delegate/clients/search';
+  static String delegateCustomerInvoiceHistory(int customerId) =>
+      '/delegate/customers/$customerId/invoices';
 
   // Shared reference data (root API, not under /v1/mobile)
   static const String products        = '$apiRoot/products';

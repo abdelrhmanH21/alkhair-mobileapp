@@ -11,6 +11,7 @@ import '../models/settlement_summary_model.dart';
 import '../models/breakdown_models.dart';
 import '../models/transaction_record_models.dart';
 import '../models/report_models.dart';
+import '../models/customer_invoice_history_model.dart';
 
 abstract class DelegateRemoteDataSource {
   Future<LoadingModel?> fetchCurrentLoading();
@@ -39,6 +40,7 @@ abstract class DelegateRemoteDataSource {
   });
   Future<List<DelegateInvoiceModel>> fetchInvoices();
   Future<DelegateInvoiceModel> fetchInvoice(int id);
+  Future<CustomerInvoiceHistoryModel> fetchCustomerInvoiceHistory(int customerId, {int page = 1});
   Future<LoadingModel> updateLoadingStatus(int id, String status);
   Future<SettlementSummaryModel> fetchSettlementSummary();
   Future<void> submitSettlementRequest({
@@ -199,6 +201,15 @@ class DelegateRemoteDataSourceImpl implements DelegateRemoteDataSource {
   Future<DelegateInvoiceModel> fetchInvoice(int id) async {
     final res = await _client.dio.get('${ApiEndpoints.delegateInvoices}/$id');
     return DelegateInvoiceModel.fromJson(res.data['data'] as Map<String, dynamic>);
+  }
+
+  @override
+  Future<CustomerInvoiceHistoryModel> fetchCustomerInvoiceHistory(int customerId, {int page = 1}) async {
+    final res = await _client.dio.get(
+      ApiEndpoints.delegateCustomerInvoiceHistory(customerId),
+      queryParameters: {'page': page},
+    );
+    return CustomerInvoiceHistoryModel.fromJson(res.data as Map<String, dynamic>);
   }
 
   @override

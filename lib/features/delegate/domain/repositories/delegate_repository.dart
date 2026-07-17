@@ -9,6 +9,7 @@ import '../../data/models/settlement_summary_model.dart';
 import '../../data/models/breakdown_models.dart';
 import '../../data/models/transaction_record_models.dart';
 import '../../data/models/report_models.dart';
+import '../../data/models/customer_invoice_history_model.dart';
 
 abstract class DelegateRepository {
   Future<LoadingModel?> getCurrentLoading();
@@ -36,6 +37,7 @@ abstract class DelegateRepository {
     double? longitude,
   });
   Future<List<DelegateInvoiceModel>> getInvoices();
+  Future<CustomerInvoiceHistoryModel> getCustomerInvoiceHistory(int customerId, {int page = 1});
   Future<LoadingModel> updateLoadingStatus(int id, String status);
   Future<SettlementSummaryModel> getSettlementSummary();
   Future<void> submitSettlementRequest({

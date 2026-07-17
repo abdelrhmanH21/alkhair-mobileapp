@@ -10,6 +10,7 @@ import '../models/settlement_summary_model.dart';
 import '../models/breakdown_models.dart';
 import '../models/transaction_record_models.dart';
 import '../models/report_models.dart';
+import '../models/customer_invoice_history_model.dart';
 import '../../domain/repositories/delegate_repository.dart';
 
 class DelegateRepositoryImpl implements DelegateRepository {
@@ -82,6 +83,10 @@ class DelegateRepositoryImpl implements DelegateRepository {
 
   @override
   Future<List<DelegateInvoiceModel>> getInvoices() => _remote.fetchInvoices();
+
+  @override
+  Future<CustomerInvoiceHistoryModel> getCustomerInvoiceHistory(int customerId, {int page = 1}) =>
+      _remote.fetchCustomerInvoiceHistory(customerId, page: page);
 
   @override
   Future<LoadingModel> updateLoadingStatus(int id, String status) =>

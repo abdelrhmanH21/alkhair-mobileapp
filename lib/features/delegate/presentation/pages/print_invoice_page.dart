@@ -10,6 +10,7 @@ import '../../../../core/utils/app_snackbar.dart';
 import '../../../../core/utils/bluetooth_printer.dart';
 import '../../../app_config/presentation/bloc/app_config_bloc.dart';
 import '../../../app_config/presentation/bloc/app_config_state.dart';
+import 'invoice_preview_page.dart';
 
 class PrintInvoicePage extends StatefulWidget {
   final int invoiceId;
@@ -75,67 +76,34 @@ class _PrintInvoicePageState extends State<PrintInvoicePage> {
     }
   }
 
-  Future<void> _print() async {
-    if (_invoiceData == null) return;
-    setState(() => _printing = true);
-
+  /// Same construction print and preview both use, so they always render
+  /// from identical data.
+  InvoicePrintData _buildPrintData() {
     final configState = context.read<AppConfigBloc>().state;
     final config = configState is AppConfigLoaded ? configState.config : null;
-
-    final customer =
-        _invoiceData!['customer'] as Map<String, dynamic>? ?? {};
-    final delegate  = _invoiceData!['delegate'] as Map<String, dynamic>? ?? {};
-    final items     = _invoiceData!['items'] as List? ?? [];
-    final returns   = _invoiceData!['returns'] as List? ?? [];
-
-    final data = InvoicePrintData(
-      invoiceNumber: _invoiceData!['invoice_number'] as String? ?? '',
-      clientName: customer['name'] as String? ?? '',
-      clientPhone: customer['phone'] as String? ?? '',
+    return InvoicePrintData.fromInvoiceJson(
+      _invoiceData!,
       showPhone: config?.showPhone ?? true,
-      delegateName: delegate['name'] as String? ?? 'مندوب',
-      issuedAt: DateTime.tryParse(
-              _invoiceData!['created_at'] as String? ?? '') ??
-          DateTime.now(),
-      salesItems: items.map((e) {
-        final m = e as Map<String, dynamic>;
-        final p = m['product'] as Map<String, dynamic>? ?? {};
-        return PrintLineItem(
-          productName: p['name'] as String? ?? '',
-          unit: p['unit'] as String? ?? '',
-          quantity: (m['quantity'] as num).toDouble(),
-          unitPrice: (m['unit_price'] as num).toDouble(),
-          subtotal: (m['subtotal'] as num).toDouble(),
-        );
-      }).toList(),
-      returnedItems: returns.map((e) {
-        final m = e as Map<String, dynamic>;
-        final p = m['product'] as Map<String, dynamic>? ?? {};
-        return PrintLineItem(
-          productName: p['name'] as String? ?? '',
-          unit: p['unit'] as String? ?? '',
-          quantity: (m['quantity'] as num).toDouble(),
-          unitPrice: (m['unit_price'] as num).toDouble(),
-          subtotal: (m['subtotal'] as num).toDouble(),
-        );
-      }).toList(),
-      grossSales:
-          (_invoiceData!['gross_sales_total'] as num? ?? 0).toDouble(),
-      discountAmount:
-          (_invoiceData!['discount_amount'] as num? ?? 0).toDouble(),
-      totalReturns: (_invoiceData!['total_returns'] as num? ?? 0).toDouble(),
-      netTotal: (_invoiceData!['net_total'] as num? ?? 0).toDouble(),
-      cashReceived: (_invoiceData!['cash_received'] as num? ?? 0).toDouble(),
-      balanceAddedToDebt:
-          (_invoiceData!['balance_added_to_debt'] as num? ?? 0).toDouble(),
-      customerBalanceAfter: (customer['balance'] as num? ?? 0).toDouble(),
       companyName: config?.companyName ?? '',
       headerText: config?.headerText,
       footerText: config?.footerText,
       logoUrl: config?.logoUrl,
     );
+  }
 
-    final ok = await _printer.printInvoice(data);
+  void _openPreview() {
+    if (_invoiceData == null) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => InvoicePreviewPage(data: _buildPrintData())),
+    );
+  }
+
+  Future<void> _print() async {
+    if (_invoiceData == null) return;
+    setState(() => _printing = true);
+
+    final ok = await _printer.printInvoice(_buildPrintData());
     if (!mounted) return;
     setState(() => _printing = false);
     if (ok) {
@@ -204,6 +172,12 @@ class _PrintInvoicePageState extends State<PrintInvoicePage> {
                           ],
                         ),
                       ),
+                    ),
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: _openPreview,
+                      icon: const Icon(Icons.visibility_outlined),
+                      label: const Text('معاينة الفاتورة'),
                     ),
                     const SizedBox(height: 16),
                   ],

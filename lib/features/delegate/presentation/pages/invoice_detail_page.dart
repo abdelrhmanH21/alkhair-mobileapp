@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/di/service_locator.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/network/api_endpoints.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/utils/bluetooth_printer.dart';
 import '../../../../core/widgets/state_views.dart';
+import '../../../app_config/presentation/bloc/app_config_bloc.dart';
+import '../../../app_config/presentation/bloc/app_config_state.dart';
+import 'invoice_preview_page.dart';
 import 'print_invoice_page.dart';
 
 /// Full invoice preview — customer, itemized products/returns, totals.
@@ -63,7 +68,12 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
       appBar: AppBar(
         title: Text(invoice?['invoice_number'] as String? ?? 'تفاصيل الفاتورة'),
         actions: [
-          if (invoice != null)
+          if (invoice != null) ...[
+            IconButton(
+              icon: const Icon(Icons.visibility_outlined),
+              tooltip: 'معاينة',
+              onPressed: () => _openPreview(context, invoice),
+            ),
             IconButton(
               icon: const Icon(Icons.print_rounded),
               tooltip: 'طباعة',
@@ -74,6 +84,7 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
                 ),
               ),
             ),
+          ],
         ],
       ),
       body: _loading
@@ -83,6 +94,29 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
               : invoice == null
                   ? const Center(child: Text('تعذر عرض الفاتورة'))
                   : _buildBody(context, invoice),
+    );
+  }
+
+  /// Builds the same InvoicePrintData print_invoice_page.dart's print flow
+  /// does (via InvoicePrintData.fromInvoiceJson), so this preview always
+  /// shows exactly what would be printed.
+  void _openPreview(BuildContext context, Map<String, dynamic> invoice) {
+    final configState = context.read<AppConfigBloc>().state;
+    final config = configState is AppConfigLoaded ? configState.config : null;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => InvoicePreviewPage(
+          data: InvoicePrintData.fromInvoiceJson(
+            invoice,
+            showPhone: config?.showPhone ?? true,
+            companyName: config?.companyName ?? '',
+            headerText: config?.headerText,
+            footerText: config?.footerText,
+            logoUrl: config?.logoUrl,
+          ),
+        ),
+      ),
     );
   }
 

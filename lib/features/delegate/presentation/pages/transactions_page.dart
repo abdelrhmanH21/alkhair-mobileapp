@@ -348,12 +348,23 @@ class _ExpenseFormSheetState extends State<_ExpenseFormSheet> {
       child: BlocListener<DelegateBloc, DelegateState>(
         listener: (ctx, state) {
           if (state is DelegateExpenseSubmittedState) {
+            // Close the ownership window immediately — TransactionsPage's own
+            // listener reacts to this same state by re-fetching the
+            // expense/collection lists, and this sheet stays mounted (still
+            // subscribed) for the pop animation's ~300ms tail. Without
+            // resetting _submitting here, a DelegateFailure from that
+            // unrelated background refresh would still match `_submitting`
+            // below and misreport as "this submit failed" even though it
+            // already succeeded.
+            _submitting = false;
             Navigator.pop(ctx);
             AppSnackbar.showSuccess(ctx, state.message);
-          } else if (state is DelegateFailure) {
+          } else if (state is DelegateFailure && _submitting) {
             setState(() => _submitting = false);
             AppSnackbar.showError(ctx, state.message);
           }
+          // else: not ours (e.g. the background list refresh triggered by
+          // our own success above) — ignore it.
         },
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -460,9 +471,15 @@ class _ExpenseEditSheetState extends State<_ExpenseEditSheet> {
       child: BlocListener<DelegateBloc, DelegateState>(
         listener: (ctx, state) {
           if (state is DelegateExpenseRecordUpdatedState) {
+            // See _ExpenseFormSheet's identical comment: close the ownership
+            // window on success too, not just failure, so a DelegateFailure
+            // from TransactionsPage's own post-success list refresh (fired
+            // while this sheet is still mounted mid pop-animation) isn't
+            // misattributed to this edit.
+            _submitting = false;
             Navigator.pop(ctx);
             AppSnackbar.showSuccess(ctx, 'تم تعديل المصروف بنجاح.');
-          } else if (state is DelegateFailure) {
+          } else if (state is DelegateFailure && _submitting) {
             setState(() => _submitting = false);
             AppSnackbar.showError(ctx, state.message);
           }
@@ -607,15 +624,23 @@ class _CollectionFormSheetState extends State<_CollectionFormSheet> {
               _searchLoading = false;
             });
           } else if (state is DelegateCustomerCollectionSubmittedState) {
+            // Close the ownership window on success too — see
+            // _ExpenseFormSheet's identical comment. Without this,
+            // TransactionsPage's own post-success list refresh (fired while
+            // this sheet is still mounted mid pop-animation) could still
+            // match `_submitting` below and misreport as "this collection
+            // failed" even though it already succeeded.
+            _submitting = false;
             Navigator.pop(ctx);
             AppSnackbar.showSuccess(ctx, state.message);
-          } else if (state is DelegateFailure) {
+          } else if (state is DelegateFailure && (_submitting || _searchLoading)) {
             setState(() {
               _submitting = false;
               _searchLoading = false;
             });
             AppSnackbar.showError(ctx, state.message);
           }
+          // else: not ours — ignore.
         },
         builder: (context, state) => Column(
           mainAxisSize: MainAxisSize.min,
@@ -748,9 +773,12 @@ class _CollectionEditSheetState extends State<_CollectionEditSheet> {
       child: BlocListener<DelegateBloc, DelegateState>(
         listener: (ctx, state) {
           if (state is DelegateCustomerCollectionRecordUpdatedState) {
+            // See _ExpenseFormSheet's identical comment: close the ownership
+            // window on success too, not just failure.
+            _submitting = false;
             Navigator.pop(ctx);
             AppSnackbar.showSuccess(ctx, 'تم تعديل التحصيل بنجاح.');
-          } else if (state is DelegateFailure) {
+          } else if (state is DelegateFailure && _submitting) {
             setState(() => _submitting = false);
             AppSnackbar.showError(ctx, state.message);
           }

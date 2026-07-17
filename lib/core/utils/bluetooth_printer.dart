@@ -6,12 +6,192 @@ import 'package:image/image.dart' as img;
 import 'package:intl/intl.dart';
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 
-class BluetoothPrinterService {
-  static const int _charsPerLine = 42; // standard 80mm ESC/POS columns
-  // Safe raster width for both 58mm and 80mm printers (no per-printer paper
-  // width is plumbed into this flow yet — see ReceiptSetting.paper_width).
-  static const int _logoWidthDots = 384;
+const int _charsPerLine = 42; // standard 80mm ESC/POS columns
+// Safe raster width for both 58mm and 80mm printers (no per-printer paper
+// width is plumbed into this flow yet — see ReceiptSetting.paper_width).
+const int _logoWidthDots = 384;
+// Luminance below this prints as a black dot — shared by the real ESC/POS
+// rasterizer and the on-screen preview's logo rendering so both show the
+// exact same monochrome conversion.
+const int _blackThreshold = 160;
 
+enum ReceiptAlign { left, center, right }
+
+/// One structural element of a receipt, in print order. This is the single
+/// source of truth for "what a receipt contains" — [buildReceiptPlan] builds
+/// it once from [InvoicePrintData], and both the real ESC/POS byte encoder
+/// ([BluetoothPrinterService._buildTicket]) and the on-screen preview
+/// (ReceiptPreviewView) render from it, so they can never structurally drift
+/// apart from each other.
+sealed class ReceiptElement {}
+
+class ReceiptTextLine extends ReceiptElement {
+  final String text;
+  final bool bold;
+  final ReceiptAlign align;
+  ReceiptTextLine(this.text, {this.bold = false, this.align = ReceiptAlign.left});
+}
+
+class ReceiptSeparatorLine extends ReceiptElement {}
+
+class ReceiptLogoElement extends ReceiptElement {
+  final String logoUrl;
+  ReceiptLogoElement(this.logoUrl);
+}
+
+/// Builds the ordered content plan for [d]'s receipt — every line, in the
+/// same order and under the same conditions a physical thermal receipt would
+/// print them (logo, header, invoice#/date, customer+phone, delegate name,
+/// items table, sales/discount/returns totals, إجمالي المديونية/الصافي
+/// المستحق/المدفوع/المتبقي, footer). Trailing paper-feed blank lines and the
+/// cut command are print-mechanics only, not content, so they're added by
+/// [BluetoothPrinterService._buildTicket] directly rather than here.
+List<ReceiptElement> buildReceiptPlan(InvoicePrintData d) {
+  final elements = <ReceiptElement>[];
+  void addLine(String text, {bool bold = false, ReceiptAlign align = ReceiptAlign.left}) =>
+      elements.add(ReceiptTextLine(text, bold: bold, align: align));
+  void separator() => elements.add(ReceiptSeparatorLine());
+
+  // 1. Logo (greyscale receipt logo)
+  if (d.logoUrl != null && d.logoUrl!.isNotEmpty) {
+    elements.add(ReceiptLogoElement(d.logoUrl!));
+  }
+
+  // 2. Company name + welcome header text
+  if (d.companyName.isNotEmpty) {
+    addLine(d.companyName, bold: true, align: ReceiptAlign.center);
+  }
+  if (d.headerText != null && d.headerText!.isNotEmpty) {
+    addLine(d.headerText!, align: ReceiptAlign.center);
+  }
+  separator();
+
+  // 3. Invoice number + date/time
+  addLine('رقم الفاتورة: ${d.invoiceNumber}');
+  addLine('التاريخ: ${DateFormat('yyyy/MM/dd – HH:mm').format(d.issuedAt)}');
+  separator();
+
+  // 4. Customer name + phone (respecting "إظهار رقم الهاتف")
+  addLine('العميل : ${d.clientName}');
+  if (d.showPhone && d.clientPhone.isNotEmpty) {
+    addLine('الهاتف : ${d.clientPhone}');
+  }
+
+  // 5. Delegate (representative) name
+  addLine('المندوب: ${d.delegateName}');
+  separator();
+
+  // 6. Items table: الصنف | الوحدة | الكمية | السعر | الإجمالي
+  addLine(_row5('الصنف', 'الوحدة', 'الكمية', 'السعر', 'الإجمالي'), bold: true);
+  separator();
+
+  for (final item in d.salesItems) {
+    final nameLines = _wrapText(item.productName, 12);
+    for (var i = 0; i < nameLines.length; i++) {
+      if (i == 0) {
+        addLine(_row5(
+          nameLines[i],
+          item.unit,
+          item.quantity.toStringAsFixed(2),
+          item.unitPrice.toStringAsFixed(2),
+          item.subtotal.toStringAsFixed(2),
+        ));
+      } else {
+        addLine(nameLines[i]);
+      }
+    }
+  }
+
+  if (d.returnedItems.isNotEmpty) {
+    separator();
+    addLine('المرتجعات:', bold: true);
+    for (final ret in d.returnedItems) {
+      final nameLines = _wrapText(ret.productName, 12);
+      for (var i = 0; i < nameLines.length; i++) {
+        if (i == 0) {
+          addLine(_row5(
+            nameLines[i],
+            ret.unit,
+            '-${ret.quantity.toStringAsFixed(2)}',
+            ret.unitPrice.toStringAsFixed(2),
+            ret.subtotal.toStringAsFixed(2),
+          ));
+        } else {
+          addLine(nameLines[i]);
+        }
+      }
+    }
+  }
+
+  separator();
+
+  // 7. Gross sales total (before discount/returns)
+  addLine('إجمالي المبيعات: ${d.grossSales.toStringAsFixed(2)} ج.م',
+      bold: true, align: ReceiptAlign.right);
+
+  // 8. Discount — only when present
+  if (d.discountAmount > 0) {
+    addLine('الخصم: -${d.discountAmount.toStringAsFixed(2)} ج.م',
+        bold: true, align: ReceiptAlign.right);
+  }
+
+  // 9. Returns — only when this invoice includes returns
+  if (d.totalReturns > 0) {
+    addLine('المرتجعات: -${d.totalReturns.toStringAsFixed(2)} ج.م',
+        bold: true, align: ReceiptAlign.right);
+  }
+
+  separator();
+
+  // 10. Overall customer debt AFTER this invoice's effect
+  addLine('إجمالي المديونية: ${d.customerBalanceAfter.toStringAsFixed(2)} ج.م',
+      bold: true, align: ReceiptAlign.right);
+
+  // 11. This invoice's own net total
+  addLine('الصافي المستحق: ${d.netTotal.toStringAsFixed(2)} ج.م',
+      bold: true, align: ReceiptAlign.right);
+
+  // 12. Cash received
+  addLine('المدفوع: ${d.cashReceived.toStringAsFixed(2)} ج.م',
+      bold: true, align: ReceiptAlign.right);
+
+  // 13. This invoice's own remaining amount only (distinct from #10)
+  final remaining = d.balanceAddedToDebt > 0 ? d.balanceAddedToDebt : 0.0;
+  addLine('المتبقي: ${remaining.toStringAsFixed(2)} ج.م',
+      bold: true, align: ReceiptAlign.right);
+
+  // 14. Footer text
+  if (d.footerText != null && d.footerText!.isNotEmpty) {
+    separator();
+    addLine(d.footerText!, align: ReceiptAlign.center);
+  }
+
+  return elements;
+}
+
+/// Fixed-width 5-column row: name | unit | qty | price | total.
+String _row5(String name, String unit, String qty, String price, String total) {
+  final n = name.padRight(12).substring(0, 12);
+  final u = unit.padRight(6).substring(0, 6);
+  final q = qty.padLeft(6);
+  final p = price.padLeft(8);
+  final t = total.padLeft(10);
+  return '$n$u$q$p$t';
+}
+
+List<String> _wrapText(String text, int maxWidth) {
+  if (text.length <= maxWidth) return [text];
+  final lines = <String>[];
+  var remaining = text;
+  while (remaining.length > maxWidth) {
+    lines.add(remaining.substring(0, maxWidth));
+    remaining = remaining.substring(maxWidth);
+  }
+  if (remaining.isNotEmpty) lines.add(remaining);
+  return lines;
+}
+
+class BluetoothPrinterService {
   Future<List<BluetoothInfo>> discoverDevices() async {
     try {
       return await PrintBluetoothThermal.pairedBluetooths;
@@ -62,144 +242,45 @@ class BluetoothPrinterService {
       addBytes([...text.codeUnits, 0x0A]);
     }
 
-    void separator() => line('-' * _charsPerLine);
-
     // Bold ON: ESC E 1
-    void boldOn()  => addBytes([0x1B, 0x45, 0x01]);
+    void boldOn() => addBytes([0x1B, 0x45, 0x01]);
     void boldOff() => addBytes([0x1B, 0x45, 0x00]);
 
-    // Align center: ESC a 1
+    // Align center: ESC a 1 / right: ESC a 2 / left: ESC a 0
     void alignCenter() => addBytes([0x1B, 0x61, 0x01]);
-    // Align right: ESC a 2
     void alignRight() => addBytes([0x1B, 0x61, 0x02]);
-    // Align left: ESC a 0
     void alignLeft() => addBytes([0x1B, 0x61, 0x00]);
+    void setAlign(ReceiptAlign a) {
+      switch (a) {
+        case ReceiptAlign.left:
+          alignLeft();
+        case ReceiptAlign.center:
+          alignCenter();
+        case ReceiptAlign.right:
+          alignRight();
+      }
+    }
 
     // Initialize printer
     addBytes([0x1B, 0x40]);
 
-    // 1. Logo (greyscale receipt logo)
-    if (d.logoUrl != null && d.logoUrl!.isNotEmpty) {
-      final raster = await _fetchAndRasterizeLogo(d.logoUrl!);
-      if (raster != null) {
-        alignCenter();
-        addBytes(raster);
-        line('');
-      }
-    }
-
-    // 2. Company name + welcome header text
-    alignCenter();
-    if (d.companyName.isNotEmpty) {
-      boldOn();
-      line(d.companyName);
-      boldOff();
-    }
-    if (d.headerText != null && d.headerText!.isNotEmpty) {
-      line(d.headerText!);
-    }
-    separator();
-
-    // 3. Invoice number + date/time
-    alignLeft();
-    line('رقم الفاتورة: ${d.invoiceNumber}');
-    line('التاريخ: ${DateFormat('yyyy/MM/dd – HH:mm').format(d.issuedAt)}');
-    separator();
-
-    // 4. Customer name + phone (respecting "إظهار رقم الهاتف")
-    line('العميل : ${d.clientName}');
-    if (d.showPhone && d.clientPhone.isNotEmpty) {
-      line('الهاتف : ${d.clientPhone}');
-    }
-
-    // 5. Delegate (representative) name
-    line('المندوب: ${d.delegateName}');
-    separator();
-
-    // 6. Items table: الصنف | الوحدة | الكمية | السعر | الإجمالي
-    boldOn();
-    line(_row5('الصنف', 'الوحدة', 'الكمية', 'السعر', 'الإجمالي'));
-    boldOff();
-    separator();
-
-    for (final item in d.salesItems) {
-      final nameLines = _wrapText(item.productName, 12);
-      for (var i = 0; i < nameLines.length; i++) {
-        if (i == 0) {
-          line(_row5(
-            nameLines[i],
-            item.unit,
-            item.quantity.toStringAsFixed(2),
-            item.unitPrice.toStringAsFixed(2),
-            item.subtotal.toStringAsFixed(2),
-          ));
-        } else {
-          line(nameLines[i]);
-        }
-      }
-    }
-
-    if (d.returnedItems.isNotEmpty) {
-      separator();
-      boldOn();
-      line('المرتجعات:');
-      boldOff();
-      for (final ret in d.returnedItems) {
-        final nameLines = _wrapText(ret.productName, 12);
-        for (var i = 0; i < nameLines.length; i++) {
-          if (i == 0) {
-            line(_row5(
-              nameLines[i],
-              ret.unit,
-              '-${ret.quantity.toStringAsFixed(2)}',
-              ret.unitPrice.toStringAsFixed(2),
-              ret.subtotal.toStringAsFixed(2),
-            ));
-          } else {
-            line(nameLines[i]);
+    for (final element in buildReceiptPlan(d)) {
+      switch (element) {
+        case ReceiptLogoElement(:final logoUrl):
+          final raster = await _fetchAndRasterizeLogo(logoUrl);
+          if (raster != null) {
+            alignCenter();
+            addBytes(raster);
+            line('');
           }
-        }
+        case ReceiptSeparatorLine():
+          line('-' * _charsPerLine);
+        case ReceiptTextLine(:final text, :final bold, :final align):
+          setAlign(align);
+          if (bold) boldOn();
+          line(text);
+          if (bold) boldOff();
       }
-    }
-
-    separator();
-    alignRight();
-    boldOn();
-
-    // 7. Gross sales total (before discount/returns)
-    line('إجمالي المبيعات: ${d.grossSales.toStringAsFixed(2)} ج.م');
-
-    // 8. Discount — only when present
-    if (d.discountAmount > 0) {
-      line('الخصم: -${d.discountAmount.toStringAsFixed(2)} ج.م');
-    }
-
-    // 9. Returns — only when this invoice includes returns
-    if (d.totalReturns > 0) {
-      line('المرتجعات: -${d.totalReturns.toStringAsFixed(2)} ج.م');
-    }
-
-    separator();
-
-    // 10. Overall customer debt AFTER this invoice's effect
-    line('إجمالي المديونية: ${d.customerBalanceAfter.toStringAsFixed(2)} ج.م');
-
-    // 11. This invoice's own net total
-    line('الصافي المستحق: ${d.netTotal.toStringAsFixed(2)} ج.م');
-
-    // 12. Cash received
-    line('المدفوع: ${d.cashReceived.toStringAsFixed(2)} ج.م');
-
-    // 13. This invoice's own remaining amount only (distinct from #10)
-    final remaining = d.balanceAddedToDebt > 0 ? d.balanceAddedToDebt : 0.0;
-    line('المتبقي: ${remaining.toStringAsFixed(2)} ج.م');
-    boldOff();
-
-    // 14. Footer text
-    if (d.footerText != null && d.footerText!.isNotEmpty) {
-      separator();
-      alignCenter();
-      line(d.footerText!);
     }
 
     line('');
@@ -212,55 +293,56 @@ class BluetoothPrinterService {
     return bytes;
   }
 
-  /// Fixed-width 5-column row: name | unit | qty | price | total.
-  String _row5(String name, String unit, String qty, String price, String total) {
-    final n = name.padRight(12).substring(0, 12);
-    final u = unit.padRight(6).substring(0, 6);
-    final q = qty.padLeft(6);
-    final p = price.padLeft(8);
-    final t = total.padLeft(10);
-    return '$n$u$q$p$t';
-  }
-
-  List<String> _wrapText(String text, int maxWidth) {
-    if (text.length <= maxWidth) return [text];
-    final lines = <String>[];
-    var remaining = text;
-    while (remaining.length > maxWidth) {
-      lines.add(remaining.substring(0, maxWidth));
-      remaining = remaining.substring(maxWidth);
-    }
-    if (remaining.isNotEmpty) lines.add(remaining);
-    return lines;
-  }
-
-  /// Fetches the receipt logo (network URL or inline `data:` URI) and
-  /// rasterizes it into an ESC/POS GS-v-0 monochrome bitmap command.
-  /// Returns null on any failure so a broken/unreachable logo never blocks
-  /// the rest of the receipt from printing.
-  Future<List<int>?> _fetchAndRasterizeLogo(String logoUrl) async {
+  /// Fetches the receipt logo (network URL or inline `data:` URI). Returns
+  /// null on any failure so a broken/unreachable logo never blocks the rest
+  /// of the receipt from printing/previewing.
+  Future<Uint8List?> _fetchLogoBytes(String logoUrl) async {
     try {
-      final Uint8List bytes;
       if (logoUrl.startsWith('data:')) {
         final base64Part = logoUrl.substring(logoUrl.indexOf(',') + 1);
-        bytes = base64Decode(base64Part);
-      } else {
-        final response = await Dio().get<List<int>>(
-          logoUrl,
-          options: Options(responseType: ResponseType.bytes),
-        );
-        bytes = Uint8List.fromList(response.data ?? const []);
+        return base64Decode(base64Part);
       }
-
-      final decoded = img.decodeImage(bytes);
-      if (decoded == null) return null;
-
-      final resized = img.copyResize(decoded, width: _logoWidthDots);
-      return _toRasterCommand(resized);
+      final response = await Dio().get<List<int>>(
+        logoUrl,
+        options: Options(responseType: ResponseType.bytes),
+      );
+      return Uint8List.fromList(response.data ?? const []);
     } catch (e) {
-      debugPrint('Logo rasterize failed: $e');
+      debugPrint('Logo fetch failed: $e');
       return null;
     }
+  }
+
+  Future<img.Image?> _fetchAndResizeLogo(String logoUrl) async {
+    final bytes = await _fetchLogoBytes(logoUrl);
+    if (bytes == null) return null;
+    final decoded = img.decodeImage(bytes);
+    if (decoded == null) return null;
+    return img.copyResize(decoded, width: _logoWidthDots);
+  }
+
+  /// Rasterizes the logo into an ESC/POS GS-v-0 monochrome bitmap command.
+  Future<List<int>?> _fetchAndRasterizeLogo(String logoUrl) async {
+    final resized = await _fetchAndResizeLogo(logoUrl);
+    if (resized == null) return null;
+    return _toRasterCommand(resized);
+  }
+
+  /// Same fetch → resize → 1-bit threshold pipeline as the real print path,
+  /// re-encoded as a PNG for on-screen preview, so the preview shows exactly
+  /// what the printer will produce rather than the original color logo.
+  Future<Uint8List?> renderLogoPreviewPng(String logoUrl) async {
+    final resized = await _fetchAndResizeLogo(logoUrl);
+    if (resized == null) return null;
+    final mono = img.Image(width: resized.width, height: resized.height);
+    for (var y = 0; y < resized.height; y++) {
+      for (var x = 0; x < resized.width; x++) {
+        final isBlack = resized.getPixel(x, y).luminance < _blackThreshold;
+        final v = isBlack ? 0 : 255;
+        mono.setPixelRgb(x, y, v, v, v);
+      }
+    }
+    return Uint8List.fromList(img.encodePng(mono));
   }
 
   /// Encodes an [image] as an ESC/POS "GS v 0" raster bit image command
@@ -273,7 +355,7 @@ class BluetoothPrinterService {
       final row = List<int>.filled(widthBytes, 0);
       for (var x = 0; x < image.width; x++) {
         final pixel = image.getPixel(x, y);
-        if (pixel.luminance < 160) {
+        if (pixel.luminance < _blackThreshold) {
           row[x >> 3] |= (0x80 >> (x & 7));
         }
       }
@@ -331,6 +413,58 @@ class InvoicePrintData {
     this.footerText,
     this.logoUrl,
   });
+
+  /// Builds print data from a raw `/delegate/invoices/{id}` JSON payload —
+  /// the one place both the real print flow (print_invoice_page.dart) and
+  /// the on-screen preview construct an [InvoicePrintData], so they always
+  /// work from identical data.
+  factory InvoicePrintData.fromInvoiceJson(
+    Map<String, dynamic> invoiceData, {
+    bool showPhone = true,
+    String companyName = '',
+    String? headerText,
+    String? footerText,
+    String? logoUrl,
+  }) {
+    final customer = invoiceData['customer'] as Map<String, dynamic>? ?? {};
+    final delegate = invoiceData['delegate'] as Map<String, dynamic>? ?? {};
+    final items = invoiceData['items'] as List? ?? [];
+    final returns = invoiceData['returns'] as List? ?? [];
+
+    PrintLineItem toLineItem(dynamic e) {
+      final m = e as Map<String, dynamic>;
+      final p = m['product'] as Map<String, dynamic>? ?? {};
+      return PrintLineItem(
+        productName: p['name'] as String? ?? '',
+        unit: p['unit'] as String? ?? '',
+        quantity: (m['quantity'] as num).toDouble(),
+        unitPrice: (m['unit_price'] as num).toDouble(),
+        subtotal: (m['subtotal'] as num).toDouble(),
+      );
+    }
+
+    return InvoicePrintData(
+      invoiceNumber: invoiceData['invoice_number'] as String? ?? '',
+      clientName: customer['name'] as String? ?? '',
+      clientPhone: customer['phone'] as String? ?? '',
+      showPhone: showPhone,
+      delegateName: delegate['name'] as String? ?? 'مندوب',
+      issuedAt: DateTime.tryParse(invoiceData['created_at'] as String? ?? '') ?? DateTime.now(),
+      salesItems: items.map(toLineItem).toList(),
+      returnedItems: returns.map(toLineItem).toList(),
+      grossSales: (invoiceData['gross_sales_total'] as num? ?? 0).toDouble(),
+      discountAmount: (invoiceData['discount_amount'] as num? ?? 0).toDouble(),
+      totalReturns: (invoiceData['total_returns'] as num? ?? 0).toDouble(),
+      netTotal: (invoiceData['net_total'] as num? ?? 0).toDouble(),
+      cashReceived: (invoiceData['cash_received'] as num? ?? 0).toDouble(),
+      balanceAddedToDebt: (invoiceData['balance_added_to_debt'] as num? ?? 0).toDouble(),
+      customerBalanceAfter: (customer['balance'] as num? ?? 0).toDouble(),
+      companyName: companyName,
+      headerText: headerText,
+      footerText: footerText,
+      logoUrl: logoUrl,
+    );
+  }
 }
 
 class PrintLineItem {

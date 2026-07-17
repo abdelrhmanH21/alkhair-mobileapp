@@ -3,6 +3,9 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/app_snackbar.dart';
+import '../../../../core/utils/report_export.dart';
+import '../../../app_config/presentation/bloc/app_config_bloc.dart';
+import '../../../app_config/presentation/bloc/app_config_state.dart';
 import '../bloc/delegate_bloc.dart';
 import '../bloc/delegate_event.dart';
 import '../bloc/delegate_state.dart';
@@ -53,6 +56,23 @@ class _DelegateReportsPageState extends State<DelegateReportsPage>
           dateFrom: params.dateFrom,
           dateTo: params.dateTo,
         ));
+  }
+
+  /// Human-readable period label for the export header — mirrors
+  /// _currentParams()'s period resolution but as display text rather than
+  /// API query params.
+  String get _periodLabel {
+    switch (_period) {
+      case _ReportPeriod.week:
+        return 'هذا الأسبوع';
+      case _ReportPeriod.month:
+        return 'هذا الشهر';
+      case _ReportPeriod.custom:
+        final range = _customRange;
+        if (range == null) return 'هذا الشهر';
+        final fmt = DateFormat('yyyy-MM-dd');
+        return '${fmt.format(range.start)} — ${fmt.format(range.end)}';
+    }
   }
 
   ({String? period, String? dateFrom, String? dateTo}) _currentParams() {
@@ -163,8 +183,8 @@ class _DelegateReportsPageState extends State<DelegateReportsPage>
               child: TabBarView(
                 controller: _tabController,
                 children: [
-                  _RegionReportView(rows: _regionRows),
-                  _ProductReportView(rows: _productRows),
+                  _RegionReportView(rows: _regionRows, periodLabel: _periodLabel),
+                  _ProductReportView(rows: _productRows, periodLabel: _periodLabel),
                 ],
               ),
             ),
@@ -177,7 +197,29 @@ class _DelegateReportsPageState extends State<DelegateReportsPage>
 
 class _RegionReportView extends StatelessWidget {
   final List<RegionReportRowModel>? rows;
-  const _RegionReportView({required this.rows});
+  final String periodLabel;
+  const _RegionReportView({required this.rows, required this.periodLabel});
+
+  ReportExportData _exportData() {
+    final r = rows ?? [];
+    final totalCustomers = r.fold(0, (s, row) => s + row.customerCount);
+    final totalSales = r.fold(0.0, (s, row) => s + row.totalSales);
+    return ReportExportData(
+      title: 'تقرير المناطق',
+      period: periodLabel,
+      headers: const ['المنطقة', 'عدد العملاء', 'المبيعات', 'نسبة المشاركة %', 'متوسط العميل'],
+      rows: r
+          .map((row) => [
+                row.regionName,
+                '${row.customerCount}',
+                row.totalSales.toStringAsFixed(2),
+                '${row.participationPct.toStringAsFixed(1)}%',
+                row.avgPerCustomer.toStringAsFixed(2),
+              ])
+          .toList(),
+      totals: ['الإجمالي', '$totalCustomers', totalSales.toStringAsFixed(2), '-', '-'],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -190,9 +232,12 @@ class _RegionReportView extends StatelessWidget {
     }
     return ListView.builder(
       padding: const EdgeInsets.all(12),
-      itemCount: rows!.length,
+      itemCount: rows!.length + 1,
       itemBuilder: (_, i) {
-        final r = rows![i];
+        if (i == 0) {
+          return _ExportButtonsRow(buildData: _exportData);
+        }
+        final r = rows![i - 1];
         return Card(
           margin: const EdgeInsets.symmetric(vertical: 4),
           child: Padding(
@@ -232,7 +277,28 @@ class _RegionReportView extends StatelessWidget {
 
 class _ProductReportView extends StatelessWidget {
   final List<ProductReportRowModel>? rows;
-  const _ProductReportView({required this.rows});
+  final String periodLabel;
+  const _ProductReportView({required this.rows, required this.periodLabel});
+
+  ReportExportData _exportData() {
+    final p = rows ?? [];
+    final totalQty = p.fold(0.0, (s, row) => s + row.totalQuantitySold);
+    final totalValue = p.fold(0.0, (s, row) => s + row.totalValue);
+    return ReportExportData(
+      title: 'تقرير الأصناف',
+      period: periodLabel,
+      headers: const ['المنتج', 'الوحدة', 'الكمية المباعة', 'القيمة الإجمالية'],
+      rows: p
+          .map((row) => [
+                row.productName,
+                row.unit,
+                row.totalQuantitySold.toStringAsFixed(2),
+                row.totalValue.toStringAsFixed(2),
+              ])
+          .toList(),
+      totals: ['الإجمالي', '-', totalQty.toStringAsFixed(2), totalValue.toStringAsFixed(2)],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -245,9 +311,12 @@ class _ProductReportView extends StatelessWidget {
     }
     return ListView.builder(
       padding: const EdgeInsets.all(12),
-      itemCount: rows!.length,
+      itemCount: rows!.length + 1,
       itemBuilder: (_, i) {
-        final p = rows![i];
+        if (i == 0) {
+          return _ExportButtonsRow(buildData: _exportData);
+        }
+        final p = rows![i - 1];
         return Card(
           margin: const EdgeInsets.symmetric(vertical: 4),
           child: ListTile(
@@ -261,6 +330,83 @@ class _ProductReportView extends StatelessWidget {
       },
     );
   }
+}
+
+// ─── Export buttons row (shared by both report tabs) ──────────────────────────
+
+class _ExportButtonsRow extends StatefulWidget {
+  final ReportExportData Function() buildData;
+  const _ExportButtonsRow({required this.buildData});
+
+  @override
+  State<_ExportButtonsRow> createState() => _ExportButtonsRowState();
+}
+
+class _ExportButtonsRowState extends State<_ExportButtonsRow> {
+  bool _exportingPdf = false;
+  bool _exportingExcel = false;
+
+  String get _companyName {
+    final state = context.read<AppConfigBloc>().state;
+    return state is AppConfigLoaded ? state.config.companyName : '';
+  }
+
+  String? get _logoUrl {
+    final state = context.read<AppConfigBloc>().state;
+    return state is AppConfigLoaded ? (state.config.logoColorUrl ?? state.config.logoUrl) : null;
+  }
+
+  Future<void> _exportPdf() async {
+    setState(() => _exportingPdf = true);
+    try {
+      await ReportExporter.exportPdf(widget.buildData(), companyName: _companyName, logoUrl: _logoUrl);
+    } catch (_) {
+      if (mounted) AppSnackbar.showError(context, 'تعذر إنشاء ملف PDF. حاول مرة أخرى.');
+    } finally {
+      if (mounted) setState(() => _exportingPdf = false);
+    }
+  }
+
+  Future<void> _exportExcel() async {
+    setState(() => _exportingExcel = true);
+    try {
+      await ReportExporter.exportExcel(widget.buildData(), companyName: _companyName);
+    } catch (_) {
+      if (mounted) AppSnackbar.showError(context, 'تعذر إنشاء ملف Excel. حاول مرة أخرى.');
+    } finally {
+      if (mounted) setState(() => _exportingExcel = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _exportingPdf ? null : _exportPdf,
+                icon: _exportingPdf
+                    ? const SizedBox(
+                        width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.picture_as_pdf_outlined, size: 18),
+                label: const Text('تصدير PDF'),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _exportingExcel ? null : _exportExcel,
+                icon: _exportingExcel
+                    ? const SizedBox(
+                        width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.table_chart_outlined, size: 18),
+                label: const Text('تصدير Excel'),
+              ),
+            ),
+          ],
+        ),
+      );
 }
 
 class _ReportMiniStat extends StatelessWidget {

@@ -20,8 +20,10 @@ dependencies:
   firebase_core: ^3.8.0
   firebase_messaging: ^15.1.5
 
-  # Thermal-receipt logo rasterization (PNG/JPEG -> 1bpp ESC/POS bitmap)
-  image: ^4.8.0
+  # Thermal-receipt logo rasterization (PNG/JPEG -> 1bpp ESC/POS bitmap).
+  # Capped below 4.4.0: newer image releases pull in archive/xml versions
+  # that conflict with the excel package's own archive/xml constraints.
+  image: ^4.3.0
 
   # Dependency injection
   get_it: ^7.7.0
@@ -49,6 +51,12 @@ dependencies:
   intl: ^0.20.2
   shared_preferences: ^2.3.2
   cupertino_icons: ^1.0.8
+
+  # Report export (PDF / Excel) + native share sheet
+  pdf: ^3.12.0
+  printing: ^5.14.3
+  excel: ^4.0.6
+  share_plus: ^12.0.2
 
 dev_dependencies:
   flutter_test:

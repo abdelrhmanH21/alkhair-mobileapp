@@ -40,6 +40,13 @@ abstract class DelegateRemoteDataSource {
   });
   Future<List<DelegateInvoiceModel>> fetchInvoices();
   Future<DelegateInvoiceModel> fetchInvoice(int id);
+  Future<DelegateInvoiceModel> updateInvoice({
+    required int invoiceId,
+    required List<Map<String, dynamic>> salesItems,
+    required List<Map<String, dynamic>> returnedItems,
+    required double cashReceived,
+    double discountAmount = 0,
+  });
   Future<CustomerInvoiceHistoryModel> fetchCustomerInvoiceHistory(int customerId, {int page = 1});
   Future<LoadingModel> updateLoadingStatus(int id, String status);
   Future<SettlementSummaryModel> fetchSettlementSummary();
@@ -200,6 +207,23 @@ class DelegateRemoteDataSourceImpl implements DelegateRemoteDataSource {
   @override
   Future<DelegateInvoiceModel> fetchInvoice(int id) async {
     final res = await _client.dio.get('${ApiEndpoints.delegateInvoices}/$id');
+    return DelegateInvoiceModel.fromJson(res.data['data'] as Map<String, dynamic>);
+  }
+
+  @override
+  Future<DelegateInvoiceModel> updateInvoice({
+    required int invoiceId,
+    required List<Map<String, dynamic>> salesItems,
+    required List<Map<String, dynamic>> returnedItems,
+    required double cashReceived,
+    double discountAmount = 0,
+  }) async {
+    final res = await _client.dio.put(ApiEndpoints.delegateInvoiceUpdate(invoiceId), data: {
+      if (salesItems.isNotEmpty) 'sales_items': salesItems,
+      if (returnedItems.isNotEmpty) 'returned_items': returnedItems,
+      'cash_received': cashReceived,
+      if (discountAmount > 0) 'discount_amount': discountAmount,
+    });
     return DelegateInvoiceModel.fromJson(res.data['data'] as Map<String, dynamic>);
   }
 

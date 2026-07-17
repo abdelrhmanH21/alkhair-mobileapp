@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:dio/dio.dart';
+import '../../../../core/di/service_locator.dart';
+import '../../../../core/network/api_client.dart';
+import '../../../../core/network/api_endpoints.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/app_snackbar.dart';
 import '../../../app_config/presentation/bloc/app_config_bloc.dart';
@@ -20,14 +24,38 @@ import 'print_invoice_page.dart';
 import 'dashboard_page.dart';
 import 'customer_invoice_history_page.dart';
 
+/// Also doubles as the edit form for an already-submitted invoice while its
+/// shift is still active (see DelegateInvoiceController::update()) — pass
+/// [editingInvoiceId] to fetch and pre-fill that invoice's current items/
+/// discount/cash_received instead of starting a blank sale. Reuses every
+/// sale-entry widget as-is (product pickers, totals card, validations)
+/// rather than a parallel edit form; the only thing edit mode changes is
+/// the client field (fixed, not editable — matches the backend, which
+/// never lets an edit move an invoice to a different customer) and which
+/// bloc event gets dispatched on submit.
 class InvoicePage extends StatefulWidget {
-  const InvoicePage({super.key});
+  final int? editingInvoiceId;
+  const InvoicePage({super.key, this.editingInvoiceId});
 
   @override
   State<InvoicePage> createState() => _InvoicePageState();
 }
 
 class _InvoicePageState extends State<InvoicePage> {
+  bool get _isEditing => widget.editingInvoiceId != null;
+
+  // ── Editing: fetch + pre-fill the existing invoice ─────────────────────────
+  bool _loadingExisting = false;
+  String? _loadExistingError;
+  String? _editingInvoiceNumber;
+  // Ownership guard (see transactions_page.dart / settlement_page.dart for
+  // the same pattern): InvoicePage can be mounted as both the persistent
+  // "البيع" tab AND, simultaneously, a pushed edit-mode instance on top of
+  // it (the tab stays alive inside DelegateHomePage's IndexedStack) — both
+  // share the same DelegateBloc, so a DelegateFailure meant for one must
+  // not be shown by the other.
+  bool _submitting = false;
+
   // ── Client selection ───────────────────────────────────────────────────────
   ClientModel? _selectedClient;
   final _searchCtrl = TextEditingController();
@@ -60,6 +88,93 @@ class _InvoicePageState extends State<InvoicePage> {
   void initState() {
     super.initState();
     _searchFocus.addListener(_onSearchFocusChanged);
+    if (_isEditing) {
+      _loadExistingInvoice();
+    }
+  }
+
+  /// Fetches the invoice-to-edit directly (like invoice_detail_page.dart/
+  /// print_invoice_page.dart do) rather than through DelegateBloc — this
+  /// page can be pushed on top of another bloc-listening screen (the
+  /// InvoiceHistoryPage/InvoiceDetailPage it was opened from), and a
+  /// DelegateLoading()/DelegateFailure() emitted here for a plain data load
+  /// would leak into that screen's own listener.
+  Future<void> _loadExistingInvoice() async {
+    setState(() {
+      _loadingExisting = true;
+      _loadExistingError = null;
+    });
+    try {
+      final api = sl<ApiClient>();
+      final res = await api.dio
+          .get('${ApiEndpoints.delegateInvoices}/${widget.editingInvoiceId}');
+      final invoice = res.data['data'] as Map<String, dynamic>;
+      final customer = invoice['customer'] as Map<String, dynamic>? ?? {};
+      final items =
+          (invoice['items'] as List? ?? []).cast<Map<String, dynamic>>();
+      final returns =
+          (invoice['returns'] as List? ?? []).cast<Map<String, dynamic>>();
+
+      final client = ClientModel(
+        id: customer['id'] as int,
+        name: customer['name'] as String? ?? '',
+        phone: customer['phone'] as String? ?? '',
+        address: customer['address'] as String?,
+        balance: (customer['balance'] as num? ?? 0).toDouble(),
+      );
+
+      final discount = (invoice['discount_amount'] as num? ?? 0).toDouble();
+      final cash = (invoice['cash_received'] as num? ?? 0).toDouble();
+
+      setState(() {
+        _editingInvoiceNumber = invoice['invoice_number'] as String?;
+        _selectedClient = client;
+        _searchCtrl.text = client.name;
+        _salesItems
+          ..clear()
+          ..addAll(items.map((m) {
+            final p = m['product'] as Map<String, dynamic>? ?? {};
+            return InvoiceSaleItem(
+              productId: m['product_id'] as int,
+              productName: p['name'] as String? ?? '',
+              // No client-side cap for the invoice's own pre-filled items:
+              // the true max (current truck stock + this item's own already-
+              // deducted quantity, once the server reverses it) isn't known
+              // client-side without an extra stock fetch — the server still
+              // authoritatively enforces it via DelegateTruckStock::deductStock
+              // when the edit is submitted.
+              quantity: (m['quantity'] as num).toDouble(),
+              unitPrice: (m['unit_price'] as num).toDouble(),
+            );
+          }));
+        _returnItems
+          ..clear()
+          ..addAll(returns.map((m) {
+            final p = m['product'] as Map<String, dynamic>? ?? {};
+            return InvoiceReturnItem(
+              productId: m['product_id'] as int,
+              productName: p['name'] as String? ?? '',
+              quantity: (m['quantity'] as num).toDouble(),
+              unitPrice: (m['unit_price'] as num).toDouble(),
+              condition: m['condition'] as String? ?? 'سليم',
+            );
+          }));
+        _discountCtrl.text = discount > 0 ? discount.toStringAsFixed(2) : '';
+        _cashCtrl.text = cash.toStringAsFixed(2);
+        _loadingExisting = false;
+      });
+    } on DioException catch (e) {
+      setState(() {
+        _loadingExisting = false;
+        _loadExistingError = e.response?.data?['message'] as String? ??
+            'فشل تحميل بيانات الفاتورة للتعديل.';
+      });
+    } catch (_) {
+      setState(() {
+        _loadingExisting = false;
+        _loadExistingError = 'حدث خطأ غير متوقع أثناء تحميل الفاتورة.';
+      });
+    }
   }
 
   @override
@@ -72,11 +187,9 @@ class _InvoicePageState extends State<InvoicePage> {
     super.dispose();
   }
 
-  double get _grossSales =>
-      _salesItems.fold(0.0, (s, i) => s + i.subtotal);
+  double get _grossSales => _salesItems.fold(0.0, (s, i) => s + i.subtotal);
 
-  double get _totalReturns =>
-      _returnItems.fold(0.0, (s, i) => s + i.subtotal);
+  double get _totalReturns => _returnItems.fold(0.0, (s, i) => s + i.subtotal);
 
   double get _discountAmount => double.tryParse(_discountCtrl.text) ?? 0;
 
@@ -95,7 +208,8 @@ class _InvoicePageState extends State<InvoicePage> {
 
   double get _cashReceived => double.tryParse(_cashCtrl.text) ?? 0;
 
-  double get _remainingDebt => (_netTotal - _cashReceived).clamp(0, double.infinity);
+  double get _remainingDebt =>
+      (_netTotal - _cashReceived).clamp(0, double.infinity);
 
   void _submitInvoice() {
     if (_selectedClient == null) {
@@ -117,13 +231,25 @@ class _InvoicePageState extends State<InvoicePage> {
       return;
     }
 
-    context.read<DelegateBloc>().add(DelegateInvoiceSubmitted(
-          clientId: _selectedClient!.id,
-          salesItems: _salesItems,
-          returnedItems: _returnItems,
-          cashReceived: _cashReceived,
-          discountAmount: _discountAmount,
-        ));
+    setState(() => _submitting = true);
+
+    if (_isEditing) {
+      context.read<DelegateBloc>().add(DelegateInvoiceUpdateRequested(
+            invoiceId: widget.editingInvoiceId!,
+            salesItems: _salesItems,
+            returnedItems: _returnItems,
+            cashReceived: _cashReceived,
+            discountAmount: _discountAmount,
+          ));
+    } else {
+      context.read<DelegateBloc>().add(DelegateInvoiceSubmitted(
+            clientId: _selectedClient!.id,
+            salesItems: _salesItems,
+            returnedItems: _returnItems,
+            cashReceived: _cashReceived,
+            discountAmount: _discountAmount,
+          ));
+    }
   }
 
   void _showError(String msg) {
@@ -153,81 +279,139 @@ class _InvoicePageState extends State<InvoicePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('فاتورة جديدة'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.history),
-            tooltip: 'سجل الفواتير',
-            onPressed: () => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => BlocProvider.value(
-                      value: context.read<DelegateBloc>(),
-                      child: const InvoiceHistoryPage(),
-                    ))),
-          ),
-          IconButton(
-            icon: const Icon(Icons.inventory_rounded),
-            tooltip: 'مخزون الشاحنة',
-            onPressed: () => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => BlocProvider.value(
-                      value: context.read<DelegateBloc>(),
-                      child: const TruckStockPage(),
-                    ))),
-          ),
-          IconButton(
-            icon: const Icon(Icons.dashboard_outlined),
-            tooltip: 'لوحة الأداء',
-            onPressed: () => Navigator.push(context,
-                MaterialPageRoute(builder: (_) => BlocProvider.value(
-                      value: context.read<DelegateBloc>(),
-                      child: const DashboardPage(),
-                    ))),
-          ),
-        ],
+        title: Text(_isEditing
+            ? 'تعديل الفاتورة${_editingInvoiceNumber != null ? ' ${_editingInvoiceNumber!}' : ''}'
+            : 'فاتورة جديدة'),
+        actions: _isEditing
+            ? const []
+            : [
+                IconButton(
+                  icon: const Icon(Icons.history),
+                  tooltip: 'سجل الفواتير',
+                  onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => BlocProvider.value(
+                                value: context.read<DelegateBloc>(),
+                                child: const InvoiceHistoryPage(hasActiveLoading: true),
+                              ))),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.inventory_rounded),
+                  tooltip: 'مخزون الشاحنة',
+                  onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => BlocProvider.value(
+                                value: context.read<DelegateBloc>(),
+                                child: const TruckStockPage(),
+                              ))),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.dashboard_outlined),
+                  tooltip: 'لوحة الأداء',
+                  onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                          builder: (_) => BlocProvider.value(
+                                value: context.read<DelegateBloc>(),
+                                child: const DashboardPage(),
+                              ))),
+                ),
+              ],
       ),
-      body: BlocListener<DelegateBloc, DelegateState>(
-        listener: (ctx, state) {
-          if (state is DelegateClientSearchResults) {
-            setState(() {
-              _searchResults = state.clients;
-              _searchLoading = false;
-            });
-          }
-          if (state is DelegateInvoiceSubmittedState) {
-            final invoice = state.invoice;
-            // Reset form
-            setState(() {
-              _selectedClient = null;
-              _salesItems.clear();
-              _returnItems.clear();
-              _cashCtrl.clear();
-              _discountCtrl.clear();
-              _searchCtrl.clear();
-              _searchResults.clear();
-            });
-            AppSnackbar.showSuccess(
-              ctx,
-              invoice.debtReduction > 0
-                  ? 'تم حفظ الفاتورة بنجاح — تم سداد ${invoice.debtReduction.toStringAsFixed(2)} جنيه من دين العميل السابق.'
-                  : 'تم حفظ الفاتورة بنجاح',
-            );
-            // Offer print
-            Navigator.push(
-              ctx,
-              MaterialPageRoute(
-                builder: (_) => PrintInvoicePage(invoiceId: invoice.id),
-              ),
-            );
-          }
-          if (state is DelegateFailure) {
-            setState(() => _searchLoading = false);
-            _showError(state.message);
-          }
-        },
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
+      body: _loadingExisting
+          ? const Center(child: CircularProgressIndicator())
+          : _loadExistingError != null
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.error_outline,
+                            size: 48, color: AppTheme.danger),
+                        const SizedBox(height: 12),
+                        Text(_loadExistingError!, textAlign: TextAlign.center),
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          onPressed: _loadExistingInvoice,
+                          child: const Text('إعادة المحاولة'),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              : _buildForm(context),
+    );
+  }
+
+  Widget _buildForm(BuildContext context) {
+    return BlocListener<DelegateBloc, DelegateState>(
+      listener: (ctx, state) {
+        if (state is DelegateClientSearchResults) {
+          setState(() {
+            _searchResults = state.clients;
+            _searchLoading = false;
+          });
+        }
+        if (state is DelegateInvoiceSubmittedState) {
+          final invoice = state.invoice;
+          _submitting = false;
+          // Reset form
+          setState(() {
+            _selectedClient = null;
+            _salesItems.clear();
+            _returnItems.clear();
+            _cashCtrl.clear();
+            _discountCtrl.clear();
+            _searchCtrl.clear();
+            _searchResults.clear();
+          });
+          AppSnackbar.showSuccess(
+            ctx,
+            invoice.debtReduction > 0
+                ? 'تم حفظ الفاتورة بنجاح — تم سداد ${invoice.debtReduction.toStringAsFixed(2)} جنيه من دين العميل السابق.'
+                : 'تم حفظ الفاتورة بنجاح',
+          );
+          // Offer print
+          Navigator.push(
+            ctx,
+            MaterialPageRoute(
+              builder: (_) => PrintInvoicePage(invoiceId: invoice.id),
+            ),
+          );
+        }
+        if (state is DelegateInvoiceUpdatedState) {
+          _submitting = false;
+          AppSnackbar.showSuccess(ctx, 'تم تعديل الفاتورة بنجاح');
+          // Signal success to whoever pushed this edit form (invoice
+          // history/detail page) so it can refresh its own data.
+          Navigator.pop(ctx, true);
+        }
+        if (state is DelegateFailure && (_submitting || _searchLoading)) {
+          setState(() {
+            _submitting = false;
+            _searchLoading = false;
+          });
+          _showError(state.message);
+        }
+        // else (DelegateFailure not ours): ignore — e.g. a concurrent
+        // request from the persistent "البيع" tab still mounted below
+        // this pushed edit-mode instance.
+      },
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Customer is fixed once an invoice exists — the backend never
+            // lets an edit move an invoice to a different customer — so
+            // edit mode shows a plain read-only card instead of the
+            // interactive search field.
+            if (_isEditing)
+              _EditingClientCard(client: _selectedClient)
+            else
               ClientSearchField(
                 controller: _searchCtrl,
                 focusNode: _searchFocus,
@@ -236,7 +420,9 @@ class _InvoicePageState extends State<InvoicePage> {
                 selectedClient: _selectedClient,
                 onSearch: (q) {
                   setState(() => _searchLoading = true);
-                  context.read<DelegateBloc>().add(DelegateClientSearchRequested(q));
+                  context
+                      .read<DelegateBloc>()
+                      .add(DelegateClientSearchRequested(q));
                 },
                 onSelect: (c) => setState(() {
                   _selectedClient = c;
@@ -254,66 +440,103 @@ class _InvoicePageState extends State<InvoicePage> {
                   ),
                 ),
               ),
-              const SizedBox(height: 16),
+            const SizedBox(height: 16),
 
-              // ── Transaction Matrix ──────────────────────────────────────────
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: _SalesSection(
-                      items: _salesItems,
-                      clientId: _selectedClient?.id,
-                      onChange: () => setState(() {}),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: _ReturnsSection(
-                      items: _returnItems,
-                      onChange: () => setState(() {}),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              // ── Live Totals Card ────────────────────────────────────────────
-              _TotalsCard(
-                grossSales: _grossSales,
-                totalReturns: _totalReturns,
-                discountCtrl: _discountCtrl,
-                discountError: _discountError,
-                netTotal: _netTotal,
-                cashCtrl: _cashCtrl,
-                remainingDebt: _remainingDebt,
-                onCashChanged: () => setState(() {}),
-                onDiscountChanged: () => setState(() {}),
-              ),
-              const SizedBox(height: 16),
-
-              BlocBuilder<DelegateBloc, DelegateState>(
-                builder: (_, state) => SizedBox(
-                  height: 54,
-                  child: ElevatedButton.icon(
-                    onPressed: state is DelegateLoading ? null : _submitInvoice,
-                    icon: state is DelegateLoading
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2, color: Colors.white))
-                        : const Icon(Icons.send_rounded),
-                    label: Text(state is DelegateLoading ? 'جارٍ الحفظ...' : 'إصدار الفاتورة'),
-                    style: ElevatedButton.styleFrom(
-                        textStyle: const TextStyle(fontSize: 17)),
+            // ── Transaction Matrix ──────────────────────────────────────────
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: _SalesSection(
+                    items: _salesItems,
+                    clientId: _selectedClient?.id,
+                    onChange: () => setState(() {}),
                   ),
                 ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _ReturnsSection(
+                    items: _returnItems,
+                    onChange: () => setState(() {}),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // ── Live Totals Card ────────────────────────────────────────────
+            _TotalsCard(
+              grossSales: _grossSales,
+              totalReturns: _totalReturns,
+              discountCtrl: _discountCtrl,
+              discountError: _discountError,
+              netTotal: _netTotal,
+              cashCtrl: _cashCtrl,
+              remainingDebt: _remainingDebt,
+              onCashChanged: () => setState(() {}),
+              onDiscountChanged: () => setState(() {}),
+            ),
+            const SizedBox(height: 16),
+
+            SizedBox(
+              height: 54,
+              child: ElevatedButton.icon(
+                onPressed: _submitting ? null : _submitInvoice,
+                icon: _submitting
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 2, color: Colors.white))
+                    : const Icon(Icons.send_rounded),
+                label: Text(_submitting
+                    ? 'جارٍ الحفظ...'
+                    : (_isEditing ? 'حفظ التعديلات' : 'إصدار الفاتورة')),
+                style: ElevatedButton.styleFrom(
+                    textStyle: const TextStyle(fontSize: 17)),
               ),
-              const SizedBox(height: 24),
-            ],
-          ),
+            ),
+            const SizedBox(height: 24),
+          ],
         ),
+      ),
+    );
+  }
+}
+
+// ─── Edit-mode client display (read-only — customer can't be changed) ─────────
+
+class _EditingClientCard extends StatelessWidget {
+  final ClientModel? client;
+  const _EditingClientCard({required this.client});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = client;
+    if (c == null) return const SizedBox.shrink();
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppTheme.primary.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppTheme.primary.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.person_outline, color: AppTheme.primary, size: 20),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(c.name,
+                    style: const TextStyle(fontWeight: FontWeight.bold)),
+                Text(c.phone,
+                    style: const TextStyle(fontSize: 12, color: Colors.grey)),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -325,7 +548,8 @@ class _SalesSection extends StatelessWidget {
   final List<InvoiceSaleItem> items;
   final int? clientId;
   final VoidCallback onChange;
-  const _SalesSection({required this.items, required this.clientId, required this.onChange});
+  const _SalesSection(
+      {required this.items, required this.clientId, required this.onChange});
 
   void _addItem(BuildContext context) {
     showModalBottomSheet(
@@ -359,8 +583,8 @@ class _SalesSection extends StatelessWidget {
                       color: AppTheme.primary, size: 18),
                   const SizedBox(width: 4),
                   const Text('المبيعات',
-                      style: TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 14)),
+                      style:
+                          TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                   const Spacer(),
                   IconButton(
                     icon: const Icon(Icons.add_circle_outline,
@@ -436,7 +660,9 @@ class _SaleItemRow extends StatelessWidget {
               children: [
                 Expanded(
                   child: _SmallNumberField(
-                    label: item.maxQty.isFinite ? 'كمية (حتى ${item.maxQty.toStringAsFixed(0)})' : 'كمية',
+                    label: item.maxQty.isFinite
+                        ? 'كمية (حتى ${item.maxQty.toStringAsFixed(0)})'
+                        : 'كمية',
                     initialValue: item.quantity.toString(),
                     onChanged: (v) {
                       final qty = double.tryParse(v) ?? 0;
@@ -496,8 +722,8 @@ class _ReturnsSection extends StatelessWidget {
                       color: AppTheme.accent, size: 18),
                   const SizedBox(width: 4),
                   const Text('المرتجعات',
-                      style: TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 14)),
+                      style:
+                          TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                   const Spacer(),
                   IconButton(
                     icon: const Icon(Icons.add_circle_outline,
@@ -667,7 +893,8 @@ class _TotalsCard extends StatelessWidget {
                   Expanded(
                     child: TextField(
                       controller: discountCtrl,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
                       textDirection: TextDirection.ltr,
                       textAlign: TextAlign.center,
                       decoration: InputDecoration(
@@ -693,7 +920,8 @@ class _TotalsCard extends StatelessWidget {
                   Expanded(
                     child: TextField(
                       controller: cashCtrl,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
                       textDirection: TextDirection.ltr,
                       textAlign: TextAlign.center,
                       decoration: const InputDecoration(
@@ -779,13 +1007,16 @@ class _TotalRow extends StatelessWidget {
 class _SellableProductPickerSheet extends StatefulWidget {
   final int? clientId;
   final void Function(InvoiceSaleItem) onAdd;
-  const _SellableProductPickerSheet({required this.clientId, required this.onAdd});
+  const _SellableProductPickerSheet(
+      {required this.clientId, required this.onAdd});
 
   @override
-  State<_SellableProductPickerSheet> createState() => _SellableProductPickerSheetState();
+  State<_SellableProductPickerSheet> createState() =>
+      _SellableProductPickerSheetState();
 }
 
-class _SellableProductPickerSheetState extends State<_SellableProductPickerSheet> {
+class _SellableProductPickerSheetState
+    extends State<_SellableProductPickerSheet> {
   List<SellableProductModel> _products = [];
   SellableProductModel? _selected;
   final _qtyCtrl = TextEditingController(text: '1');
@@ -797,14 +1028,17 @@ class _SellableProductPickerSheetState extends State<_SellableProductPickerSheet
     return state is AppConfigLoaded ? state.config.maxPriceOverridePct : 10;
   }
 
-  double get _minAllowedPrice => (_selected!.unitPrice * (1 - _maxOverridePct / 100));
-  double get _maxAllowedPrice => (_selected!.unitPrice * (1 + _maxOverridePct / 100));
+  double get _minAllowedPrice =>
+      (_selected!.unitPrice * (1 - _maxOverridePct / 100));
+  double get _maxAllowedPrice =>
+      (_selected!.unitPrice * (1 + _maxOverridePct / 100));
 
   @override
   void initState() {
     super.initState();
-    context.read<DelegateBloc>().add(
-        DelegateSellableProductsFetched(customerId: widget.clientId));
+    context
+        .read<DelegateBloc>()
+        .add(DelegateSellableProductsFetched(customerId: widget.clientId));
   }
 
   @override
@@ -817,7 +1051,9 @@ class _SellableProductPickerSheetState extends State<_SellableProductPickerSheet
   void _confirmAdd() {
     final product = _selected;
     if (product == null) return;
-    final qty = (double.tryParse(_qtyCtrl.text) ?? 0).clamp(0, product.availableQty).toDouble();
+    final qty = (double.tryParse(_qtyCtrl.text) ?? 0)
+        .clamp(0, product.availableQty)
+        .toDouble();
     if (qty <= 0) return;
 
     final price = double.tryParse(_priceCtrl.text);
@@ -862,7 +1098,8 @@ class _SellableProductPickerSheetState extends State<_SellableProductPickerSheet
                 Row(
                   children: [
                     const Text('اختر منتجاً من مخزون الشاحنة',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                        style: TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.bold)),
                     const Spacer(),
                     IconButton(
                       icon: const Icon(Icons.close),
@@ -871,7 +1108,8 @@ class _SellableProductPickerSheetState extends State<_SellableProductPickerSheet
                   ],
                 ),
                 if (loading)
-                  const Expanded(child: Center(child: CircularProgressIndicator()))
+                  const Expanded(
+                      child: Center(child: CircularProgressIndicator()))
                 else if (_products.isEmpty)
                   const Expanded(
                     child: Center(
@@ -889,11 +1127,17 @@ class _SellableProductPickerSheetState extends State<_SellableProductPickerSheet
                         final isSelected = _selected?.productId == p.productId;
                         return ListTile(
                           selected: isSelected,
-                          selectedTileColor: AppTheme.primary.withValues(alpha: 0.08),
-                          title: Text(p.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-                          subtitle: Text('متاح: ${p.availableQty.toStringAsFixed(2)} ${p.unit}'),
+                          selectedTileColor:
+                              AppTheme.primary.withValues(alpha: 0.08),
+                          title: Text(p.name,
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w600)),
+                          subtitle: Text(
+                              'متاح: ${p.availableQty.toStringAsFixed(2)} ${p.unit}'),
                           trailing: Text(p.unitPrice.toStringAsFixed(2),
-                              style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primary)),
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: AppTheme.primary)),
                           onTap: () => setState(() {
                             _selected = p;
                             _qtyCtrl.text = '1';
@@ -909,14 +1153,16 @@ class _SellableProductPickerSheetState extends State<_SellableProductPickerSheet
                   Row(
                     children: [
                       Expanded(
-                        child: Text('الكمية (حتى ${_selected!.availableQty.toStringAsFixed(2)})',
+                        child: Text(
+                            'الكمية (حتى ${_selected!.availableQty.toStringAsFixed(2)})',
                             style: const TextStyle(fontSize: 12)),
                       ),
                       SizedBox(
                         width: 90,
                         child: TextField(
                           controller: _qtyCtrl,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true),
                           textAlign: TextAlign.center,
                           textDirection: TextDirection.ltr,
                         ),
@@ -935,11 +1181,14 @@ class _SellableProductPickerSheetState extends State<_SellableProductPickerSheet
                         width: 90,
                         child: TextField(
                           controller: _priceCtrl,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true),
                           textAlign: TextAlign.center,
                           textDirection: TextDirection.ltr,
                           onChanged: (_) {
-                            if (_priceError != null) setState(() => _priceError = null);
+                            if (_priceError != null) {
+                              setState(() => _priceError = null);
+                            }
                           },
                         ),
                       ),
@@ -948,7 +1197,8 @@ class _SellableProductPickerSheetState extends State<_SellableProductPickerSheet
                   if (_priceError != null) ...[
                     const SizedBox(height: 4),
                     Text(_priceError!,
-                        style: const TextStyle(fontSize: 11, color: AppTheme.danger)),
+                        style: const TextStyle(
+                            fontSize: 11, color: AppTheme.danger)),
                   ],
                   const SizedBox(height: 8),
                   ElevatedButton(
@@ -977,7 +1227,8 @@ class _ReturnProductPickerSheet extends StatefulWidget {
   const _ReturnProductPickerSheet({required this.onAdd});
 
   @override
-  State<_ReturnProductPickerSheet> createState() => _ReturnProductPickerSheetState();
+  State<_ReturnProductPickerSheet> createState() =>
+      _ReturnProductPickerSheetState();
 }
 
 class _ReturnProductPickerSheetState extends State<_ReturnProductPickerSheet> {
@@ -1038,7 +1289,8 @@ class _ReturnProductPickerSheetState extends State<_ReturnProductPickerSheet> {
                 Row(
                   children: [
                     const Text('اختر منتجاً للمرتجع',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                        style: TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.bold)),
                     const Spacer(),
                     IconButton(
                       icon: const Icon(Icons.close),
@@ -1047,7 +1299,8 @@ class _ReturnProductPickerSheetState extends State<_ReturnProductPickerSheet> {
                   ],
                 ),
                 if (loading)
-                  const Expanded(child: Center(child: CircularProgressIndicator()))
+                  const Expanded(
+                      child: Center(child: CircularProgressIndicator()))
                 else if (_products.isEmpty)
                   const Expanded(
                     child: Center(
@@ -1065,11 +1318,16 @@ class _ReturnProductPickerSheetState extends State<_ReturnProductPickerSheet> {
                         final isSelected = _selected?.id == p.id;
                         return ListTile(
                           selected: isSelected,
-                          selectedTileColor: AppTheme.accent.withValues(alpha: 0.08),
-                          title: Text(p.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                          selectedTileColor:
+                              AppTheme.accent.withValues(alpha: 0.08),
+                          title: Text(p.name,
+                              style:
+                                  const TextStyle(fontWeight: FontWeight.w600)),
                           subtitle: Text(p.unit),
                           trailing: Text(p.salePrice.toStringAsFixed(2),
-                              style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.accent)),
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: AppTheme.accent)),
                           onTap: () => setState(() {
                             _selected = p;
                             _qtyCtrl.text = '1';
@@ -1082,12 +1340,15 @@ class _ReturnProductPickerSheetState extends State<_ReturnProductPickerSheet> {
                   const Divider(),
                   Row(
                     children: [
-                      const Expanded(child: Text('الكمية', style: TextStyle(fontSize: 12))),
+                      const Expanded(
+                          child:
+                              Text('الكمية', style: TextStyle(fontSize: 12))),
                       SizedBox(
                         width: 90,
                         child: TextField(
                           controller: _qtyCtrl,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true),
                           textAlign: TextAlign.center,
                           textDirection: TextDirection.ltr,
                         ),

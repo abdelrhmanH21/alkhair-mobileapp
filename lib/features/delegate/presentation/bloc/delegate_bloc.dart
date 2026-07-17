@@ -17,6 +17,7 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
     on<DelegateClientSearchRequested>(_onSearchClients);
     on<DelegateClientCreated>(_onCreateClient);
     on<DelegateInvoiceSubmitted>(_onSubmitInvoice);
+    on<DelegateInvoiceUpdateRequested>(_onUpdateInvoice);
     on<DelegateInvoicesFetched>(_onFetchInvoices);
     on<DelegateLoadingStatusUpdateRequested>(_onUpdateLoadingStatus);
     on<DelegateSellableProductsFetched>(_onFetchSellableProducts);
@@ -220,6 +221,44 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
         longitude: coords.lng,
       );
       emit(DelegateInvoiceSubmittedState(invoice));
+    } on DioException catch (e) {
+      emit(DelegateFailure(_parseError(e)));
+    } catch (_) {
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
+    }
+  }
+
+  Future<void> _onUpdateInvoice(
+    DelegateInvoiceUpdateRequested event,
+    Emitter<DelegateState> emit,
+  ) async {
+    emit(DelegateLoading());
+    try {
+      final salesItems = event.salesItems
+          .map((s) => {
+                'product_id': s.productId,
+                'qty': s.quantity,
+                'unit_price': s.unitPrice,
+              })
+          .toList();
+
+      final returnedItems = event.returnedItems
+          .map((r) => {
+                'product_id': r.productId,
+                'qty': r.quantity,
+                'unit_price': r.unitPrice,
+                'status': r.condition,
+              })
+          .toList();
+
+      final invoice = await _repo.updateInvoice(
+        invoiceId: event.invoiceId,
+        salesItems: salesItems,
+        returnedItems: returnedItems,
+        cashReceived: event.cashReceived,
+        discountAmount: event.discountAmount,
+      );
+      emit(DelegateInvoiceUpdatedState(invoice));
     } on DioException catch (e) {
       emit(DelegateFailure(_parseError(e)));
     } catch (_) {

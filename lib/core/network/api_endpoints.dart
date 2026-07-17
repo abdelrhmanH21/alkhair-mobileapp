@@ -42,6 +42,7 @@ class ApiEndpoints {
   // Delegate — invoices
   static const String delegateInvoice  = '/delegate/invoice';
   static const String delegateInvoices = '/delegate/invoices';
+  static String delegateInvoiceUpdate(int id) => '/delegate/invoice/$id';
 
   // Delegate — transactions (معاملات)
   static const String delegateExpenses            = '/delegate/expenses';

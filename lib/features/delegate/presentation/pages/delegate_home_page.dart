@@ -196,7 +196,8 @@ class _DelegateHomePageState extends State<DelegateHomePage> {
           BlocProvider.value(value: context.read<DelegateBloc>(), child: const TruckStockPage()),
           BlocProvider.value(
               value: context.read<DelegateBloc>(),
-              child: InvoiceHistoryPage(refreshTick: _invoiceHistoryRefreshTick)),
+              child: InvoiceHistoryPage(
+                  refreshTick: _invoiceHistoryRefreshTick, hasActiveLoading: _canSell)),
           BlocProvider.value(
               value: context.read<DelegateBloc>(),
               child: SettlementPage(refreshTick: _settlementRefreshTick)),

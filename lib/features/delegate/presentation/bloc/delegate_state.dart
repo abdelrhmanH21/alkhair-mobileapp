@@ -62,6 +62,13 @@ class DelegateInvoiceSubmittedState extends DelegateState {
   List<Object?> get props => [invoice];
 }
 
+class DelegateInvoiceUpdatedState extends DelegateState {
+  final DelegateInvoiceModel invoice;
+  DelegateInvoiceUpdatedState(this.invoice);
+  @override
+  List<Object?> get props => [invoice];
+}
+
 class DelegateInvoicesLoaded extends DelegateState {
   final List<DelegateInvoiceModel> invoices;
   DelegateInvoicesLoaded(this.invoices);

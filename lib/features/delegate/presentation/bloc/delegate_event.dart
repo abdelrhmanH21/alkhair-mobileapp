@@ -73,6 +73,25 @@ class DelegateInvoiceSubmitted extends DelegateEvent {
       [clientId, cashReceived, discountAmount, latitude, longitude];
 }
 
+class DelegateInvoiceUpdateRequested extends DelegateEvent {
+  final int invoiceId;
+  final List<InvoiceSaleItem> salesItems;
+  final List<InvoiceReturnItem> returnedItems;
+  final double cashReceived;
+  final double discountAmount;
+
+  DelegateInvoiceUpdateRequested({
+    required this.invoiceId,
+    required this.salesItems,
+    required this.returnedItems,
+    required this.cashReceived,
+    this.discountAmount = 0,
+  });
+
+  @override
+  List<Object?> get props => [invoiceId, cashReceived, discountAmount];
+}
+
 class DelegateInvoicesFetched extends DelegateEvent {}
 
 class DelegateLoadingStatusUpdateRequested extends DelegateEvent {

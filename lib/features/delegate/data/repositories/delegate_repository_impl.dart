@@ -85,6 +85,22 @@ class DelegateRepositoryImpl implements DelegateRepository {
   Future<List<DelegateInvoiceModel>> getInvoices() => _remote.fetchInvoices();
 
   @override
+  Future<DelegateInvoiceModel> updateInvoice({
+    required int invoiceId,
+    required List<Map<String, dynamic>> salesItems,
+    required List<Map<String, dynamic>> returnedItems,
+    required double cashReceived,
+    double discountAmount = 0,
+  }) =>
+      _remote.updateInvoice(
+        invoiceId: invoiceId,
+        salesItems: salesItems,
+        returnedItems: returnedItems,
+        cashReceived: cashReceived,
+        discountAmount: discountAmount,
+      );
+
+  @override
   Future<CustomerInvoiceHistoryModel> getCustomerInvoiceHistory(int customerId, {int page = 1}) =>
       _remote.fetchCustomerInvoiceHistory(customerId, page: page);
 

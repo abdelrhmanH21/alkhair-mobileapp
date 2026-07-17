@@ -1,3 +1,13 @@
+/// Expense.amount / PaymentCollection.amount are cast `decimal:2` on the
+/// backend, which Laravel serializes to JSON as a STRING ("10.00"), unlike
+/// every other money field in this app (all `float`-cast, JSON numbers) —
+/// `json['amount'] as num?` throws on that string, so parse defensively.
+double _toDouble(dynamic value) {
+  if (value == null) return 0;
+  if (value is num) return value.toDouble();
+  return double.tryParse(value.toString()) ?? 0;
+}
+
 /// Mirrors DelegateExpenseController::index()/update() rows — this
 /// delegate's own expenses for their current active loading.
 class ExpenseRecordModel {
@@ -22,7 +32,7 @@ class ExpenseRecordModel {
     return ExpenseRecordModel(
       id: json['id'] as int,
       description: json['description'] as String? ?? '',
-      amount: (json['amount'] as num? ?? 0).toDouble(),
+      amount: _toDouble(json['amount']),
       categoryName: category?['name'] as String?,
       notes: json['notes'] as String?,
       createdAt: DateTime.tryParse(json['created_at'] as String? ?? '') ?? DateTime.now(),
@@ -56,7 +66,7 @@ class CustomerCollectionRecordModel {
       id: json['id'] as int,
       customerId: json['customer_id'] as int,
       customerName: customer['name'] as String? ?? '',
-      amount: (json['amount'] as num? ?? 0).toDouble(),
+      amount: _toDouble(json['amount']),
       notes: json['notes'] as String?,
       createdAt: DateTime.tryParse(json['created_at'] as String? ?? '') ?? DateTime.now(),
     );

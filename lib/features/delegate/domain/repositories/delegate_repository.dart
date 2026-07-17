@@ -37,6 +37,13 @@ abstract class DelegateRepository {
     double? longitude,
   });
   Future<List<DelegateInvoiceModel>> getInvoices();
+  Future<DelegateInvoiceModel> updateInvoice({
+    required int invoiceId,
+    required List<Map<String, dynamic>> salesItems,
+    required List<Map<String, dynamic>> returnedItems,
+    required double cashReceived,
+    double discountAmount = 0,
+  });
   Future<CustomerInvoiceHistoryModel> getCustomerInvoiceHistory(int customerId, {int page = 1});
   Future<LoadingModel> updateLoadingStatus(int id, String status);
   Future<SettlementSummaryModel> getSettlementSummary();

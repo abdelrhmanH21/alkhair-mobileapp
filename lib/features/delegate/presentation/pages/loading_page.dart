@@ -217,6 +217,9 @@ class _LoadingPageState extends State<LoadingPage> with PollingMixin<LoadingPage
             return _CompletedView(
               loading: loading,
               onViewInvoices: () => Navigator.of(context).push(
+                // hasActiveLoading defaults to false here — this view only
+                // renders once the loading is 'completed', which is past
+                // the accepted/in_transit window edits are allowed in.
                 MaterialPageRoute(builder: (_) => const InvoiceHistoryPage()),
               ),
             );

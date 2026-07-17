@@ -9,6 +9,41 @@ import '../bloc/delegate_event.dart';
 import '../bloc/delegate_state.dart';
 import '../../data/models/settlement_summary_model.dart';
 
+typedef SettlementAmounts = ({double cash, double wallet});
+
+/// Parses & validates the settlement form's two amount fields. A blank
+/// field means "0, nothing collected via this method" — not invalid input
+/// — so a delegate with cash-only or wallet-only collections that shift can
+/// leave the other field empty. Only genuinely non-numeric input, a
+/// negative amount, or both fields resolving to 0 (nothing to submit at
+/// all) are rejected.
+///
+/// Throws a [FormatException] whose message is the Arabic error to show;
+/// returns the parsed (cash, wallet) pair otherwise.
+SettlementAmounts parseSettlementAmounts(String cashText, String walletText) {
+  final cashTrimmed = cashText.trim();
+  final walletTrimmed = walletText.trim();
+
+  if (cashTrimmed.isNotEmpty && double.tryParse(cashTrimmed) == null) {
+    throw const FormatException('يرجى إدخال مبلغ نقدي صحيح.');
+  }
+  if (walletTrimmed.isNotEmpty && double.tryParse(walletTrimmed) == null) {
+    throw const FormatException('يرجى إدخال مبلغ محفظة إلكترونية صحيح.');
+  }
+
+  final cash = cashTrimmed.isEmpty ? 0.0 : double.parse(cashTrimmed);
+  final wallet = walletTrimmed.isEmpty ? 0.0 : double.parse(walletTrimmed);
+
+  if (cash < 0 || wallet < 0) {
+    throw const FormatException('يرجى إدخال مبالغ صحيحة للنقدي والمحفظة الإلكترونية.');
+  }
+  if (cash == 0 && wallet == 0) {
+    throw const FormatException('يرجى إدخال مبلغ نقدي أو محفظة إلكترونية على الأقل.');
+  }
+
+  return (cash: cash, wallet: wallet);
+}
+
 /// "تسليم" tab: the delegate declares end-of-shift cash + e-wallet totals.
 /// The good/damaged goods breakdown is computed server-side (same logic the
 /// admin sees on the shift-summary screen) — the delegate only enters the
@@ -86,16 +121,18 @@ class _SettlementPageState extends State<SettlementPage>
   }
 
   void _submit() {
-    final cash = double.tryParse(_cashCtrl.text) ?? -1;
-    final wallet = double.tryParse(_walletCtrl.text) ?? -1;
-    if (cash < 0 || wallet < 0) {
-      AppSnackbar.showError(context, 'يرجى إدخال مبالغ صحيحة للنقدي والمحفظة الإلكترونية.');
+    final SettlementAmounts amounts;
+    try {
+      amounts = parseSettlementAmounts(_cashCtrl.text, _walletCtrl.text);
+    } on FormatException catch (e) {
+      AppSnackbar.showError(context, e.message);
       return;
     }
+
     setState(() => _submitting = true);
     context.read<DelegateBloc>().add(DelegateSettlementRequestSubmitted(
-          cashAmount: cash,
-          walletAmount: wallet,
+          cashAmount: amounts.cash,
+          walletAmount: amounts.wallet,
         ));
   }
 

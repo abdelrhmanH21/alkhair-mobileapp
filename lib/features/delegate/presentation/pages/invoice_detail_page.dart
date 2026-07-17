@@ -10,6 +10,7 @@ import '../../../../core/utils/bluetooth_printer.dart';
 import '../../../../core/widgets/state_views.dart';
 import '../../../app_config/presentation/bloc/app_config_bloc.dart';
 import '../../../app_config/presentation/bloc/app_config_state.dart';
+import 'invoice_page.dart';
 import 'invoice_preview_page.dart';
 import 'print_invoice_page.dart';
 
@@ -19,7 +20,11 @@ import 'print_invoice_page.dart';
 /// tapping an invoice in the history list.
 class InvoiceDetailPage extends StatefulWidget {
   final int invoiceId;
-  const InvoiceDetailPage({super.key, required this.invoiceId});
+  /// Whether the delegate's loading is currently accepted/in_transit —
+  /// gates the "تعديل" action the same way TransactionsPage gates its
+  /// expense/collection edit actions. Defaults to false (view-only).
+  final bool hasActiveLoading;
+  const InvoiceDetailPage({super.key, required this.invoiceId, this.hasActiveLoading = false});
 
   @override
   State<InvoiceDetailPage> createState() => _InvoiceDetailPageState();
@@ -61,6 +66,19 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
     }
   }
 
+  /// Refreshes unconditionally on return — same rationale as
+  /// InvoiceHistoryPage's own post-navigation refresh: simpler and more
+  /// robust than threading a specific "did it succeed" result back.
+  Future<void> _openEdit() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => InvoicePage(editingInvoiceId: widget.invoiceId),
+      ),
+    );
+    if (mounted) _loadInvoice();
+  }
+
   @override
   Widget build(BuildContext context) {
     final invoice = _invoice;
@@ -69,6 +87,12 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
         title: Text(invoice?['invoice_number'] as String? ?? 'تفاصيل الفاتورة'),
         actions: [
           if (invoice != null) ...[
+            if (widget.hasActiveLoading)
+              IconButton(
+                icon: const Icon(Icons.edit_outlined),
+                tooltip: 'تعديل',
+                onPressed: _openEdit,
+              ),
             IconButton(
               icon: const Icon(Icons.visibility_outlined),
               tooltip: 'معاينة',

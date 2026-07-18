@@ -4,8 +4,11 @@ import '../../../../core/utils/app_snackbar.dart';
 import '../bloc/delegate_bloc.dart';
 import '../bloc/delegate_event.dart';
 import '../bloc/delegate_state.dart';
+import '../bloc/request_tracker.dart';
 import '../../data/models/client_model.dart';
 import '../../data/models/customer_region_model.dart';
+
+enum _AddClientReq { regions, create }
 
 class AddClientSheet extends StatefulWidget {
   final void Function(ClientModel client) onClientAdded;
@@ -25,10 +28,18 @@ class _AddClientSheetState extends State<AddClientSheet> {
   CustomerRegionModel? _selectedRegion;
   String? _phoneError;
 
+  // This sheet is always opened on top of an already-mounted screen sharing
+  // the same DelegateBloc (InvoicePage, TransactionsPage's collection sheet,
+  // ...) — tracks this sheet's own two dispatches by requestId so an
+  // unrelated DelegateFailure from underneath can never surface here.
+  final _tracker = RequestTracker<_AddClientReq>();
+
   @override
   void initState() {
     super.initState();
-    context.read<DelegateBloc>().add(DelegateCustomerRegionsFetched());
+    final event = DelegateCustomerRegionsFetched();
+    _tracker.start(event.requestId, _AddClientReq.regions);
+    context.read<DelegateBloc>().add(event);
   }
 
   @override
@@ -42,12 +53,14 @@ class _AddClientSheetState extends State<AddClientSheet> {
   void _submit() {
     setState(() => _phoneError = null);
     if (!_formKey.currentState!.validate()) return;
-    context.read<DelegateBloc>().add(DelegateClientCreated(
-          name: _nameCtrl.text.trim(),
-          phone: _phoneCtrl.text.trim(),
-          customerRegionId: _selectedRegion?.id,
-          initialBalance: double.tryParse(_balanceCtrl.text),
-        ));
+    final event = DelegateClientCreated(
+      name: _nameCtrl.text.trim(),
+      phone: _phoneCtrl.text.trim(),
+      customerRegionId: _selectedRegion?.id,
+      initialBalance: double.tryParse(_balanceCtrl.text),
+    );
+    _tracker.start(event.requestId, _AddClientReq.create);
+    context.read<DelegateBloc>().add(event);
   }
 
   @override
@@ -55,13 +68,16 @@ class _AddClientSheetState extends State<AddClientSheet> {
     return BlocListener<DelegateBloc, DelegateState>(
       listener: (ctx, state) {
         if (state is DelegateClientCreatedState) {
+          if (_tracker.resolve(state.requestId) == null) return;
           widget.onClientAdded(state.client);
           Navigator.of(ctx).pop();
         }
         if (state is DelegateCustomerRegionsLoaded) {
+          if (_tracker.resolve(state.requestId) == null) return;
           setState(() => _regions = state.regions);
         }
         if (state is DelegateClientValidationFailure) {
+          if (_tracker.resolve(state.requestId) == null) return;
           final phoneErrors = state.errors['phone'];
           if (phoneErrors != null && phoneErrors.isNotEmpty) {
             setState(() {
@@ -73,6 +89,7 @@ class _AddClientSheetState extends State<AddClientSheet> {
           }
         }
         if (state is DelegateFailure) {
+          if (_tracker.resolve(state.requestId) == null) return;
           AppSnackbar.showError(ctx, state.message);
         }
       },

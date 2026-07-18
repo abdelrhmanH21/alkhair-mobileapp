@@ -13,6 +13,7 @@ import '../../../auth/presentation/bloc/auth_state.dart';
 import '../bloc/delegate_bloc.dart';
 import '../bloc/delegate_event.dart';
 import '../bloc/delegate_state.dart';
+import '../bloc/request_tracker.dart';
 import '../../data/models/loading_model.dart';
 import '../widgets/dashboard_section.dart';
 import 'invoice_page.dart';
@@ -222,35 +223,30 @@ class _HomeTab extends StatefulWidget {
   State<_HomeTab> createState() => _HomeTabState();
 }
 
+enum _FetchKind { explicit, poll }
+
 class _HomeTabState extends State<_HomeTab> with PollingMixin<_HomeTab> {
   LoadingModel? _loading;
   String? _loadingError;
   bool _hasLoadingResult = false;
 
-  // See DashboardSection for the same pattern: the dashboard fetch and this
-  // shipment fetch share one DelegateBloc, and flutter_bloc's default
-  // transformer processes events strictly in dispatch order — so we only
-  // dispatch the shipment fetch once we've observed the dashboard fetch's
-  // own first Loaded/Failure, keeping the two requests non-overlapping and
-  // their DelegateFailure results unambiguous.
-  bool _dashboardSettled = false;
-
-  // Set while a silent PollingMixin tick's fetch is outstanding, so its
-  // result can be told apart from the explicit initial/manual fetch.
-  bool _pollInFlight = false;
-
-  // Set while THIS widget's own explicit (non-poll) DelegateLoadingFetched()
-  // is outstanding. Without this, any DelegateFailure on the shared
-  // DelegateBloc — e.g. SettlementPage's own poll 404ing with "لا توجد وردية
-  // نشطة حاليًا" (a totally normal, expected state for that unrelated
-  // screen, since it stays mounted forever inside the IndexedStack) — would
-  // be misattributed here and rendered as a RED error card, even though
-  // this widget's own fetch never actually failed.
-  bool _fetchInFlight = false;
+  // Tracks THIS widget's own outstanding DelegateLoadingFetched() dispatches
+  // by requestId, tagged as explicit vs. silent-poll — replaces the old
+  // _fetchInFlight/_pollInFlight bools. Because every state now echoes back
+  // the requestId of the event that produced it (see request_tracker.dart),
+  // a DelegateLoadingLoaded/DelegateFailure meant for some other listener on
+  // the shared DelegateBloc (e.g. DashboardSection's own dashboard fetch, or
+  // SettlementPage's own poll 404ing with "لا توجد وردية نشطة حاليًا" —
+  // both mounted forever alongside this tab in DelegateHomePage's
+  // IndexedStack) can never be misattributed here, regardless of dispatch
+  // order — so unlike before, this fetch no longer needs to wait for
+  // DashboardSection's fetch to settle first; both can run in parallel.
+  final _tracker = RequestTracker<_FetchKind>();
 
   @override
   void initState() {
     super.initState();
+    _fetchLoading();
     startPolling();
   }
 
@@ -262,35 +258,30 @@ class _HomeTabState extends State<_HomeTab> with PollingMixin<_HomeTab> {
 
   @override
   void onPoll() {
-    // Nothing to refresh yet, or an explicit fetch/dashboard sequencing is
-    // still in progress — let that settle first rather than overlapping.
-    if (!_dashboardSettled || _pollInFlight || _fetchInFlight) return;
-    _pollInFlight = true;
-    context.read<DelegateBloc>().add(DelegateLoadingFetched());
+    // Never overlap with an explicit fetch/poll already in flight — whichever
+    // is running will settle this card's state on its own.
+    if (_tracker.hasPending(_FetchKind.explicit) || _tracker.hasPending(_FetchKind.poll)) {
+      return;
+    }
+    final event = DelegateLoadingFetched();
+    _tracker.start(event.requestId, _FetchKind.poll);
+    context.read<DelegateBloc>().add(event);
   }
 
   void _fetchLoading() {
-    _fetchInFlight = true;
+    final event = DelegateLoadingFetched();
+    _tracker.start(event.requestId, _FetchKind.explicit);
     setState(() => _loadingError = null);
-    context.read<DelegateBloc>().add(DelegateLoadingFetched());
+    context.read<DelegateBloc>().add(event);
   }
 
   @override
   Widget build(BuildContext context) {
     return BlocListener<DelegateBloc, DelegateState>(
       listener: (_, state) {
-        final dashboardWasSettled = _dashboardSettled;
-        if (!dashboardWasSettled) {
-          if (state is DelegateDashboardLoaded || state is DelegateFailure) {
-            _dashboardSettled = true;
-            _fetchLoading();
-          }
-          return;
-        }
         if (state is DelegateLoadingLoaded) {
-          if (!_fetchInFlight && !_pollInFlight) return; // not ours — see note above
-          _fetchInFlight = false;
-          _pollInFlight = false;
+          final kind = _tracker.resolve(state.requestId);
+          if (kind == null) return; // not ours
           setState(() {
             _loading = state.loading;
             _loadingError = null;
@@ -298,29 +289,23 @@ class _HomeTabState extends State<_HomeTab> with PollingMixin<_HomeTab> {
           });
           widget.onLoadingChanged(state.loading);
         } else if (state is DelegateFailure) {
-          if (_fetchInFlight) {
-            _fetchInFlight = false;
+          final kind = _tracker.resolve(state.requestId);
+          if (kind == null) return; // not ours
+          if (kind == _FetchKind.explicit) {
             setState(() {
               _loadingError = state.message;
               _hasLoadingResult = true;
             });
-          } else if (_pollInFlight) {
-            _pollInFlight = false;
-            if (_loading == null) {
-              // No good data to protect — safe to show/update the error.
-              setState(() {
-                _loadingError = state.message;
-                _hasLoadingResult = true;
-              });
-            }
-            // else: silent — keep showing the last-good shipment card,
-            // retry next tick, per PollingMixin's contract.
+          } else if (_loading == null) {
+            // A silent poll tick failed with no good data to protect —
+            // safe to show/update the error.
+            setState(() {
+              _loadingError = state.message;
+              _hasLoadingResult = true;
+            });
           }
-          // else: not ours — belongs to some unrelated dispatch on the
-          // shared DelegateBloc (e.g. SettlementPage's own poll, which stays
-          // mounted forever inside the IndexedStack and 404s normally
-          // whenever there's no active loading) — ignore it entirely rather
-          // than misattributing it as this card's own error.
+          // else: silent poll failure while last-good data is still shown —
+          // keep it, retry next tick, per PollingMixin's contract.
         }
       },
       child: SingleChildScrollView(

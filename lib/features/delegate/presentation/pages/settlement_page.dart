@@ -7,7 +7,10 @@ import '../../../../core/widgets/state_views.dart';
 import '../bloc/delegate_bloc.dart';
 import '../bloc/delegate_event.dart';
 import '../bloc/delegate_state.dart';
+import '../bloc/request_tracker.dart';
 import '../../data/models/settlement_summary_model.dart';
+
+enum _ReqKind { summary, submit }
 
 typedef SettlementAmounts = ({double cash, double wallet});
 
@@ -83,6 +86,13 @@ class _SettlementPageState extends State<SettlementPage>
   final _cashCtrl = TextEditingController();
   final _walletCtrl = TextEditingController();
 
+  // Tracks outstanding summary-fetch vs settlement-submit dispatches by
+  // requestId, so a DelegateFailure produced by one can never be
+  // misattributed to the other regardless of arrival order — replaces
+  // needing to infer "which request failed" from _submitting alone. See
+  // request_tracker.dart.
+  final _tracker = RequestTracker<_ReqKind>();
+
   @override
   void initState() {
     super.initState();
@@ -116,8 +126,10 @@ class _SettlementPageState extends State<SettlementPage>
   }
 
   void _fetchSummary() {
+    final event = DelegateSettlementSummaryRequested();
+    _tracker.start(event.requestId, _ReqKind.summary);
     setState(() => _summaryError = null);
-    context.read<DelegateBloc>().add(DelegateSettlementSummaryRequested());
+    context.read<DelegateBloc>().add(event);
   }
 
   void _submit() {
@@ -129,11 +141,13 @@ class _SettlementPageState extends State<SettlementPage>
       return;
     }
 
+    final event = DelegateSettlementRequestSubmitted(
+      cashAmount: amounts.cash,
+      walletAmount: amounts.wallet,
+    );
+    _tracker.start(event.requestId, _ReqKind.submit);
     setState(() => _submitting = true);
-    context.read<DelegateBloc>().add(DelegateSettlementRequestSubmitted(
-          cashAmount: amounts.cash,
-          walletAmount: amounts.wallet,
-        ));
+    context.read<DelegateBloc>().add(event);
   }
 
   @override
@@ -153,6 +167,7 @@ class _SettlementPageState extends State<SettlementPage>
       body: BlocListener<DelegateBloc, DelegateState>(
         listener: (ctx, state) {
           if (state is DelegateSettlementSummaryLoaded) {
+            if (_tracker.resolve(state.requestId) == null) return; // not ours
             final newLoadingId = state.summary.loadingId;
             final isNewLoading = _submittedLoadingId != null && _submittedLoadingId != newLoadingId;
             final hasPendingRequest = _submittedLoadingId == null && state.summary.settlementRequestId != null;
@@ -181,12 +196,14 @@ class _SettlementPageState extends State<SettlementPage>
               }
             });
           } else if (state is DelegateSettlementRequestSubmittedState) {
+            if (_tracker.resolve(state.requestId) == null) return; // not ours
             setState(() {
               _submitting = false;
               _submittedLoadingId = _summary?.loadingId;
               _submittedMessage = state.message;
             });
           } else if (state is DelegateNoActiveShift) {
+            if (_tracker.resolve(state.requestId) == null) return; // not ours
             if (_submittedLoadingId != null && !_confirmed) {
               // No active/unsettled loading anymore while we were awaiting a
               // submitted request's confirmation means admin just confirmed
@@ -209,10 +226,12 @@ class _SettlementPageState extends State<SettlementPage>
             // claiming "no active shift" now would contradict what's on
             // screen; ignore it and keep the current view, retry next tick.
           } else if (state is DelegateFailure) {
-            if (_submitting) {
+            final kind = _tracker.resolve(state.requestId);
+            if (kind == null) return; // not ours
+            if (kind == _ReqKind.submit) {
               setState(() => _submitting = false);
               AppSnackbar.showError(ctx, state.message);
-            } else if (_summary == null) {
+            } else if (kind == _ReqKind.summary && _summary == null) {
               setState(() => _summaryError = state.message);
             }
             // else: a background poll failed while data is already showing

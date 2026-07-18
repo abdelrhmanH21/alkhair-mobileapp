@@ -5,6 +5,7 @@ import '../../../../core/utils/app_snackbar.dart';
 import '../bloc/delegate_bloc.dart';
 import '../bloc/delegate_event.dart';
 import '../bloc/delegate_state.dart';
+import '../bloc/request_tracker.dart';
 import '../../data/models/breakdown_models.dart';
 
 class CommissionBreakdownPage extends StatefulWidget {
@@ -17,10 +18,15 @@ class CommissionBreakdownPage extends StatefulWidget {
 class _CommissionBreakdownPageState extends State<CommissionBreakdownPage> {
   List<CommissionDayModel>? _days;
 
+  // See PenaltiesPage's identical comment.
+  final _tracker = RequestTracker<bool>();
+
   @override
   void initState() {
     super.initState();
-    context.read<DelegateBloc>().add(DelegateCommissionBreakdownFetched());
+    final event = DelegateCommissionBreakdownFetched();
+    _tracker.start(event.requestId, true);
+    context.read<DelegateBloc>().add(event);
   }
 
   @override
@@ -30,13 +36,15 @@ class _CommissionBreakdownPageState extends State<CommissionBreakdownPage> {
       body: BlocConsumer<DelegateBloc, DelegateState>(
         listener: (ctx, state) {
           if (state is DelegateCommissionBreakdownLoaded) {
+            if (_tracker.resolve(state.requestId) == null) return;
             setState(() => _days = state.days);
           } else if (state is DelegateFailure) {
+            if (_tracker.resolve(state.requestId) == null) return;
             AppSnackbar.showError(ctx, state.message);
           }
         },
         builder: (_, state) {
-          if (state is DelegateLoading && _days == null) {
+          if (_tracker.hasPending(true) && _days == null) {
             return const Center(child: CircularProgressIndicator());
           }
           final days = _days ?? [];

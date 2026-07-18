@@ -6,9 +6,12 @@ import '../../../../core/utils/polling_mixin.dart';
 import '../bloc/delegate_bloc.dart';
 import '../bloc/delegate_event.dart';
 import '../bloc/delegate_state.dart';
+import '../bloc/request_tracker.dart';
 import '../../data/models/loading_model.dart';
 import 'invoice_page.dart';
 import 'invoice_history_page.dart';
+
+enum _RequestKind { fetch, poll, action }
 
 class LoadingPage extends StatefulWidget {
   const LoadingPage({super.key});
@@ -20,44 +23,29 @@ class LoadingPage extends StatefulWidget {
 class _LoadingPageState extends State<LoadingPage> with PollingMixin<LoadingPage> {
   LoadingModel? _currentLoading;
 
-  // Guards confirm/status-update actions against a double-tap firing two
-  // overlapping requests. Without this, a fast second tap could dispatch a
-  // second DelegateLoadingConfirmed() before the button visually disables
-  // (bloc state propagation lands a frame after the tap) — the SECOND
-  // request always fails server-side (the loading is no longer
-  // pending_pickup by then), and if that failure response happens to arrive
-  // before the FIRST request's success, the user sees a spurious error right
-  // before the real success navigates them away. Setting this synchronously
-  // in the tap handler (not waiting for the bloc) closes that window
-  // entirely, rather than just hiding whichever error shows up.
-  bool _actionInFlight = false;
+  // Tracks every outstanding dispatch THIS page has made — explicit fetch,
+  // silent poll tick, or confirm/status-update action — by requestId. This
+  // is what actually closes the recurring "spurious error after a
+  // successful action" bug class: since every state now echoes back the
+  // requestId of the event that produced it, a DelegateFailure/
+  // DelegateLoadingLoaded meant for some unrelated dispatch — a double-tap's
+  // doomed second request, _HomeTab's own shipment fetch (mounted forever
+  // underneath this page, since it's reached via "عرض التفاصيل" pushed on
+  // top of DelegateHomePage), or this page's own poll tick — can never be
+  // misattributed to a different one, regardless of arrival order. See
+  // request_tracker.dart.
+  final _tracker = RequestTracker<_RequestKind>();
 
-  // This page is normally reached via "عرض التفاصيل" pushed on top of
-  // DelegateHomePage, whose _HomeTab stays mounted (and its BlocListener
-  // stays subscribed to the same shared DelegateBloc) underneath. _HomeTab
-  // dispatches its own DelegateLoadingFetched() once, right after the
-  // dashboard settles at Home-tab mount — if this page is opened quickly
-  // after landing on Home, that fetch can still be in flight. Without this
-  // guard, a DelegateFailure/DelegateLoadingLoaded from THAT unrelated,
-  // still-pending request (bloc state carries no dispatch identity) would
-  // be misattributed to this page's own fetch, flashing a spurious error
-  // banner even though this page's own data loads fine moments later.
-  bool _fetchInFlight = false;
   String? _loadError;
-
-  // Set (never via setState — must stay invisible) while a silent
-  // PollingMixin tick's fetch is outstanding, so its result/failure can be
-  // told apart from an explicit fetch (which drives the spinner/full-screen
-  // error) without ever touching those visible-UI flags itself.
-  bool _pollInFlight = false;
 
   @override
   void initState() {
     super.initState();
     // Set directly rather than via _fetchLoading()'s setState — calling
     // setState before the first build is redundant (nothing to rebuild yet).
-    _fetchInFlight = true;
-    context.read<DelegateBloc>().add(DelegateLoadingFetched());
+    final event = DelegateLoadingFetched();
+    _tracker.start(event.requestId, _RequestKind.fetch);
+    context.read<DelegateBloc>().add(event);
     startPolling();
   }
 
@@ -71,23 +59,31 @@ class _LoadingPageState extends State<LoadingPage> with PollingMixin<LoadingPage
   void onPoll() {
     // Never overlap with an explicit fetch/action already in flight —
     // whichever is already running will settle this page's state on its own.
-    if (_fetchInFlight || _actionInFlight || _pollInFlight) return;
-    _pollInFlight = true;
-    context.read<DelegateBloc>().add(DelegateLoadingFetched());
+    if (_tracker.hasPending(_RequestKind.fetch) ||
+        _tracker.hasPending(_RequestKind.action) ||
+        _tracker.hasPending(_RequestKind.poll)) {
+      return;
+    }
+    final event = DelegateLoadingFetched();
+    _tracker.start(event.requestId, _RequestKind.poll);
+    context.read<DelegateBloc>().add(event);
   }
 
   void _fetchLoading() {
-    setState(() {
-      _fetchInFlight = true;
-      _loadError = null;
-    });
-    context.read<DelegateBloc>().add(DelegateLoadingFetched());
+    final event = DelegateLoadingFetched();
+    _tracker.start(event.requestId, _RequestKind.fetch);
+    setState(() => _loadError = null);
+    context.read<DelegateBloc>().add(event);
   }
 
-  void _runAction(VoidCallback dispatch) {
+  bool get _actionInFlight => _tracker.hasPending(_RequestKind.action);
+
+  void _runAction(DelegateEvent Function() makeEvent) {
     if (_actionInFlight) return;
-    setState(() => _actionInFlight = true);
-    dispatch();
+    final event = makeEvent();
+    _tracker.start(event.requestId, _RequestKind.action);
+    setState(() {});
+    context.read<DelegateBloc>().add(event);
   }
 
   @override
@@ -105,10 +101,8 @@ class _LoadingPageState extends State<LoadingPage> with PollingMixin<LoadingPage
       body: BlocConsumer<DelegateBloc, DelegateState>(
         listener: (ctx, state) {
           if (state is DelegateLoadingConfirmedState) {
-            setState(() {
-              _currentLoading = state.loading;
-              _actionInFlight = false;
-            });
+            if (_tracker.resolve(state.requestId) == null) return;
+            setState(() => _currentLoading = state.loading);
             AppSnackbar.showSuccess(ctx, 'تم تأكيد الاستلام. يمكنك البدء بالبيع.');
             Navigator.of(ctx).pushReplacement(
               MaterialPageRoute(builder: (_) => const InvoicePage()),
@@ -116,10 +110,8 @@ class _LoadingPageState extends State<LoadingPage> with PollingMixin<LoadingPage
           }
 
           if (state is DelegateLoadingStatusUpdated) {
-            setState(() {
-              _currentLoading = state.loading;
-              _actionInFlight = false;
-            });
+            if (_tracker.resolve(state.requestId) == null) return;
+            setState(() => _currentLoading = state.loading);
             final label = state.loading.isInTransit
                 ? 'تم تغيير الحالة إلى: في الطريق'
                 : 'تم إنهاء الجولة بنجاح';
@@ -127,27 +119,27 @@ class _LoadingPageState extends State<LoadingPage> with PollingMixin<LoadingPage
           }
 
           if (state is DelegateFailure) {
-            if (_actionInFlight) {
-              setState(() => _actionInFlight = false);
-              AppSnackbar.showError(ctx, state.message);
-            } else if (_fetchInFlight) {
-              setState(() {
-                _fetchInFlight = false;
-                _loadError = state.message;
-              });
-              AppSnackbar.showError(ctx, state.message);
-            } else if (_pollInFlight) {
-              // Silent poll tick failed — retry next tick, never surface it.
-              _pollInFlight = false;
+            final kind = _tracker.resolve(state.requestId);
+            if (kind == null) {
+              // Belongs to some unrelated dispatch on the shared
+              // DelegateBloc (e.g. _HomeTab's own still-in-flight shipment
+              // fetch, mounted forever underneath this page) — not ours.
+              return;
             }
-            // else: belongs to some unrelated dispatch on the shared
-            // DelegateBloc (e.g. _HomeTab's own still-in-flight shipment
-            // fetch) — not ours, ignore it rather than showing a spurious
-            // error for a request this page never made.
+            if (kind == _RequestKind.action) {
+              setState(() {});
+              AppSnackbar.showError(ctx, state.message);
+            } else if (kind == _RequestKind.fetch) {
+              setState(() => _loadError = state.message);
+              AppSnackbar.showError(ctx, state.message);
+            }
+            // else (poll): silent — retry next tick, never surface it.
           }
 
           if (state is DelegateLoadingLoaded) {
-            if (_fetchInFlight) {
+            final kind = _tracker.resolve(state.requestId);
+            if (kind == null) return; // not ours — see note above
+            if (kind == _RequestKind.fetch) {
               // No auto-navigate here: this page is now reached explicitly
               // via "عرض التفاصيل" from DelegateHomePage, so simply fetching/
               // displaying the loading must never redirect the user away
@@ -155,11 +147,9 @@ class _LoadingPageState extends State<LoadingPage> with PollingMixin<LoadingPage
               // still jumps to InvoicePage via DelegateLoadingConfirmedState.
               setState(() {
                 _currentLoading = state.loading;
-                _fetchInFlight = false;
                 _loadError = null;
               });
-            } else if (_pollInFlight) {
-              _pollInFlight = false;
+            } else if (kind == _RequestKind.poll) {
               // Silent refresh: update data with no spinner/flicker. Skip
               // the rebuild entirely if nothing actually changed.
               if (_currentLoading?.status != state.loading?.status ||
@@ -169,11 +159,10 @@ class _LoadingPageState extends State<LoadingPage> with PollingMixin<LoadingPage
                 _currentLoading = state.loading;
               }
             }
-            // else: not ours — see note above
           }
         },
         builder: (_, state) {
-          if (_fetchInFlight && _currentLoading == null) {
+          if (_tracker.hasPending(_RequestKind.fetch) && _currentLoading == null) {
             return const Center(child: CircularProgressIndicator());
           }
 
@@ -204,12 +193,10 @@ class _LoadingPageState extends State<LoadingPage> with PollingMixin<LoadingPage
                 MaterialPageRoute(builder: (_) => const InvoicePage()),
               ),
               onMarkCompleted: () => _runAction(() =>
-                  context.read<DelegateBloc>().add(
-                        DelegateLoadingStatusUpdateRequested(
-                          loadingId: loading.id,
-                          status: 'completed',
-                        ),
-                      )),
+                  DelegateLoadingStatusUpdateRequested(
+                    loadingId: loading.id,
+                    status: 'completed',
+                  )),
             );
           }
 
@@ -229,15 +216,12 @@ class _LoadingPageState extends State<LoadingPage> with PollingMixin<LoadingPage
             loading: loading,
             isBusy: isBusy,
             onConfirm: loading.isPendingPickup
-                ? () => _runAction(() =>
-                    context.read<DelegateBloc>().add(DelegateLoadingConfirmed()))
+                ? () => _runAction(() => DelegateLoadingConfirmed())
                 : null,
             onMarkInTransit: loading.canUpdateToInTransit
-                ? () => _runAction(() => context.read<DelegateBloc>().add(
-                      DelegateLoadingStatusUpdateRequested(
-                        loadingId: loading.id,
-                        status: 'in_transit',
-                      ),
+                ? () => _runAction(() => DelegateLoadingStatusUpdateRequested(
+                      loadingId: loading.id,
+                      status: 'in_transit',
                     ))
                 : null,
           );

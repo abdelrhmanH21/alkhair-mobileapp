@@ -6,6 +6,7 @@ import '../../../../core/widgets/state_views.dart';
 import '../bloc/delegate_bloc.dart';
 import '../bloc/delegate_event.dart';
 import '../bloc/delegate_state.dart';
+import '../bloc/request_tracker.dart';
 import '../../data/models/dashboard_model.dart';
 import '../pages/penalties_page.dart';
 import '../pages/advances_page.dart';
@@ -26,16 +27,23 @@ class _DashboardSectionState extends State<DashboardSection> {
   DashboardModel? _dashboard;
   String? _errorMessage;
   bool _retrying = false;
-  // Guards against ever reacting to a DelegateFailure that belongs to some
-  // unrelated fetch dispatched later by a sibling widget on the same shared
-  // DelegateBloc (e.g. the shipment-status fetch on the home tab) — only the
-  // first Loaded/Failure seen after (re)arming is treated as ours.
-  bool _settled = false;
+  // Replaces the old _settled bool: tracks the requestId of THIS widget's
+  // own outstanding dashboard fetch, so a DelegateLoadingLoaded/DelegateFailure
+  // dispatched later by a sibling widget on the same shared DelegateBloc
+  // (e.g. the shipment-status fetch on the home tab) can never be mistaken
+  // for our own fetch's result — see request_tracker.dart.
+  final _tracker = RequestTracker<bool>();
+
+  void _dispatchFetch() {
+    final event = DelegateDashboardRequested();
+    _tracker.start(event.requestId, true);
+    context.read<DelegateBloc>().add(event);
+  }
 
   @override
   void initState() {
     super.initState();
-    context.read<DelegateBloc>().add(DelegateDashboardRequested());
+    _dispatchFetch();
   }
 
   void _refresh() {
@@ -45,25 +53,23 @@ class _DashboardSectionState extends State<DashboardSection> {
       // view back to the loading skeleton and flicker it right back —
       // the retry button shows its own inline spinner instead.
       _retrying = true;
-      _settled = false;
     });
-    context.read<DelegateBloc>().add(DelegateDashboardRequested());
+    _dispatchFetch();
   }
 
   @override
   Widget build(BuildContext context) {
     return BlocListener<DelegateBloc, DelegateState>(
       listener: (_, state) {
-        if (_settled) return;
         if (state is DelegateDashboardLoaded) {
-          _settled = true;
+          if (_tracker.resolve(state.requestId) == null) return;
           setState(() {
             _dashboard = state.dashboard;
             _errorMessage = null;
             _retrying = false;
           });
         } else if (state is DelegateFailure) {
-          _settled = true;
+          if (_tracker.resolve(state.requestId) == null) return;
           setState(() {
             _errorMessage = state.message;
             _retrying = false;

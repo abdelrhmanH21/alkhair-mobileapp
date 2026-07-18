@@ -6,6 +6,7 @@ import '../../../../core/utils/app_snackbar.dart';
 import '../bloc/delegate_bloc.dart';
 import '../bloc/delegate_event.dart';
 import '../bloc/delegate_state.dart';
+import '../bloc/request_tracker.dart';
 import '../../data/models/client_model.dart';
 import '../../data/models/transaction_record_models.dart';
 import '../widgets/client_search_field.dart';
@@ -384,6 +385,15 @@ class _ExpenseFormSheetState extends State<_ExpenseFormSheet> {
   final _notesCtrl = TextEditingController();
   bool _submitting = false;
 
+  // Tracks this sheet's own outstanding submit dispatch by requestId. This
+  // sheet stays mounted (and its BlocListener stays subscribed to the
+  // shared DelegateBloc) for the pop animation's ~300ms tail after success,
+  // during which TransactionsPage's own post-success list refresh could
+  // fail — with requestId correlation that stray DelegateFailure can no
+  // longer be misattributed as "this submit failed", without needing to
+  // manually reset _submitting on success as a workaround.
+  final _tracker = RequestTracker<bool>();
+
   @override
   void dispose() {
     _amountCtrl.dispose();
@@ -402,12 +412,14 @@ class _ExpenseFormSheetState extends State<_ExpenseFormSheet> {
       AppSnackbar.showError(context, 'يرجى إدخال وصف المصروف.');
       return;
     }
+    final event = DelegateExpenseSubmitted(
+      amount: amount,
+      description: _descCtrl.text.trim(),
+      notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+    );
+    _tracker.start(event.requestId, true);
     setState(() => _submitting = true);
-    context.read<DelegateBloc>().add(DelegateExpenseSubmitted(
-          amount: amount,
-          description: _descCtrl.text.trim(),
-          notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
-        ));
+    context.read<DelegateBloc>().add(event);
   }
 
   @override
@@ -422,18 +434,12 @@ class _ExpenseFormSheetState extends State<_ExpenseFormSheet> {
       child: BlocListener<DelegateBloc, DelegateState>(
         listener: (ctx, state) {
           if (state is DelegateExpenseSubmittedState) {
-            // Close the ownership window immediately — TransactionsPage's own
-            // listener reacts to this same state by re-fetching the
-            // expense/collection lists, and this sheet stays mounted (still
-            // subscribed) for the pop animation's ~300ms tail. Without
-            // resetting _submitting here, a DelegateFailure from that
-            // unrelated background refresh would still match `_submitting`
-            // below and misreport as "this submit failed" even though it
-            // already succeeded.
+            if (_tracker.resolve(state.requestId) == null) return;
             _submitting = false;
             Navigator.pop(ctx);
             AppSnackbar.showSuccess(ctx, state.message);
-          } else if (state is DelegateFailure && _submitting) {
+          } else if (state is DelegateFailure) {
+            if (_tracker.resolve(state.requestId) == null) return;
             setState(() => _submitting = false);
             AppSnackbar.showError(ctx, state.message);
           }
@@ -508,6 +514,9 @@ class _ExpenseEditSheetState extends State<_ExpenseEditSheet> {
   late final _descCtrl = TextEditingController(text: widget.expense.description);
   bool _submitting = false;
 
+  // See _ExpenseFormSheet's identical comment.
+  final _tracker = RequestTracker<bool>();
+
   @override
   void dispose() {
     _amountCtrl.dispose();
@@ -525,12 +534,14 @@ class _ExpenseEditSheetState extends State<_ExpenseEditSheet> {
       AppSnackbar.showError(context, 'يرجى إدخال وصف المصروف.');
       return;
     }
+    final event = DelegateExpenseRecordUpdateRequested(
+      id: widget.expense.id,
+      amount: amount,
+      description: _descCtrl.text.trim(),
+    );
+    _tracker.start(event.requestId, true);
     setState(() => _submitting = true);
-    context.read<DelegateBloc>().add(DelegateExpenseRecordUpdateRequested(
-          id: widget.expense.id,
-          amount: amount,
-          description: _descCtrl.text.trim(),
-        ));
+    context.read<DelegateBloc>().add(event);
   }
 
   @override
@@ -545,15 +556,12 @@ class _ExpenseEditSheetState extends State<_ExpenseEditSheet> {
       child: BlocListener<DelegateBloc, DelegateState>(
         listener: (ctx, state) {
           if (state is DelegateExpenseRecordUpdatedState) {
-            // See _ExpenseFormSheet's identical comment: close the ownership
-            // window on success too, not just failure, so a DelegateFailure
-            // from TransactionsPage's own post-success list refresh (fired
-            // while this sheet is still mounted mid pop-animation) isn't
-            // misattributed to this edit.
+            if (_tracker.resolve(state.requestId) == null) return;
             _submitting = false;
             Navigator.pop(ctx);
             AppSnackbar.showSuccess(ctx, 'تم تعديل المصروف بنجاح.');
-          } else if (state is DelegateFailure && _submitting) {
+          } else if (state is DelegateFailure) {
+            if (_tracker.resolve(state.requestId) == null) return;
             setState(() => _submitting = false);
             AppSnackbar.showError(ctx, state.message);
           }
@@ -601,6 +609,8 @@ class _ExpenseEditSheetState extends State<_ExpenseEditSheet> {
 
 // ─── تحصيل من عميل ───────────────────────────────────────────────────────────
 
+enum _CollectionReq { search, submit }
+
 class _CollectionFormSheet extends StatefulWidget {
   const _CollectionFormSheet();
 
@@ -620,10 +630,19 @@ class _CollectionFormSheetState extends State<_CollectionFormSheet> {
   String _paymentMethod = 'cash';
   bool _submitting = false;
 
+  // Tracks this sheet's own outstanding search/submit dispatches by
+  // requestId. DelegateClientSearchRequested is also dispatched by
+  // InvoicePage (mounted forever as the "البيع" tab underneath this
+  // modally-opened sheet) — without correlation, that unrelated screen's
+  // search results/failures could be misattributed here (or vice versa).
+  final _tracker = RequestTracker<_CollectionReq>();
+
   void _onSearchFocusChanged() {
     if (_searchFocus.hasFocus && _searchCtrl.text.isEmpty) {
+      final event = DelegateClientSearchRequested('');
+      _tracker.start(event.requestId, _CollectionReq.search);
       setState(() => _searchLoading = true);
-      context.read<DelegateBloc>().add(DelegateClientSearchRequested(''));
+      context.read<DelegateBloc>().add(event);
     }
   }
 
@@ -653,13 +672,15 @@ class _CollectionFormSheetState extends State<_CollectionFormSheet> {
       AppSnackbar.showError(context, 'يرجى إدخال مبلغ صحيح.');
       return;
     }
+    final event = DelegateCustomerCollectionSubmitted(
+      customerId: _selectedClient!.id,
+      amount: amount,
+      paymentMethod: _paymentMethod,
+      notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+    );
+    _tracker.start(event.requestId, _CollectionReq.submit);
     setState(() => _submitting = true);
-    context.read<DelegateBloc>().add(DelegateCustomerCollectionSubmitted(
-          customerId: _selectedClient!.id,
-          amount: amount,
-          paymentMethod: _paymentMethod,
-          notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
-        ));
+    context.read<DelegateBloc>().add(event);
   }
 
   void _openAddClientSheet() {
@@ -693,24 +714,22 @@ class _CollectionFormSheetState extends State<_CollectionFormSheet> {
       child: BlocConsumer<DelegateBloc, DelegateState>(
         listener: (ctx, state) {
           if (state is DelegateClientSearchResults) {
+            if (_tracker.resolve(state.requestId) == null) return; // not ours
             setState(() {
               _searchResults = state.clients;
               _searchLoading = false;
             });
           } else if (state is DelegateCustomerCollectionSubmittedState) {
-            // Close the ownership window on success too — see
-            // _ExpenseFormSheet's identical comment. Without this,
-            // TransactionsPage's own post-success list refresh (fired while
-            // this sheet is still mounted mid pop-animation) could still
-            // match `_submitting` below and misreport as "this collection
-            // failed" even though it already succeeded.
+            if (_tracker.resolve(state.requestId) == null) return; // not ours
             _submitting = false;
             Navigator.pop(ctx);
             AppSnackbar.showSuccess(ctx, state.message);
-          } else if (state is DelegateFailure && (_submitting || _searchLoading)) {
+          } else if (state is DelegateFailure) {
+            final kind = _tracker.resolve(state.requestId);
+            if (kind == null) return; // not ours
             setState(() {
-              _submitting = false;
-              _searchLoading = false;
+              if (kind == _CollectionReq.submit) _submitting = false;
+              if (kind == _CollectionReq.search) _searchLoading = false;
             });
             AppSnackbar.showError(ctx, state.message);
           }
@@ -730,8 +749,10 @@ class _CollectionFormSheetState extends State<_CollectionFormSheet> {
               isLoading: _searchLoading,
               selectedClient: _selectedClient,
               onSearch: (q) {
+                final event = DelegateClientSearchRequested(q);
+                _tracker.start(event.requestId, _CollectionReq.search);
                 setState(() => _searchLoading = true);
-                context.read<DelegateBloc>().add(DelegateClientSearchRequested(q));
+                context.read<DelegateBloc>().add(event);
               },
               onSelect: (c) => setState(() {
                 _selectedClient = c;
@@ -814,6 +835,9 @@ class _CollectionEditSheetState extends State<_CollectionEditSheet> {
   late final _notesCtrl = TextEditingController(text: widget.collection.notes ?? '');
   bool _submitting = false;
 
+  // See _ExpenseFormSheet's identical comment.
+  final _tracker = RequestTracker<bool>();
+
   @override
   void dispose() {
     _amountCtrl.dispose();
@@ -827,12 +851,14 @@ class _CollectionEditSheetState extends State<_CollectionEditSheet> {
       AppSnackbar.showError(context, 'يرجى إدخال مبلغ صحيح.');
       return;
     }
+    final event = DelegateCustomerCollectionRecordUpdateRequested(
+      id: widget.collection.id,
+      amount: amount,
+      notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+    );
+    _tracker.start(event.requestId, true);
     setState(() => _submitting = true);
-    context.read<DelegateBloc>().add(DelegateCustomerCollectionRecordUpdateRequested(
-          id: widget.collection.id,
-          amount: amount,
-          notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
-        ));
+    context.read<DelegateBloc>().add(event);
   }
 
   @override
@@ -847,12 +873,12 @@ class _CollectionEditSheetState extends State<_CollectionEditSheet> {
       child: BlocListener<DelegateBloc, DelegateState>(
         listener: (ctx, state) {
           if (state is DelegateCustomerCollectionRecordUpdatedState) {
-            // See _ExpenseFormSheet's identical comment: close the ownership
-            // window on success too, not just failure.
+            if (_tracker.resolve(state.requestId) == null) return;
             _submitting = false;
             Navigator.pop(ctx);
             AppSnackbar.showSuccess(ctx, 'تم تعديل التحصيل بنجاح.');
-          } else if (state is DelegateFailure && _submitting) {
+          } else if (state is DelegateFailure) {
+            if (_tracker.resolve(state.requestId) == null) return;
             setState(() => _submitting = false);
             AppSnackbar.showError(ctx, state.message);
           }

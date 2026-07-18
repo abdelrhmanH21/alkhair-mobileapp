@@ -5,6 +5,7 @@ import '../../../../core/utils/app_snackbar.dart';
 import '../bloc/delegate_bloc.dart';
 import '../bloc/delegate_event.dart';
 import '../bloc/delegate_state.dart';
+import '../bloc/request_tracker.dart';
 import '../../data/models/loading_model.dart';
 
 class TruckStockPage extends StatefulWidget {
@@ -17,10 +18,23 @@ class TruckStockPage extends StatefulWidget {
 class _TruckStockPageState extends State<TruckStockPage> {
   List<TruckStockModel> _stocks = [];
 
+  // This tab lives forever inside DelegateHomePage's IndexedStack, sharing
+  // one DelegateBloc with every other tab — without this, ANY DelegateFailure
+  // from an unrelated dispatch elsewhere (e.g. _HomeTab's shipment poll)
+  // would surface here as a stray SnackBar. Tracks this page's own
+  // outstanding fetch by requestId instead.
+  final _tracker = RequestTracker<bool>();
+
+  void _fetch() {
+    final event = DelegateTruckStockFetched();
+    _tracker.start(event.requestId, true);
+    context.read<DelegateBloc>().add(event);
+  }
+
   @override
   void initState() {
     super.initState();
-    context.read<DelegateBloc>().add(DelegateTruckStockFetched());
+    _fetch();
   }
 
   @override
@@ -31,16 +45,17 @@ class _TruckStockPageState extends State<TruckStockPage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: () =>
-                context.read<DelegateBloc>().add(DelegateTruckStockFetched()),
+            onPressed: _fetch,
           ),
         ],
       ),
       body: BlocConsumer<DelegateBloc, DelegateState>(
         listener: (ctx, state) {
           if (state is DelegateTruckStockLoaded) {
+            if (_tracker.resolve(state.requestId) == null) return;
             setState(() => _stocks = state.stocks);
           } else if (state is DelegateFailure) {
+            if (_tracker.resolve(state.requestId) == null) return;
             AppSnackbar.showError(ctx, state.message);
           }
         },

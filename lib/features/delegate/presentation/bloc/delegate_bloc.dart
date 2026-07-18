@@ -9,7 +9,7 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
   final DelegateRepository _repo;
   final GpsService _gps;
 
-  DelegateBloc(this._repo, this._gps) : super(DelegateInitial()) {
+  DelegateBloc(this._repo, this._gps) : super(const DelegateInitial()) {
     on<DelegateLoadingFetched>(_onFetchLoading);
     on<DelegateLoadingConfirmed>(_onConfirmLoading);
     on<DelegateTruckStockFetched>(_onFetchTruckStock);
@@ -44,14 +44,14 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
     DelegateLoadingFetched event,
     Emitter<DelegateState> emit,
   ) async {
-    emit(DelegateLoading());
+    emit(DelegateLoading(requestId: event.requestId));
     try {
       final loading = await _repo.getCurrentLoading();
-      emit(DelegateLoadingLoaded(loading));
+      emit(DelegateLoadingLoaded(loading, requestId: event.requestId));
     } on DioException catch (e) {
-      emit(DelegateFailure(_parseError(e)));
+      emit(DelegateFailure(_parseError(e), requestId: event.requestId));
     } catch (_) {
-      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.', requestId: event.requestId));
     }
   }
 
@@ -59,14 +59,14 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
     DelegateLoadingConfirmed event,
     Emitter<DelegateState> emit,
   ) async {
-    emit(DelegateLoading());
+    emit(DelegateLoading(requestId: event.requestId));
     try {
       final loading = await _repo.confirmLoading();
-      emit(DelegateLoadingConfirmedState(loading));
+      emit(DelegateLoadingConfirmedState(loading, requestId: event.requestId));
     } on DioException catch (e) {
-      emit(DelegateFailure(_parseError(e)));
+      emit(DelegateFailure(_parseError(e), requestId: event.requestId));
     } catch (_) {
-      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.', requestId: event.requestId));
     }
   }
 
@@ -74,14 +74,14 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
     DelegateTruckStockFetched event,
     Emitter<DelegateState> emit,
   ) async {
-    emit(DelegateLoading());
+    emit(DelegateLoading(requestId: event.requestId));
     try {
       final stocks = await _repo.getTruckStock();
-      emit(DelegateTruckStockLoaded(stocks));
+      emit(DelegateTruckStockLoaded(stocks, requestId: event.requestId));
     } on DioException catch (e) {
-      emit(DelegateFailure(_parseError(e)));
+      emit(DelegateFailure(_parseError(e), requestId: event.requestId));
     } catch (_) {
-      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.', requestId: event.requestId));
     }
   }
 
@@ -89,14 +89,14 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
     DelegateDashboardRequested event,
     Emitter<DelegateState> emit,
   ) async {
-    emit(DelegateLoading());
+    emit(DelegateLoading(requestId: event.requestId));
     try {
       final dashboard = await _repo.getDashboard();
-      emit(DelegateDashboardLoaded(dashboard));
+      emit(DelegateDashboardLoaded(dashboard, requestId: event.requestId));
     } on DioException catch (e) {
-      emit(DelegateFailure(_parseError(e)));
+      emit(DelegateFailure(_parseError(e), requestId: event.requestId));
     } catch (_) {
-      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.', requestId: event.requestId));
     }
   }
 
@@ -106,11 +106,11 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
   ) async {
     try {
       final clients = await _repo.searchClients(event.query);
-      emit(DelegateClientSearchResults(clients));
+      emit(DelegateClientSearchResults(clients, requestId: event.requestId));
     } on DioException catch (e) {
-      emit(DelegateFailure(_parseError(e)));
+      emit(DelegateFailure(_parseError(e), requestId: event.requestId));
     } catch (_) {
-      emit(DelegateFailure('حدث خطأ في البحث. حاول مرة أخرى.'));
+      emit(DelegateFailure('حدث خطأ في البحث. حاول مرة أخرى.', requestId: event.requestId));
     }
   }
 
@@ -118,7 +118,7 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
     DelegateClientCreated event,
     Emitter<DelegateState> emit,
   ) async {
-    emit(DelegateLoading());
+    emit(DelegateLoading(requestId: event.requestId));
     try {
       final client = await _repo.createClient(
         name: event.name,
@@ -127,19 +127,20 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
         customerRegionId: event.customerRegionId,
         initialBalance: event.initialBalance,
       );
-      emit(DelegateClientCreatedState(client));
+      emit(DelegateClientCreatedState(client, requestId: event.requestId));
     } on DioException catch (e) {
       final fieldErrors = e.response?.data?['errors'] as Map<String, dynamic>?;
       if (e.response?.statusCode == 422 && fieldErrors != null) {
         emit(DelegateClientValidationFailure(
           fieldErrors.map((k, v) => MapEntry(k, (v as List).map((s) => s.toString()).toList())),
           _parseError(e),
+          requestId: event.requestId,
         ));
       } else {
-        emit(DelegateFailure(_parseError(e)));
+        emit(DelegateFailure(_parseError(e), requestId: event.requestId));
       }
     } catch (_) {
-      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.', requestId: event.requestId));
     }
   }
 
@@ -147,14 +148,14 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
     DelegateSellableProductsFetched event,
     Emitter<DelegateState> emit,
   ) async {
-    emit(DelegateLoading());
+    emit(DelegateLoading(requestId: event.requestId));
     try {
       final products = await _repo.getSellableProducts(customerId: event.customerId);
-      emit(DelegateSellableProductsLoaded(products));
+      emit(DelegateSellableProductsLoaded(products, requestId: event.requestId));
     } on DioException catch (e) {
-      emit(DelegateFailure(_parseError(e)));
+      emit(DelegateFailure(_parseError(e), requestId: event.requestId));
     } catch (_) {
-      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.', requestId: event.requestId));
     }
   }
 
@@ -162,14 +163,14 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
     DelegateSalesCatalogFetched event,
     Emitter<DelegateState> emit,
   ) async {
-    emit(DelegateLoading());
+    emit(DelegateLoading(requestId: event.requestId));
     try {
       final products = await _repo.getSalesCatalogProducts();
-      emit(DelegateSalesCatalogLoaded(products));
+      emit(DelegateSalesCatalogLoaded(products, requestId: event.requestId));
     } on DioException catch (e) {
-      emit(DelegateFailure(_parseError(e)));
+      emit(DelegateFailure(_parseError(e), requestId: event.requestId));
     } catch (_) {
-      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.', requestId: event.requestId));
     }
   }
 
@@ -179,11 +180,11 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
   ) async {
     try {
       final regions = await _repo.getCustomerRegions();
-      emit(DelegateCustomerRegionsLoaded(regions));
+      emit(DelegateCustomerRegionsLoaded(regions, requestId: event.requestId));
     } on DioException catch (e) {
-      emit(DelegateFailure(_parseError(e)));
+      emit(DelegateFailure(_parseError(e), requestId: event.requestId));
     } catch (_) {
-      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.', requestId: event.requestId));
     }
   }
 
@@ -191,7 +192,7 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
     DelegateInvoiceSubmitted event,
     Emitter<DelegateState> emit,
   ) async {
-    emit(DelegateLoading());
+    emit(DelegateLoading(requestId: event.requestId));
     try {
       // GPS capture is fire-and-forget — never blocks the invoice
       final coords = await _gps.captureCoordinates();
@@ -222,11 +223,11 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
         latitude: coords.lat,
         longitude: coords.lng,
       );
-      emit(DelegateInvoiceSubmittedState(invoice));
+      emit(DelegateInvoiceSubmittedState(invoice, requestId: event.requestId));
     } on DioException catch (e) {
-      emit(DelegateFailure(_parseError(e)));
+      emit(DelegateFailure(_parseError(e), requestId: event.requestId));
     } catch (_) {
-      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.', requestId: event.requestId));
     }
   }
 
@@ -234,7 +235,7 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
     DelegateInvoiceUpdateRequested event,
     Emitter<DelegateState> emit,
   ) async {
-    emit(DelegateLoading());
+    emit(DelegateLoading(requestId: event.requestId));
     try {
       final salesItems = event.salesItems
           .map((s) => {
@@ -260,11 +261,11 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
         cashReceived: event.cashReceived,
         discountAmount: event.discountAmount,
       );
-      emit(DelegateInvoiceUpdatedState(invoice));
+      emit(DelegateInvoiceUpdatedState(invoice, requestId: event.requestId));
     } on DioException catch (e) {
-      emit(DelegateFailure(_parseError(e)));
+      emit(DelegateFailure(_parseError(e), requestId: event.requestId));
     } catch (_) {
-      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.', requestId: event.requestId));
     }
   }
 
@@ -272,14 +273,14 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
     DelegateInvoicesFetched event,
     Emitter<DelegateState> emit,
   ) async {
-    emit(DelegateLoading());
+    emit(DelegateLoading(requestId: event.requestId));
     try {
       final invoices = await _repo.getInvoices();
-      emit(DelegateInvoicesLoaded(invoices));
+      emit(DelegateInvoicesLoaded(invoices, requestId: event.requestId));
     } on DioException catch (e) {
-      emit(DelegateFailure(_parseError(e)));
+      emit(DelegateFailure(_parseError(e), requestId: event.requestId));
     } catch (_) {
-      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.', requestId: event.requestId));
     }
   }
 
@@ -287,14 +288,14 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
     DelegateLoadingStatusUpdateRequested event,
     Emitter<DelegateState> emit,
   ) async {
-    emit(DelegateLoading());
+    emit(DelegateLoading(requestId: event.requestId));
     try {
       final loading = await _repo.updateLoadingStatus(event.loadingId, event.status);
-      emit(DelegateLoadingStatusUpdated(loading));
+      emit(DelegateLoadingStatusUpdated(loading, requestId: event.requestId));
     } on DioException catch (e) {
-      emit(DelegateFailure(_parseError(e)));
+      emit(DelegateFailure(_parseError(e), requestId: event.requestId));
     } catch (_) {
-      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.', requestId: event.requestId));
     }
   }
 
@@ -302,18 +303,18 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
     DelegateSettlementSummaryRequested event,
     Emitter<DelegateState> emit,
   ) async {
-    emit(DelegateLoading());
+    emit(DelegateLoading(requestId: event.requestId));
     try {
       final summary = await _repo.getSettlementSummary();
-      emit(DelegateSettlementSummaryLoaded(summary));
+      emit(DelegateSettlementSummaryLoaded(summary, requestId: event.requestId));
     } on DioException catch (e) {
       if (e.response?.statusCode == 404) {
-        emit(DelegateNoActiveShift());
+        emit(DelegateNoActiveShift(requestId: event.requestId));
       } else {
-        emit(DelegateFailure(_parseError(e)));
+        emit(DelegateFailure(_parseError(e), requestId: event.requestId));
       }
     } catch (_) {
-      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.', requestId: event.requestId));
     }
   }
 
@@ -321,7 +322,7 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
     DelegateSettlementRequestSubmitted event,
     Emitter<DelegateState> emit,
   ) async {
-    emit(DelegateLoading());
+    emit(DelegateLoading(requestId: event.requestId));
     try {
       await _repo.submitSettlementRequest(
         cashAmount: event.cashAmount,
@@ -329,11 +330,13 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
         notes: event.notes,
       );
       emit(DelegateSettlementRequestSubmittedState(
-          'تم إرسال طلب التسليم، بانتظار تأكيد الإدارة.'));
+        'تم إرسال طلب التسليم، بانتظار تأكيد الإدارة.',
+        requestId: event.requestId,
+      ));
     } on DioException catch (e) {
-      emit(DelegateFailure(_parseError(e)));
+      emit(DelegateFailure(_parseError(e), requestId: event.requestId));
     } catch (_) {
-      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.', requestId: event.requestId));
     }
   }
 
@@ -341,14 +344,14 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
     DelegatePenaltiesFetched event,
     Emitter<DelegateState> emit,
   ) async {
-    emit(DelegateLoading());
+    emit(DelegateLoading(requestId: event.requestId));
     try {
       final penalties = await _repo.getPenalties();
-      emit(DelegatePenaltiesLoaded(penalties));
+      emit(DelegatePenaltiesLoaded(penalties, requestId: event.requestId));
     } on DioException catch (e) {
-      emit(DelegateFailure(_parseError(e)));
+      emit(DelegateFailure(_parseError(e), requestId: event.requestId));
     } catch (_) {
-      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.', requestId: event.requestId));
     }
   }
 
@@ -356,14 +359,14 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
     DelegateAdvancesFetched event,
     Emitter<DelegateState> emit,
   ) async {
-    emit(DelegateLoading());
+    emit(DelegateLoading(requestId: event.requestId));
     try {
       final advances = await _repo.getAdvances();
-      emit(DelegateAdvancesLoaded(advances));
+      emit(DelegateAdvancesLoaded(advances, requestId: event.requestId));
     } on DioException catch (e) {
-      emit(DelegateFailure(_parseError(e)));
+      emit(DelegateFailure(_parseError(e), requestId: event.requestId));
     } catch (_) {
-      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.', requestId: event.requestId));
     }
   }
 
@@ -371,14 +374,14 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
     DelegateCommissionBreakdownFetched event,
     Emitter<DelegateState> emit,
   ) async {
-    emit(DelegateLoading());
+    emit(DelegateLoading(requestId: event.requestId));
     try {
       final days = await _repo.getCommissionBreakdown();
-      emit(DelegateCommissionBreakdownLoaded(days));
+      emit(DelegateCommissionBreakdownLoaded(days, requestId: event.requestId));
     } on DioException catch (e) {
-      emit(DelegateFailure(_parseError(e)));
+      emit(DelegateFailure(_parseError(e), requestId: event.requestId));
     } catch (_) {
-      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.', requestId: event.requestId));
     }
   }
 
@@ -386,7 +389,7 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
     DelegateExpenseSubmitted event,
     Emitter<DelegateState> emit,
   ) async {
-    emit(DelegateLoading());
+    emit(DelegateLoading(requestId: event.requestId));
     try {
       final message = await _repo.submitExpense(
         amount: event.amount,
@@ -394,11 +397,11 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
         categoryId: event.categoryId,
         notes: event.notes,
       );
-      emit(DelegateExpenseSubmittedState(message));
+      emit(DelegateExpenseSubmittedState(message, requestId: event.requestId));
     } on DioException catch (e) {
-      emit(DelegateFailure(_parseError(e)));
+      emit(DelegateFailure(_parseError(e), requestId: event.requestId));
     } catch (_) {
-      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.', requestId: event.requestId));
     }
   }
 
@@ -406,7 +409,7 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
     DelegateCustomerCollectionSubmitted event,
     Emitter<DelegateState> emit,
   ) async {
-    emit(DelegateLoading());
+    emit(DelegateLoading(requestId: event.requestId));
     try {
       final message = await _repo.submitCustomerCollection(
         customerId: event.customerId,
@@ -414,11 +417,11 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
         paymentMethod: event.paymentMethod,
         notes: event.notes,
       );
-      emit(DelegateCustomerCollectionSubmittedState(message));
+      emit(DelegateCustomerCollectionSubmittedState(message, requestId: event.requestId));
     } on DioException catch (e) {
-      emit(DelegateFailure(_parseError(e)));
+      emit(DelegateFailure(_parseError(e), requestId: event.requestId));
     } catch (_) {
-      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.', requestId: event.requestId));
     }
   }
 
@@ -426,14 +429,14 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
     DelegateExpenseRecordsFetched event,
     Emitter<DelegateState> emit,
   ) async {
-    emit(DelegateLoading());
+    emit(DelegateLoading(requestId: event.requestId));
     try {
       final expenses = await _repo.getExpenseRecords();
-      emit(DelegateExpenseRecordsLoaded(expenses));
+      emit(DelegateExpenseRecordsLoaded(expenses, requestId: event.requestId));
     } on DioException catch (e) {
-      emit(DelegateFailure(_parseError(e)));
+      emit(DelegateFailure(_parseError(e), requestId: event.requestId));
     } catch (_) {
-      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.', requestId: event.requestId));
     }
   }
 
@@ -441,18 +444,18 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
     DelegateExpenseRecordUpdateRequested event,
     Emitter<DelegateState> emit,
   ) async {
-    emit(DelegateLoading());
+    emit(DelegateLoading(requestId: event.requestId));
     try {
       final expense = await _repo.updateExpenseRecord(
         id: event.id,
         amount: event.amount,
         description: event.description,
       );
-      emit(DelegateExpenseRecordUpdatedState(expense));
+      emit(DelegateExpenseRecordUpdatedState(expense, requestId: event.requestId));
     } on DioException catch (e) {
-      emit(DelegateFailure(_parseError(e)));
+      emit(DelegateFailure(_parseError(e), requestId: event.requestId));
     } catch (_) {
-      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.', requestId: event.requestId));
     }
   }
 
@@ -460,14 +463,14 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
     DelegateExpenseRecordDeleteRequested event,
     Emitter<DelegateState> emit,
   ) async {
-    emit(DelegateLoading());
+    emit(DelegateLoading(requestId: event.requestId));
     try {
       final message = await _repo.deleteExpenseRecord(event.id);
-      emit(DelegateExpenseRecordDeletedState(event.id, message));
+      emit(DelegateExpenseRecordDeletedState(event.id, message, requestId: event.requestId));
     } on DioException catch (e) {
-      emit(DelegateFailure(_parseError(e)));
+      emit(DelegateFailure(_parseError(e), requestId: event.requestId));
     } catch (_) {
-      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.', requestId: event.requestId));
     }
   }
 
@@ -475,14 +478,14 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
     DelegateCustomerCollectionRecordsFetched event,
     Emitter<DelegateState> emit,
   ) async {
-    emit(DelegateLoading());
+    emit(DelegateLoading(requestId: event.requestId));
     try {
       final collections = await _repo.getCustomerCollectionRecords();
-      emit(DelegateCustomerCollectionRecordsLoaded(collections));
+      emit(DelegateCustomerCollectionRecordsLoaded(collections, requestId: event.requestId));
     } on DioException catch (e) {
-      emit(DelegateFailure(_parseError(e)));
+      emit(DelegateFailure(_parseError(e), requestId: event.requestId));
     } catch (_) {
-      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.', requestId: event.requestId));
     }
   }
 
@@ -490,18 +493,18 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
     DelegateCustomerCollectionRecordUpdateRequested event,
     Emitter<DelegateState> emit,
   ) async {
-    emit(DelegateLoading());
+    emit(DelegateLoading(requestId: event.requestId));
     try {
       final collection = await _repo.updateCustomerCollectionRecord(
         id: event.id,
         amount: event.amount,
         notes: event.notes,
       );
-      emit(DelegateCustomerCollectionRecordUpdatedState(collection));
+      emit(DelegateCustomerCollectionRecordUpdatedState(collection, requestId: event.requestId));
     } on DioException catch (e) {
-      emit(DelegateFailure(_parseError(e)));
+      emit(DelegateFailure(_parseError(e), requestId: event.requestId));
     } catch (_) {
-      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.', requestId: event.requestId));
     }
   }
 
@@ -509,14 +512,14 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
     DelegateCustomerCollectionRecordDeleteRequested event,
     Emitter<DelegateState> emit,
   ) async {
-    emit(DelegateLoading());
+    emit(DelegateLoading(requestId: event.requestId));
     try {
       final message = await _repo.deleteCustomerCollectionRecord(event.id);
-      emit(DelegateCustomerCollectionRecordDeletedState(event.id, message));
+      emit(DelegateCustomerCollectionRecordDeletedState(event.id, message, requestId: event.requestId));
     } on DioException catch (e) {
-      emit(DelegateFailure(_parseError(e)));
+      emit(DelegateFailure(_parseError(e), requestId: event.requestId));
     } catch (_) {
-      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.', requestId: event.requestId));
     }
   }
 
@@ -524,18 +527,18 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
     DelegateReportByRegionRequested event,
     Emitter<DelegateState> emit,
   ) async {
-    emit(DelegateLoading());
+    emit(DelegateLoading(requestId: event.requestId));
     try {
       final rows = await _repo.getReportByRegion(
         period: event.period,
         dateFrom: event.dateFrom,
         dateTo: event.dateTo,
       );
-      emit(DelegateReportByRegionLoaded(rows));
+      emit(DelegateReportByRegionLoaded(rows, requestId: event.requestId));
     } on DioException catch (e) {
-      emit(DelegateFailure(_parseError(e)));
+      emit(DelegateFailure(_parseError(e), requestId: event.requestId));
     } catch (_) {
-      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.', requestId: event.requestId));
     }
   }
 
@@ -543,18 +546,18 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
     DelegateReportByProductRequested event,
     Emitter<DelegateState> emit,
   ) async {
-    emit(DelegateLoading());
+    emit(DelegateLoading(requestId: event.requestId));
     try {
       final rows = await _repo.getReportByProduct(
         period: event.period,
         dateFrom: event.dateFrom,
         dateTo: event.dateTo,
       );
-      emit(DelegateReportByProductLoaded(rows));
+      emit(DelegateReportByProductLoaded(rows, requestId: event.requestId));
     } on DioException catch (e) {
-      emit(DelegateFailure(_parseError(e)));
+      emit(DelegateFailure(_parseError(e), requestId: event.requestId));
     } catch (_) {
-      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.'));
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.', requestId: event.requestId));
     }
   }
 

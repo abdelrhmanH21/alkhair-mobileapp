@@ -2,6 +2,22 @@ import 'package:equatable/equatable.dart';
 import '../../data/models/invoice_model.dart';
 
 abstract class DelegateEvent extends Equatable {
+  static int _requestCounter = 0;
+
+  /// Unique id for this specific dispatch, assigned once per event instance
+  /// (not per event *type*). DelegateBloc echoes it back on every state that
+  /// results from processing this event, so a listener sharing the bloc with
+  /// other simultaneously-mounted screens (e.g. every tab in
+  /// DelegateHomePage's IndexedStack, all alive forever) or with this
+  /// screen's own background PollingMixin tick can tell "was this MY
+  /// dispatch" apart definitively, instead of the fragile per-screen
+  /// _fetchInFlight/_pollInFlight/_actionInFlight bool flags this replaces.
+  /// Deliberately excluded from [props]: two otherwise-identical events
+  /// (e.g. two DelegateLoadingFetched()) must keep comparing equal for any
+  /// code/tests relying on Equatable equality — only DelegateBloc and
+  /// RequestTracker ever read requestId directly.
+  final String requestId = 'req_${_requestCounter++}';
+
   @override
   List<Object?> get props => [];
 }

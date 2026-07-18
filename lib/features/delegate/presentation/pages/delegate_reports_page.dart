@@ -9,9 +9,11 @@ import '../../../app_config/presentation/bloc/app_config_state.dart';
 import '../bloc/delegate_bloc.dart';
 import '../bloc/delegate_event.dart';
 import '../bloc/delegate_state.dart';
+import '../bloc/request_tracker.dart';
 import '../../data/models/report_models.dart';
 
 enum _ReportPeriod { month, week, custom }
+enum _ReportKind { region, product }
 
 /// تقارير المندوب — بيانات مبيعاته (المناطق/الأصناف) لفترة قابلة للاختيار.
 /// مصدر مصدرها الوحيد: DelegateReportController::byRegion()/byProduct()، نفس
@@ -32,6 +34,12 @@ class _DelegateReportsPageState extends State<DelegateReportsPage>
   List<RegionReportRowModel>? _regionRows;
   List<ProductReportRowModel>? _productRows;
 
+  // This page lives forever behind DashboardSection's card (and every other
+  // tab in DelegateHomePage's IndexedStack), all sharing one DelegateBloc.
+  // Tracks this page's own two outstanding fetches by requestId so an
+  // unrelated DelegateFailure elsewhere can never surface here.
+  final _tracker = RequestTracker<_ReportKind>();
+
   @override
   void initState() {
     super.initState();
@@ -46,16 +54,20 @@ class _DelegateReportsPageState extends State<DelegateReportsPage>
 
   void _fetchReports() {
     final params = _currentParams();
-    context.read<DelegateBloc>().add(DelegateReportByRegionRequested(
-          period: params.period,
-          dateFrom: params.dateFrom,
-          dateTo: params.dateTo,
-        ));
-    context.read<DelegateBloc>().add(DelegateReportByProductRequested(
-          period: params.period,
-          dateFrom: params.dateFrom,
-          dateTo: params.dateTo,
-        ));
+    final regionEvent = DelegateReportByRegionRequested(
+      period: params.period,
+      dateFrom: params.dateFrom,
+      dateTo: params.dateTo,
+    );
+    final productEvent = DelegateReportByProductRequested(
+      period: params.period,
+      dateFrom: params.dateFrom,
+      dateTo: params.dateTo,
+    );
+    _tracker.start(regionEvent.requestId, _ReportKind.region);
+    _tracker.start(productEvent.requestId, _ReportKind.product);
+    context.read<DelegateBloc>().add(regionEvent);
+    context.read<DelegateBloc>().add(productEvent);
   }
 
   /// Human-readable period label for the export header — mirrors
@@ -138,10 +150,13 @@ class _DelegateReportsPageState extends State<DelegateReportsPage>
       body: BlocListener<DelegateBloc, DelegateState>(
         listener: (ctx, state) {
           if (state is DelegateReportByRegionLoaded) {
+            if (_tracker.resolve(state.requestId) == null) return;
             setState(() => _regionRows = state.rows);
           } else if (state is DelegateReportByProductLoaded) {
+            if (_tracker.resolve(state.requestId) == null) return;
             setState(() => _productRows = state.rows);
           } else if (state is DelegateFailure) {
+            if (_tracker.resolve(state.requestId) == null) return;
             AppSnackbar.showError(ctx, state.message);
           }
         },

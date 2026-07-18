@@ -11,6 +11,7 @@ import '../../../app_config/presentation/bloc/app_config_state.dart';
 import '../bloc/delegate_bloc.dart';
 import '../bloc/delegate_event.dart';
 import '../bloc/delegate_state.dart';
+import '../bloc/request_tracker.dart';
 import '../../data/models/client_model.dart';
 import '../../data/models/invoice_model.dart';
 import '../../data/models/sellable_product_model.dart';
@@ -41,6 +42,8 @@ class InvoicePage extends StatefulWidget {
   State<InvoicePage> createState() => _InvoicePageState();
 }
 
+enum _InvoiceReq { search, submit }
+
 class _InvoicePageState extends State<InvoicePage> {
   bool get _isEditing => widget.editingInvoiceId != null;
 
@@ -48,12 +51,13 @@ class _InvoicePageState extends State<InvoicePage> {
   bool _loadingExisting = false;
   String? _loadExistingError;
   String? _editingInvoiceNumber;
-  // Ownership guard (see transactions_page.dart / settlement_page.dart for
-  // the same pattern): InvoicePage can be mounted as both the persistent
-  // "البيع" tab AND, simultaneously, a pushed edit-mode instance on top of
-  // it (the tab stays alive inside DelegateHomePage's IndexedStack) — both
-  // share the same DelegateBloc, so a DelegateFailure meant for one must
-  // not be shown by the other.
+  // Tracks this instance's own outstanding search/submit dispatches by
+  // requestId (see request_tracker.dart): InvoicePage can be mounted as both
+  // the persistent "البيع" tab AND, simultaneously, a pushed edit-mode
+  // instance on top of it (the tab stays alive inside DelegateHomePage's
+  // IndexedStack) — both share the same DelegateBloc, so a DelegateFailure
+  // meant for one must never be shown by the other.
+  final _tracker = RequestTracker<_InvoiceReq>();
   bool _submitting = false;
 
   // ── Client selection ───────────────────────────────────────────────────────
@@ -67,8 +71,10 @@ class _InvoicePageState extends State<InvoicePage> {
     // Opening the search field with no query yet shows the full, browsable
     // client list instead of nothing until the delegate starts typing.
     if (_searchFocus.hasFocus && _searchCtrl.text.isEmpty) {
+      final event = DelegateClientSearchRequested('');
+      _tracker.start(event.requestId, _InvoiceReq.search);
       setState(() => _searchLoading = true);
-      context.read<DelegateBloc>().add(DelegateClientSearchRequested(''));
+      context.read<DelegateBloc>().add(event);
     }
   }
 
@@ -231,25 +237,24 @@ class _InvoicePageState extends State<InvoicePage> {
       return;
     }
 
-    setState(() => _submitting = true);
-
-    if (_isEditing) {
-      context.read<DelegateBloc>().add(DelegateInvoiceUpdateRequested(
+    final DelegateEvent event = _isEditing
+        ? DelegateInvoiceUpdateRequested(
             invoiceId: widget.editingInvoiceId!,
             salesItems: _salesItems,
             returnedItems: _returnItems,
             cashReceived: _cashReceived,
             discountAmount: _discountAmount,
-          ));
-    } else {
-      context.read<DelegateBloc>().add(DelegateInvoiceSubmitted(
+          )
+        : DelegateInvoiceSubmitted(
             clientId: _selectedClient!.id,
             salesItems: _salesItems,
             returnedItems: _returnItems,
             cashReceived: _cashReceived,
             discountAmount: _discountAmount,
-          ));
-    }
+          );
+    _tracker.start(event.requestId, _InvoiceReq.submit);
+    setState(() => _submitting = true);
+    context.read<DelegateBloc>().add(event);
   }
 
   void _showError(String msg) {
@@ -350,12 +355,14 @@ class _InvoicePageState extends State<InvoicePage> {
     return BlocListener<DelegateBloc, DelegateState>(
       listener: (ctx, state) {
         if (state is DelegateClientSearchResults) {
+          if (_tracker.resolve(state.requestId) == null) return;
           setState(() {
             _searchResults = state.clients;
             _searchLoading = false;
           });
         }
         if (state is DelegateInvoiceSubmittedState) {
+          if (_tracker.resolve(state.requestId) == null) return;
           final invoice = state.invoice;
           _submitting = false;
           // Reset form
@@ -383,22 +390,26 @@ class _InvoicePageState extends State<InvoicePage> {
           );
         }
         if (state is DelegateInvoiceUpdatedState) {
+          if (_tracker.resolve(state.requestId) == null) return;
           _submitting = false;
           AppSnackbar.showSuccess(ctx, 'تم تعديل الفاتورة بنجاح');
           // Signal success to whoever pushed this edit form (invoice
           // history/detail page) so it can refresh its own data.
           Navigator.pop(ctx, true);
         }
-        if (state is DelegateFailure && (_submitting || _searchLoading)) {
+        if (state is DelegateFailure) {
+          final kind = _tracker.resolve(state.requestId);
+          if (kind == null) {
+            // Not ours — e.g. a concurrent request from the persistent
+            // "البيع" tab still mounted below this pushed edit-mode instance.
+            return;
+          }
           setState(() {
-            _submitting = false;
-            _searchLoading = false;
+            if (kind == _InvoiceReq.submit) _submitting = false;
+            if (kind == _InvoiceReq.search) _searchLoading = false;
           });
           _showError(state.message);
         }
-        // else (DelegateFailure not ours): ignore — e.g. a concurrent
-        // request from the persistent "البيع" tab still mounted below
-        // this pushed edit-mode instance.
       },
       child: SingleChildScrollView(
         padding: const EdgeInsets.all(12),
@@ -419,10 +430,10 @@ class _InvoicePageState extends State<InvoicePage> {
                 isLoading: _searchLoading,
                 selectedClient: _selectedClient,
                 onSearch: (q) {
+                  final event = DelegateClientSearchRequested(q);
+                  _tracker.start(event.requestId, _InvoiceReq.search);
                   setState(() => _searchLoading = true);
-                  context
-                      .read<DelegateBloc>()
-                      .add(DelegateClientSearchRequested(q));
+                  context.read<DelegateBloc>().add(event);
                 },
                 onSelect: (c) => setState(() {
                   _selectedClient = c;
@@ -1023,6 +1034,12 @@ class _SellableProductPickerSheetState
   final _priceCtrl = TextEditingController();
   String? _priceError;
 
+  // This sheet shares the same DelegateBloc as the InvoicePage underneath
+  // it (and, if reopened quickly, a previous instance of itself mid pop-
+  // animation) — track our own fetch by requestId so its result can't be
+  // confused with either. See request_tracker.dart.
+  final _tracker = RequestTracker<bool>();
+
   double get _maxOverridePct {
     final state = context.read<AppConfigBloc>().state;
     return state is AppConfigLoaded ? state.config.maxPriceOverridePct : 10;
@@ -1036,9 +1053,9 @@ class _SellableProductPickerSheetState
   @override
   void initState() {
     super.initState();
-    context
-        .read<DelegateBloc>()
-        .add(DelegateSellableProductsFetched(customerId: widget.clientId));
+    final event = DelegateSellableProductsFetched(customerId: widget.clientId);
+    _tracker.start(event.requestId, true);
+    context.read<DelegateBloc>().add(event);
   }
 
   @override
@@ -1085,11 +1102,12 @@ class _SellableProductPickerSheetState
       child: BlocConsumer<DelegateBloc, DelegateState>(
         listener: (ctx, state) {
           if (state is DelegateSellableProductsLoaded) {
+            if (_tracker.resolve(state.requestId) == null) return;
             setState(() => _products = state.products);
           }
         },
         builder: (ctx, state) {
-          final loading = state is DelegateLoading && _products.isEmpty;
+          final loading = _tracker.hasPending(true) && _products.isEmpty;
           return SizedBox(
             height: MediaQuery.of(context).size.height * 0.6,
             child: Column(
@@ -1237,10 +1255,15 @@ class _ReturnProductPickerSheetState extends State<_ReturnProductPickerSheet> {
   final _qtyCtrl = TextEditingController(text: '1');
   String _condition = 'سليم';
 
+  // See _SellableProductPickerSheetState's identical comment.
+  final _tracker = RequestTracker<bool>();
+
   @override
   void initState() {
     super.initState();
-    context.read<DelegateBloc>().add(DelegateSalesCatalogFetched());
+    final event = DelegateSalesCatalogFetched();
+    _tracker.start(event.requestId, true);
+    context.read<DelegateBloc>().add(event);
   }
 
   @override
@@ -1276,11 +1299,12 @@ class _ReturnProductPickerSheetState extends State<_ReturnProductPickerSheet> {
       child: BlocConsumer<DelegateBloc, DelegateState>(
         listener: (ctx, state) {
           if (state is DelegateSalesCatalogLoaded) {
+            if (_tracker.resolve(state.requestId) == null) return;
             setState(() => _products = state.products);
           }
         },
         builder: (ctx, state) {
-          final loading = state is DelegateLoading && _products.isEmpty;
+          final loading = _tracker.hasPending(true) && _products.isEmpty;
           return SizedBox(
             height: MediaQuery.of(context).size.height * 0.6,
             child: Column(

@@ -6,6 +6,7 @@ import '../../../../core/utils/app_snackbar.dart';
 import '../bloc/delegate_bloc.dart';
 import '../bloc/delegate_event.dart';
 import '../bloc/delegate_state.dart';
+import '../bloc/request_tracker.dart';
 import '../../data/models/invoice_model.dart';
 import 'invoice_detail_page.dart';
 import 'invoice_page.dart';
@@ -32,17 +33,29 @@ class InvoiceHistoryPage extends StatefulWidget {
 class _InvoiceHistoryPageState extends State<InvoiceHistoryPage> {
   List<DelegateInvoiceModel> _invoices = [];
 
+  // This tab lives forever inside DelegateHomePage's IndexedStack, sharing
+  // one DelegateBloc with every other tab — tracks this page's own
+  // outstanding fetch by requestId so an unrelated DelegateFailure elsewhere
+  // (e.g. a sibling tab's poll) can never surface here as a stray SnackBar.
+  final _tracker = RequestTracker<bool>();
+
+  void _fetch() {
+    final event = DelegateInvoicesFetched();
+    _tracker.start(event.requestId, true);
+    context.read<DelegateBloc>().add(event);
+  }
+
   @override
   void initState() {
     super.initState();
-    context.read<DelegateBloc>().add(DelegateInvoicesFetched());
+    _fetch();
   }
 
   @override
   void didUpdateWidget(covariant InvoiceHistoryPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.refreshTick != oldWidget.refreshTick) {
-      context.read<DelegateBloc>().add(DelegateInvoicesFetched());
+      _fetch();
     }
   }
 
@@ -58,7 +71,7 @@ class _InvoiceHistoryPageState extends State<InvoiceHistoryPage> {
             InvoiceDetailPage(invoiceId: invoiceId, hasActiveLoading: widget.hasActiveLoading),
       ),
     );
-    if (mounted) context.read<DelegateBloc>().add(DelegateInvoicesFetched());
+    if (mounted) _fetch();
   }
 
   Future<void> _openEdit(int invoiceId) async {
@@ -71,7 +84,7 @@ class _InvoiceHistoryPageState extends State<InvoiceHistoryPage> {
         ),
       ),
     );
-    if (mounted) context.read<DelegateBloc>().add(DelegateInvoicesFetched());
+    if (mounted) _fetch();
   }
 
   @override
@@ -81,8 +94,10 @@ class _InvoiceHistoryPageState extends State<InvoiceHistoryPage> {
       body: BlocConsumer<DelegateBloc, DelegateState>(
         listener: (ctx, state) {
           if (state is DelegateInvoicesLoaded) {
+            if (_tracker.resolve(state.requestId) == null) return;
             setState(() => _invoices = state.invoices);
           } else if (state is DelegateFailure) {
+            if (_tracker.resolve(state.requestId) == null) return;
             AppSnackbar.showError(ctx, state.message);
           }
         },

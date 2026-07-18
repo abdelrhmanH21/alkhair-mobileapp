@@ -5,6 +5,7 @@ import '../../../../core/utils/app_snackbar.dart';
 import '../bloc/delegate_bloc.dart';
 import '../bloc/delegate_event.dart';
 import '../bloc/delegate_state.dart';
+import '../bloc/request_tracker.dart';
 import '../../data/models/breakdown_models.dart';
 
 class PenaltiesPage extends StatefulWidget {
@@ -17,10 +18,19 @@ class PenaltiesPage extends StatefulWidget {
 class _PenaltiesPageState extends State<PenaltiesPage> {
   List<PenaltyModel>? _penalties;
 
+  // Reached from a DashboardSection card while DashboardSection itself stays
+  // mounted underneath (and _HomeTab/other tabs stay alive forever in
+  // DelegateHomePage's IndexedStack) — all sharing one DelegateBloc. Tracks
+  // this page's own fetch by requestId so an unrelated DelegateFailure can
+  // never surface here as a stray SnackBar.
+  final _tracker = RequestTracker<bool>();
+
   @override
   void initState() {
     super.initState();
-    context.read<DelegateBloc>().add(DelegatePenaltiesFetched());
+    final event = DelegatePenaltiesFetched();
+    _tracker.start(event.requestId, true);
+    context.read<DelegateBloc>().add(event);
   }
 
   @override
@@ -30,13 +40,15 @@ class _PenaltiesPageState extends State<PenaltiesPage> {
       body: BlocConsumer<DelegateBloc, DelegateState>(
         listener: (ctx, state) {
           if (state is DelegatePenaltiesLoaded) {
+            if (_tracker.resolve(state.requestId) == null) return;
             setState(() => _penalties = state.penalties);
           } else if (state is DelegateFailure) {
+            if (_tracker.resolve(state.requestId) == null) return;
             AppSnackbar.showError(ctx, state.message);
           }
         },
         builder: (_, state) {
-          if (state is DelegateLoading && _penalties == null) {
+          if (_tracker.hasPending(true) && _penalties == null) {
             return const Center(child: CircularProgressIndicator());
           }
           final penalties = _penalties ?? [];

@@ -337,8 +337,7 @@ class BluetoothPrinterService {
     final mono = img.Image(width: resized.width, height: resized.height);
     for (var y = 0; y < resized.height; y++) {
       for (var x = 0; x < resized.width; x++) {
-        final isBlack = resized.getPixel(x, y).luminance < _blackThreshold;
-        final v = isBlack ? 0 : 255;
+        final v = _isDarkOnWhite(resized.getPixel(x, y)) ? 0 : 255;
         mono.setPixelRgb(x, y, v, v, v);
       }
     }
@@ -354,8 +353,7 @@ class BluetoothPrinterService {
     for (var y = 0; y < image.height; y++) {
       final row = List<int>.filled(widthBytes, 0);
       for (var x = 0; x < image.width; x++) {
-        final pixel = image.getPixel(x, y);
-        if (pixel.luminance < _blackThreshold) {
+        if (_isDarkOnWhite(image.getPixel(x, y))) {
           row[x >> 3] |= (0x80 >> (x & 7));
         }
       }
@@ -368,6 +366,31 @@ class BluetoothPrinterService {
       image.height & 0xFF, (image.height >> 8) & 0xFF,
       ...data,
     ];
+  }
+
+  /// Whether [pixel] should print/render as a black dot once composited onto
+  /// a plain white receipt background.
+  ///
+  /// The logo source PNGs here are genuinely transparent (verified directly
+  /// against the uploaded `receipt_settings.company_logo`/`company_logo_color`
+  /// files), but a transparent pixel's leftover RGB channel values are
+  /// whatever the exporting tool happened to leave behind — commonly
+  /// (0,0,0), but not always (one of these logos' transparent palette entry
+  /// is a dark green (71,112,76)). Thresholding `pixel.luminance` directly,
+  /// as this used to, ignored `pixel.a` entirely: any transparent pixel
+  /// whose incidental RGB was merely dark (luminance below
+  /// [_blackThreshold]) — which covers most of a logo's transparent
+  /// background — printed as solid black, regardless of the logo's actual
+  /// visible color. Alpha-compositing onto white FIRST, then thresholding
+  /// the *result*, is the correct fix: a fully transparent pixel always
+  /// composites to pure white (never black) no matter what color garbage
+  /// its RGB channels hold, and partially-transparent edge pixels fade
+  /// smoothly toward white instead of a hard on/off cutoff.
+  bool _isDarkOnWhite(img.Pixel pixel) {
+    final maxVal = pixel.maxChannelValue;
+    final alpha = pixel.a / maxVal;
+    final compositedLuminance = pixel.luminance * alpha + maxVal * (1 - alpha);
+    return compositedLuminance < _blackThreshold;
   }
 }
 

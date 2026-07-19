@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:fl_chart/fl_chart.dart';
 import '../../../../core/di/service_locator.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/app_snackbar.dart';
@@ -102,7 +103,7 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
           NavigationDestination(
               icon: Icon(Icons.people_outline),
               selectedIcon: Icon(Icons.people),
-              label: 'المندوبون'),
+              label: 'متابعة المناديب'),
         ],
       ),
       body: IndexedStack(
@@ -277,6 +278,12 @@ class _DashboardContent extends StatelessWidget {
                   style: TextStyle(color: Colors.grey)),
               const SizedBox(height: 16),
 
+              _WorkingCapitalSection(
+                total: stats.workingCapital,
+                breakdown: stats.workingCapitalBreakdown,
+              ),
+              const SizedBox(height: 20),
+
               // KPI grid
               GridView.count(
                 crossAxisCount: 2,
@@ -398,6 +405,178 @@ class _KpiCard extends StatelessWidget {
       );
 }
 
+// ─── Working Capital Section ────────────────────────────────────────────────
+
+class _WorkingCapitalSection extends StatelessWidget {
+  final double total;
+  final WorkingCapitalBreakdownModel breakdown;
+  const _WorkingCapitalSection({required this.total, required this.breakdown});
+
+  @override
+  Widget build(BuildContext context) {
+    // Positive components make up the donut; payables is a deduction shown
+    // separately below since a slice can't represent a subtraction.
+    final components = <_WcComponent>[
+      _WcComponent('نقدية بالخزائن', breakdown.cash, AppTheme.primary),
+      _WcComponent('مواد خام', breakdown.rawMaterials, AppTheme.secondary),
+      _WcComponent('منتجات تامة', breakdown.finishedGoods, AppTheme.accent),
+      _WcComponent('ذمم مدينة (عملاء)', breakdown.receivables, Colors.teal),
+    ].where((c) => c.value > 0).toList();
+    final componentsTotal = components.fold<double>(0, (s, c) => s + c.value);
+
+    return Container(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [AppTheme.primary, AppTheme.secondary],
+          begin: Alignment.topRight,
+          end: Alignment.bottomLeft,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.primary.withValues(alpha: 0.25),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.account_balance_wallet_rounded,
+                  color: Colors.white, size: 20),
+              const SizedBox(width: 8),
+              const Text('إجمالي رأس المال المتداول',
+                  style: TextStyle(color: Colors.white, fontSize: 14)),
+              const Spacer(),
+              if (total < 0)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.warning_amber_rounded,
+                          color: Colors.white, size: 12),
+                      SizedBox(width: 4),
+                      Text('سالب',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            total.toStringAsFixed(0),
+            style: const TextStyle(
+                color: Colors.white,
+                fontSize: 30,
+                fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 16),
+          if (componentsTotal > 0)
+            Row(
+              children: [
+                SizedBox(
+                  width: 96,
+                  height: 96,
+                  child: PieChart(
+                    PieChartData(
+                      sectionsSpace: 2,
+                      centerSpaceRadius: 26,
+                      sections: components
+                          .map((c) => PieChartSectionData(
+                                value: c.value,
+                                color: c.color,
+                                radius: 20,
+                                showTitle: false,
+                              ))
+                          .toList(),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: components
+                        .map((c) => Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 2),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 8,
+                                    height: 8,
+                                    decoration: BoxDecoration(
+                                        color: c.color, shape: BoxShape.circle),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(c.label,
+                                        style: const TextStyle(
+                                            color: Colors.white, fontSize: 11)),
+                                  ),
+                                  Text(
+                                    c.value.toStringAsFixed(0),
+                                    style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold),
+                                  ),
+                                ],
+                              ),
+                            ))
+                        .toList(),
+                  ),
+                ),
+              ],
+            ),
+          if (breakdown.payables > 0) ...[
+            const SizedBox(height: 12),
+            Container(height: 1, color: Colors.white.withValues(alpha: 0.2)),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                const Icon(Icons.remove_circle_outline,
+                    color: Colors.white70, size: 14),
+                const SizedBox(width: 6),
+                const Text('مطلوبات (دائنون) — تُخصم من الإجمالي',
+                    style: TextStyle(color: Colors.white70, fontSize: 11)),
+                const Spacer(),
+                Text(
+                  '- ${breakdown.payables.toStringAsFixed(0)}',
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _WcComponent {
+  final String label;
+  final double value;
+  final Color color;
+  const _WcComponent(this.label, this.value, this.color);
+}
+
 // ─── Delegates Tab ─────────────────────────────────────────────────────────────
 
 class _DelegatesTab extends StatelessWidget {
@@ -450,60 +629,75 @@ class _DelegatesList extends StatelessWidget {
           itemCount: delegates.length,
           itemBuilder: (_, i) {
             final d = delegates[i];
+            final badge = _statusBadge(d.trackingStatus);
             return Card(
               child: ListTile(
                 leading: CircleAvatar(
-                  backgroundColor: d.hasActiveShift
-                      ? AppTheme.secondary.withValues(alpha: 0.2)
-                      : Colors.grey.shade200,
-                  child: Icon(
-                    Icons.person_rounded,
-                    color: d.hasActiveShift
-                        ? AppTheme.secondary
-                        : Colors.grey,
-                  ),
+                  backgroundColor: badge.color.withValues(alpha: 0.15),
+                  child: Icon(Icons.person_rounded, color: badge.color),
                 ),
                 title: Text(d.name,
                     style: const TextStyle(fontWeight: FontWeight.bold)),
                 subtitle: Text(d.email,
                     style: const TextStyle(fontSize: 12)),
-                trailing: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: d.hasActiveShift
-                            ? AppTheme.secondary.withValues(alpha: 0.1)
-                            : Colors.grey.shade100,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text(
-                        d.hasActiveShift ? 'في الوردية' : 'غير نشط',
-                        style: TextStyle(
-                            fontSize: 10,
-                            color: d.hasActiveShift
-                                ? AppTheme.secondary
-                                : Colors.grey),
-                      ),
-                    ),
-                  ],
+                trailing: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: badge.color.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    badge.label,
+                    style: TextStyle(fontSize: 10, color: badge.color),
+                  ),
                 ),
-                onTap: d.hasActiveShift
-                    ? () => Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => BlocProvider.value(
-                              value: context.read<AdminBloc>(),
-                              child: SettleDelegatePage(delegate: d),
-                            ),
-                          ),
-                        )
-                    : null,
+                onTap: () => _openDelegate(context, d),
               ),
             );
           },
         ),
       );
+
+  void _openDelegate(BuildContext context, DelegateModel d) {
+    if (d.canOpenShiftDetail) {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => BlocProvider.value(
+            value: context.read<AdminBloc>(),
+            child: SettleDelegatePage(delegate: d),
+          ),
+        ),
+      );
+      return;
+    }
+    final message = d.trackingStatus == DelegateTrackingStatus.pendingPickup
+        ? 'التحميلة بانتظار استلام المندوب من التطبيق بعد.'
+        : 'لا توجد وردية نشطة لهذا المندوب حالياً.';
+    AppSnackbar.showInfo(context, message);
+  }
+
+  _StatusBadge _statusBadge(DelegateTrackingStatus status) {
+    switch (status) {
+      case DelegateTrackingStatus.idle:
+        return const _StatusBadge('غير نشط', Colors.grey);
+      case DelegateTrackingStatus.pendingPickup:
+        return const _StatusBadge('بانتظار الاستلام', AppTheme.accent);
+      case DelegateTrackingStatus.accepted:
+        return const _StatusBadge('تم الاستلام', AppTheme.secondary);
+      case DelegateTrackingStatus.inTransit:
+        return const _StatusBadge('في الطريق', AppTheme.secondary);
+      case DelegateTrackingStatus.completed:
+        return const _StatusBadge('أنهى الجولة', AppTheme.primary);
+      case DelegateTrackingStatus.awaitingSettlementConfirmation:
+        return const _StatusBadge('بانتظار تأكيد التسليم', AppTheme.danger);
+    }
+  }
+}
+
+class _StatusBadge {
+  final String label;
+  final Color color;
+  const _StatusBadge(this.label, this.color);
 }

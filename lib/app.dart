@@ -41,7 +41,7 @@ class AlKhairApp extends StatelessWidget {
       ],
       child: MaterialApp(
         navigatorKey: appNavigatorKey,
-        title: 'الخير للألبان',
+        title: 'Alkhair Dairies',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.theme,
         // Full Arabic RTL support

@@ -43,6 +43,9 @@ class ApiEndpoints {
   static const String expenseItems    = '$apiRoot/expense-items';
   static const String customers       = '$apiRoot/customers';
   static const String suppliers       = '$apiRoot/suppliers';
+  static const String salesCombined      = '$apiRoot/sales/combined';
+  static const String paymentCollections = '$apiRoot/payment-collections';
+  static const String targets            = '$apiRoot/targets';
 
   // Delegate — invoices
   static const String delegateInvoice  = '/delegate/invoice';
@@ -70,4 +73,5 @@ class ApiEndpoints {
   static const String adminLoadings     = '/admin/loadings';
   static const String adminProducts     = '/admin/products';
   static const String adminWarehouses   = '/admin/warehouses';
+  static const String adminPayrollSummary = '/admin/payroll-summary';
 }

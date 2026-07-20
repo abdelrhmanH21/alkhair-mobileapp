@@ -468,3 +468,166 @@ class SupplierPageModel {
         lastPage: (json['last_page'] as num? ?? 1).toInt(),
       );
 }
+
+// ─── Sales & collections (المبيعات والتحصيلات) ─────────────────────────────
+// Mirrors SaleController::combined() (GET /sales/combined) — the same
+// read-only UNION of `sales` (web) + `delegate_invoices` (delegate app)
+// rows the web "المبيعات" screen already lists, and
+// PaymentCollectionController::index() (GET /payment-collections).
+
+class SalesCombinedRowModel {
+  final int id;
+  final String source; // 'web' | 'delegate'
+  final String invoiceNumber;
+  final int? customerId;
+  final String customerName;
+  final String? repName;
+  final DateTime date;
+  final double total;
+  final double paidAmount;
+  final String paymentStatus;
+
+  const SalesCombinedRowModel({
+    required this.id,
+    required this.source,
+    required this.invoiceNumber,
+    required this.customerId,
+    required this.customerName,
+    required this.repName,
+    required this.date,
+    required this.total,
+    required this.paidAmount,
+    required this.paymentStatus,
+  });
+
+  bool get isDelegateSourced => source == 'delegate';
+
+  factory SalesCombinedRowModel.fromJson(Map<String, dynamic> json) =>
+      SalesCombinedRowModel(
+        id: json['id'] as int,
+        source: json['source'] as String? ?? 'web',
+        invoiceNumber: json['invoice_number'] as String? ?? '',
+        customerId: json['customer_id'] as int?,
+        customerName: json['customer_name'] as String? ?? '',
+        repName: json['rep_name'] as String?,
+        date: DateTime.tryParse(json['date'] as String? ?? '') ?? DateTime.now(),
+        total: _asDouble(json['total']),
+        paidAmount: _asDouble(json['paid_amount']),
+        paymentStatus: json['payment_status'] as String? ?? 'unpaid',
+      );
+}
+
+class SalesCombinedPageModel {
+  final List<SalesCombinedRowModel> data;
+  final int currentPage;
+  final int lastPage;
+  const SalesCombinedPageModel(
+      {required this.data, required this.currentPage, required this.lastPage});
+
+  bool get hasMore => currentPage < lastPage;
+
+  factory SalesCombinedPageModel.fromJson(Map<String, dynamic> json) =>
+      SalesCombinedPageModel(
+        data: (json['data'] as List? ?? [])
+            .map((e) => SalesCombinedRowModel.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        currentPage: (json['current_page'] as num? ?? 1).toInt(),
+        lastPage: (json['last_page'] as num? ?? 1).toInt(),
+      );
+}
+
+class CollectionModel {
+  final int id;
+  final String customerName;
+  final String treasuryName;
+  final double amount;
+  final DateTime date;
+  final String? notes;
+
+  const CollectionModel({
+    required this.id,
+    required this.customerName,
+    required this.treasuryName,
+    required this.amount,
+    required this.date,
+    this.notes,
+  });
+
+  factory CollectionModel.fromJson(Map<String, dynamic> json) {
+    final customer = json['customer'] as Map<String, dynamic>?;
+    final treasury = json['treasury'] as Map<String, dynamic>?;
+    return CollectionModel(
+      id: json['id'] as int,
+      customerName: customer?['name'] as String? ?? 'غير معروف',
+      treasuryName: treasury?['name'] as String? ?? '',
+      amount: _asDouble(json['amount']),
+      date: DateTime.tryParse(json['date'] as String? ?? '') ?? DateTime.now(),
+      notes: json['notes'] as String?,
+    );
+  }
+}
+
+class CollectionPageModel {
+  final List<CollectionModel> data;
+  final int currentPage;
+  final int lastPage;
+  const CollectionPageModel(
+      {required this.data, required this.currentPage, required this.lastPage});
+
+  bool get hasMore => currentPage < lastPage;
+
+  factory CollectionPageModel.fromJson(Map<String, dynamic> json) => CollectionPageModel(
+        data: (json['data'] as List? ?? [])
+            .map((e) => CollectionModel.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        currentPage: (json['current_page'] as num? ?? 1).toInt(),
+        lastPage: (json['last_page'] as num? ?? 1).toInt(),
+      );
+}
+
+// ─── Payroll (العمالة) ──────────────────────────────────────────────────────
+// Mirrors AdminDelegateController::payrollSummary() — one row per active
+// sales rep, same SalesRepPayrollService calculations the delegate's own
+// dashboard() already surfaces for a single rep.
+
+class PayrollSummaryRowModel {
+  final int repId;
+  final String repName;
+  final String? phone;
+  final double monthlyTarget;
+  final double achievedThisMonth;
+  final double? targetPercentage;
+  final double commissionEarned;
+  final double penaltiesTotal;
+  final double advancesTotal;
+  final double netPayable;
+
+  const PayrollSummaryRowModel({
+    required this.repId,
+    required this.repName,
+    required this.phone,
+    required this.monthlyTarget,
+    required this.achievedThisMonth,
+    required this.targetPercentage,
+    required this.commissionEarned,
+    required this.penaltiesTotal,
+    required this.advancesTotal,
+    required this.netPayable,
+  });
+
+  factory PayrollSummaryRowModel.fromJson(Map<String, dynamic> json) =>
+      PayrollSummaryRowModel(
+        repId: json['rep_id'] as int,
+        repName: json['rep_name'] as String? ?? '',
+        phone: json['phone'] as String?,
+        monthlyTarget: _asDouble(json['monthly_target']),
+        achievedThisMonth: _asDouble(json['achieved_this_month']),
+        targetPercentage: json['target_percentage'] == null
+            ? null
+            : _asDouble(json['target_percentage']),
+        commissionEarned: _asDouble(json['commission_earned']),
+        penaltiesTotal: _asDouble(json['penalties_total']),
+        advancesTotal: _asDouble(json['advances_total']),
+        netPayable: _asDouble(json['net_payable']),
+      );
+}

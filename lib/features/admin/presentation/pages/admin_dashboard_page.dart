@@ -22,6 +22,8 @@ import 'settle_delegate_page.dart';
 import 'create_loading_page.dart';
 import 'admin_expenses_page.dart';
 import 'admin_customers_suppliers_page.dart';
+import 'admin_sales_collections_page.dart';
+import 'admin_payroll_page.dart';
 
 class AdminDashboardPage extends StatefulWidget {
   const AdminDashboardPage({super.key});
@@ -205,6 +207,28 @@ class _AdminDrawerState extends State<_AdminDrawer> {
                 onChanged: _updatingPreference ? null : _togglePreference,
               ),
               const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.point_of_sale_outlined),
+                title: const Text('المبيعات والتحصيلات'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const AdminSalesCollectionsPage()),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.badge_outlined),
+                title: const Text('العمالة'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const AdminPayrollPage()),
+                  );
+                },
+              ),
               ListTile(
                 leading: const Icon(Icons.account_balance_wallet_outlined),
                 title: const Text('المصروفات والخزائن'),

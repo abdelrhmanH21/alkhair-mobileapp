@@ -38,6 +38,11 @@ class ApiEndpoints {
   // Shared reference data (root API, not under /v1/mobile)
   static const String products        = '$apiRoot/products';
   static const String customerRegions = '$apiRoot/customer-regions';
+  static const String expenses        = '$apiRoot/expenses';
+  static const String treasuries      = '$apiRoot/treasuries';
+  static const String expenseItems    = '$apiRoot/expense-items';
+  static const String customers       = '$apiRoot/customers';
+  static const String suppliers       = '$apiRoot/suppliers';
 
   // Delegate — invoices
   static const String delegateInvoice  = '/delegate/invoice';

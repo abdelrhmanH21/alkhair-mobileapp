@@ -22,6 +22,29 @@ abstract class AdminRemoteDataSource {
     String? notes,
   });
   Future<void> updateNotificationPreference(bool enabled);
+
+  // ── Expenses & Treasuries ──────────────────────────────────────────────
+  Future<ExpensePageModel> fetchExpenses({
+    String? dateFrom,
+    String? dateTo,
+    int? categoryId,
+    int? treasuryId,
+    int page = 1,
+  });
+  Future<List<TreasuryModel>> fetchTreasuries();
+  Future<List<ExpenseCategoryModel>> fetchExpenseCategories();
+  Future<void> createExpense({
+    int? categoryId,
+    required int treasuryId,
+    required String description,
+    required double amount,
+    required String expenseDate,
+    String? notes,
+  });
+
+  // ── Customers & Suppliers ──────────────────────────────────────────────
+  Future<CustomerPageModel> fetchCustomers({String? search, int page = 1});
+  Future<SupplierPageModel> fetchSuppliers({String? search, int page = 1});
 }
 
 class AdminRemoteDataSourceImpl implements AdminRemoteDataSource {
@@ -108,5 +131,85 @@ class AdminRemoteDataSourceImpl implements AdminRemoteDataSource {
     await _client.dio.put(ApiEndpoints.notificationPreferences, data: {
       'sales_notifications_enabled': enabled,
     });
+  }
+
+  // ── Expenses & Treasuries ──────────────────────────────────────────────
+
+  @override
+  Future<ExpensePageModel> fetchExpenses({
+    String? dateFrom,
+    String? dateTo,
+    int? categoryId,
+    int? treasuryId,
+    int page = 1,
+  }) async {
+    final res = await _client.dio.get(ApiEndpoints.expenses, queryParameters: {
+      'page': page,
+      if (dateFrom != null) 'date_from': dateFrom,
+      if (dateTo != null) 'date_to': dateTo,
+      if (categoryId != null) 'category_id': categoryId,
+      if (treasuryId != null) 'treasury_id': treasuryId,
+    });
+    return ExpensePageModel.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  @override
+  Future<List<TreasuryModel>> fetchTreasuries() async {
+    final res = await _client.dio.get(ApiEndpoints.treasuries);
+    final list = res.data as List? ?? [];
+    return list
+        .map((e) => TreasuryModel.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  @override
+  Future<List<ExpenseCategoryModel>> fetchExpenseCategories() async {
+    // Paginated response (per_page defaults to 50 server-side, comfortably
+    // covering the full category list in one page).
+    final res = await _client.dio
+        .get(ApiEndpoints.expenseItems, queryParameters: {'per_page': 100});
+    final list = (res.data as Map<String, dynamic>)['data'] as List? ?? [];
+    return list
+        .map((e) => ExpenseCategoryModel.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  @override
+  Future<void> createExpense({
+    int? categoryId,
+    required int treasuryId,
+    required String description,
+    required double amount,
+    required String expenseDate,
+    String? notes,
+  }) async {
+    await _client.dio.post(ApiEndpoints.expenses, data: {
+      if (categoryId != null) 'category_id': categoryId,
+      'treasury_id': treasuryId,
+      'description': description,
+      'amount': amount,
+      'expense_date': expenseDate,
+      if (notes != null && notes.isNotEmpty) 'notes': notes,
+    });
+  }
+
+  // ── Customers & Suppliers ──────────────────────────────────────────────
+
+  @override
+  Future<CustomerPageModel> fetchCustomers({String? search, int page = 1}) async {
+    final res = await _client.dio.get(ApiEndpoints.customers, queryParameters: {
+      'page': page,
+      if (search != null && search.isNotEmpty) 'search': search,
+    });
+    return CustomerPageModel.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  @override
+  Future<SupplierPageModel> fetchSuppliers({String? search, int page = 1}) async {
+    final res = await _client.dio.get(ApiEndpoints.suppliers, queryParameters: {
+      'page': page,
+      if (search != null && search.isNotEmpty) 'search': search,
+    });
+    return SupplierPageModel.fromJson(res.data as Map<String, dynamic>);
   }
 }

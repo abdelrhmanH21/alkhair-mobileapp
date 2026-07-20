@@ -15,9 +15,13 @@ import '../bloc/admin_event.dart';
 import '../bloc/admin_state.dart';
 import '../../data/datasources/admin_remote_datasource.dart';
 import '../../data/models/admin_models.dart';
+import '../../../delegate/presentation/bloc/delegate_bloc.dart';
+import '../../../delegate/presentation/pages/delegate_reports_page.dart';
 // delegates_page.dart is a re-export barrel; no additional imports needed
 import 'settle_delegate_page.dart';
 import 'create_loading_page.dart';
+import 'admin_expenses_page.dart';
+import 'admin_customers_suppliers_page.dart';
 
 class AdminDashboardPage extends StatefulWidget {
   const AdminDashboardPage({super.key});
@@ -200,6 +204,53 @@ class _AdminDrawerState extends State<_AdminDrawer> {
                 value: _salesNotificationsEnabled,
                 onChanged: _updatingPreference ? null : _togglePreference,
               ),
+              const Divider(height: 1),
+              ListTile(
+                leading: const Icon(Icons.account_balance_wallet_outlined),
+                title: const Text('المصروفات والخزائن'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const AdminExpensesPage()),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.bar_chart_rounded),
+                title: const Text('التقارير'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      // DelegateReportsPage's by-region/by-product endpoints
+                      // return company-wide totals (not the caller's own
+                      // sales) whenever the authenticated user is admin/
+                      // manager — see DelegateReportController::byRegion().
+                      // DelegateBloc is already provided at the app root
+                      // (see app.dart), so it's available here unmodified.
+                      builder: (_) => BlocProvider.value(
+                        value: context.read<DelegateBloc>(),
+                        child: const DelegateReportsPage(),
+                      ),
+                    ),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.groups_outlined),
+                title: const Text('بيانات العملاء والموردين'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => const AdminCustomersSuppliersPage()),
+                  );
+                },
+              ),
+              const Divider(height: 1),
               ListTile(
                 leading: const Icon(Icons.logout_rounded),
                 title: const Text('تسجيل الخروج'),

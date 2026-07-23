@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/theme/app_theme.dart';
-import '../../../../core/utils/app_snackbar.dart';
 import '../../../../core/widgets/app_logo.dart';
 import '../../../app_config/presentation/bloc/app_config_bloc.dart';
 import '../../../app_config/presentation/bloc/app_config_state.dart';
@@ -43,19 +42,13 @@ class _LoginPageState extends State<LoginPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppTheme.surface,
-      body: BlocListener<AuthBloc, AuthState>(
-        listener: (ctx, state) {
-          if (state is AuthFailure) {
-            AppSnackbar.showError(ctx, state.message);
-          }
-        },
-        child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
                   // Logo / brand mark
                   BlocBuilder<AppConfigBloc, AppConfigState>(
                     builder: (_, state) {
@@ -196,8 +189,7 @@ class _LoginPageState extends State<LoginPage> {
             ),
           ),
         ),
-      ),
-    );
+      );
   }
 }
 

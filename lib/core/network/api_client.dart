@@ -48,7 +48,20 @@ class _AuthInterceptor extends Interceptor {
     RequestOptions options,
     RequestInterceptorHandler handler,
   ) async {
-    final token = await _storage.read(key: _tokenKey);
+    // Bounded: this runs before Dio's own connect/receive timeouts start
+    // ticking, so an unbounded read here (e.g. a secure-storage/Keystore
+    // stall) would hang every request — including login — forever with no
+    // timeout anywhere in the chain to catch it. Falling back to "no token"
+    // on timeout just means the request goes out unauthenticated (a normal,
+    // already-handled 401 path) instead of never going out at all.
+    String? token;
+    try {
+      token = await _storage
+          .read(key: _tokenKey)
+          .timeout(const Duration(seconds: 5));
+    } catch (_) {
+      token = null;
+    }
     if (token != null) {
       options.headers['Authorization'] = 'Bearer $token';
     }

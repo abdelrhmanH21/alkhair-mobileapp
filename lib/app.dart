@@ -4,6 +4,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'core/di/service_locator.dart';
 import 'core/theme/app_theme.dart';
+import 'core/utils/app_snackbar.dart';
 
 import 'features/app_config/presentation/bloc/app_config_bloc.dart';
 import 'features/app_config/presentation/bloc/app_config_event.dart';
@@ -39,27 +40,43 @@ class AlKhairApp extends StatelessWidget {
         BlocProvider<DelegateBloc>(create: (_) => sl<DelegateBloc>()),
         BlocProvider<AdminBloc>(create: (_) => sl<AdminBloc>()),
       ],
-      child: MaterialApp(
-        navigatorKey: appNavigatorKey,
-        title: 'Alkhair Dairies',
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.theme,
-        // Full Arabic RTL support
-        locale: const Locale('ar', 'SA'),
-        supportedLocales: const [
-          Locale('ar', 'SA'),
-          Locale('en', 'US'),
-        ],
-        localizationsDelegates: const [
-          GlobalMaterialLocalizations.delegate,
-          GlobalWidgetsLocalizations.delegate,
-          GlobalCupertinoLocalizations.delegate,
-        ],
-        builder: (ctx, child) => Directionality(
-          textDirection: TextDirection.rtl,
-          child: child ?? const SizedBox.shrink(),
+      // Listens here, one level above _RootNavigator's BlocBuilder, because
+      // that BlocBuilder swaps its entire displayed widget on every
+      // AuthState change (spinner / LoginPage / role home). A BlocListener
+      // placed inside LoginPage itself would be mounted freshly *because of*
+      // the AuthFailure transition, and so would never see the very state
+      // that caused it to mount — failed logins would silently drop back to
+      // a blank form with no error shown. A listener up here stays mounted
+      // across all of those swaps and never misses a transition.
+      child: BlocListener<AuthBloc, AuthState>(
+        listener: (_, state) {
+          if (state is AuthFailure) {
+            final ctx = appNavigatorKey.currentContext;
+            if (ctx != null) AppSnackbar.showError(ctx, state.message);
+          }
+        },
+        child: MaterialApp(
+          navigatorKey: appNavigatorKey,
+          title: 'Alkhair Dairies',
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.theme,
+          // Full Arabic RTL support
+          locale: const Locale('ar', 'SA'),
+          supportedLocales: const [
+            Locale('ar', 'SA'),
+            Locale('en', 'US'),
+          ],
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          builder: (ctx, child) => Directionality(
+            textDirection: TextDirection.rtl,
+            child: child ?? const SizedBox.shrink(),
+          ),
+          home: const _RootNavigator(),
         ),
-        home: const _RootNavigator(),
       ),
     );
   }

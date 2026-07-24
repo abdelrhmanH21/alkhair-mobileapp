@@ -46,6 +46,13 @@ class ApiEndpoints {
   static const String salesCombined      = '$apiRoot/sales/combined';
   static const String paymentCollections = '$apiRoot/payment-collections';
   static const String targets            = '$apiRoot/targets';
+  static const String categories         = '$apiRoot/categories';
+  static const String labs               = '$apiRoot/labs';
+  static const String rawMaterials       = '$apiRoot/raw-materials';
+  static const String manufacturingRecipes = '$apiRoot/manufacturing-recipes';
+  static const String manufacturingOrders  = '$apiRoot/manufacturing';
+  static String manufacturingComplete(int id) => '$apiRoot/manufacturing/$id/complete';
+  static const String inventory = '$apiRoot/inventory';
 
   // Delegate — invoices
   static const String delegateInvoice  = '/delegate/invoice';
@@ -74,4 +81,8 @@ class ApiEndpoints {
   static const String adminProducts     = '/admin/products';
   static const String adminWarehouses   = '/admin/warehouses';
   static const String adminPayrollSummary = '/admin/payroll-summary';
+  static const String adminSale = '/admin/sale';
+  static const String adminCustomerCollection = '/admin/customer-collection';
+  static String adminProductPrice(int id) => '/admin/products/$id/price';
+  static String adminRawMaterialPrice(int id) => '/admin/raw-materials/$id/price';
 }

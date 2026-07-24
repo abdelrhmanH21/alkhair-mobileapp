@@ -24,6 +24,9 @@ import 'admin_expenses_page.dart';
 import 'admin_customers_suppliers_page.dart';
 import 'admin_sales_collections_page.dart';
 import 'admin_payroll_page.dart';
+import 'start_production_page.dart';
+import 'receive_production_page.dart';
+import 'admin_operations_page.dart';
 
 class AdminDashboardPage extends StatefulWidget {
   const AdminDashboardPage({super.key});
@@ -271,6 +274,39 @@ class _AdminDrawerState extends State<_AdminDrawer> {
                     context,
                     MaterialPageRoute(
                         builder: (_) => const AdminCustomersSuppliersPage()),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.science_outlined),
+                title: const Text('بدء تشغيلة جديدة'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const StartProductionPage()),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.inventory_2_outlined),
+                title: const Text('استلام إنتاج تام'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const ReceiveProductionPage()),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.touch_app_outlined),
+                title: const Text('العمليات'),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const AdminOperationsPage()),
                   );
                 },
               ),
@@ -617,10 +653,33 @@ class _WorkingCapitalSection extends StatelessWidget {
                 ),
               ],
             ),
-          if (breakdown.payables > 0) ...[
+          if (breakdown.payables > 0 || breakdown.payrollPaidToDate > 0) ...[
             const SizedBox(height: 12),
             Container(height: 1, color: Colors.white.withValues(alpha: 0.2)),
             const SizedBox(height: 10),
+          ],
+          if (breakdown.payrollPaidToDate > 0)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                children: [
+                  const Icon(Icons.remove_circle_outline,
+                      color: Colors.white70, size: 14),
+                  const SizedBox(width: 6),
+                  const Text('رواتب مصروفة هذا الشهر — تُخصم من الإجمالي',
+                      style: TextStyle(color: Colors.white70, fontSize: 11)),
+                  const Spacer(),
+                  Text(
+                    '- ${breakdown.payrollPaidToDate.toStringAsFixed(0)}',
+                    style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+            ),
+          if (breakdown.payables > 0)
             Row(
               children: [
                 const Icon(Icons.remove_circle_outline,
@@ -638,7 +697,6 @@ class _WorkingCapitalSection extends StatelessWidget {
                 ),
               ],
             ),
-          ],
         ],
       ),
     );

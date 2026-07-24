@@ -53,6 +53,7 @@ class WorkingCapitalBreakdownModel {
   final double finishedGoods;
   final double inventoryValue;
   final double receivables;
+  final double payrollPaidToDate;
   final double payables;
 
   const WorkingCapitalBreakdownModel({
@@ -61,6 +62,7 @@ class WorkingCapitalBreakdownModel {
     required this.finishedGoods,
     required this.inventoryValue,
     required this.receivables,
+    required this.payrollPaidToDate,
     required this.payables,
   });
 
@@ -71,6 +73,7 @@ class WorkingCapitalBreakdownModel {
         finishedGoods: _asDouble(json['finished_goods']),
         inventoryValue: _asDouble(json['inventory_value']),
         receivables: _asDouble(json['receivables']),
+        payrollPaidToDate: _asDouble(json['payroll_paid_to_date']),
         payables: _asDouble(json['payables']),
       );
 }
@@ -629,5 +632,341 @@ class PayrollSummaryRowModel {
         penaltiesTotal: _asDouble(json['penalties_total']),
         advancesTotal: _asDouble(json['advances_total']),
         netPayable: _asDouble(json['net_payable']),
+      );
+}
+
+// ─── Simple id+name reference data (التصنيفات/المعامل) ─────────────────────
+
+class IdNameModel {
+  final int id;
+  final String name;
+  const IdNameModel({required this.id, required this.name});
+
+  factory IdNameModel.fromJson(Map<String, dynamic> json) => IdNameModel(
+        id: json['id'] as int,
+        name: json['name'] as String? ?? '',
+      );
+
+  @override
+  String toString() => name;
+}
+
+// ─── Raw materials (تعديل سعر) ──────────────────────────────────────────────
+
+class RawMaterialModel {
+  final int id;
+  final String name;
+  final String unit;
+  final double costPrice;
+  final double currentStock;
+
+  const RawMaterialModel({
+    required this.id,
+    required this.name,
+    required this.unit,
+    required this.costPrice,
+    required this.currentStock,
+  });
+
+  factory RawMaterialModel.fromJson(Map<String, dynamic> json) => RawMaterialModel(
+        id: json['id'] as int,
+        name: json['name'] as String? ?? '',
+        unit: json['unit'] as String? ?? '',
+        costPrice: _asDouble(json['cost_price']),
+        currentStock: _asDouble(json['current_stock']),
+      );
+
+  @override
+  String toString() => name;
+}
+
+// ─── Manufacturing recipes ("بدء تشغيلة جديدة") ─────────────────────────────
+// Mirrors ManufacturingRecipeController::index()/show() — same recipe
+// records the web MaterialIssuancePage.tsx uses to build the input/output
+// form for "بدء تشغيلة معمل".
+
+class RecipeInputModel {
+  final int id;
+  final String inputType; // 'raw_material' | 'product'
+  final int? rawMaterialId;
+  final int? productId;
+  final double defaultQuantity;
+  final String name;
+  final String unit;
+  final double? currentStock; // raw materials only
+
+  const RecipeInputModel({
+    required this.id,
+    required this.inputType,
+    required this.rawMaterialId,
+    required this.productId,
+    required this.defaultQuantity,
+    required this.name,
+    required this.unit,
+    required this.currentStock,
+  });
+
+  factory RecipeInputModel.fromJson(Map<String, dynamic> json) {
+    final isProduct = json['input_type'] == 'product';
+    final rawMaterial = json['raw_material'] as Map<String, dynamic>?;
+    final product = json['product'] as Map<String, dynamic>?;
+    return RecipeInputModel(
+      id: json['id'] as int,
+      inputType: json['input_type'] as String? ?? 'raw_material',
+      rawMaterialId: json['raw_material_id'] as int?,
+      productId: json['product_id'] as int?,
+      defaultQuantity: _asDouble(json['default_quantity']),
+      name: isProduct
+          ? (product?['name'] as String? ?? '')
+          : (rawMaterial?['name'] as String? ?? ''),
+      unit: (json['unit'] as String?) ??
+          (isProduct ? (product?['unit'] as String? ?? '') : (rawMaterial?['unit'] as String? ?? '')),
+      currentStock: isProduct ? null : _asDouble(rawMaterial?['current_stock']),
+    );
+  }
+}
+
+class RecipeOutputModel {
+  final int id;
+  final int productId;
+  final bool isByproduct;
+  final String name;
+  final String unit;
+
+  const RecipeOutputModel({
+    required this.id,
+    required this.productId,
+    required this.isByproduct,
+    required this.name,
+    required this.unit,
+  });
+
+  factory RecipeOutputModel.fromJson(Map<String, dynamic> json) {
+    final product = json['product'] as Map<String, dynamic>?;
+    return RecipeOutputModel(
+      id: json['id'] as int,
+      productId: json['product_id'] as int,
+      isByproduct: json['is_byproduct'] as bool? ?? false,
+      name: product?['name'] as String? ?? '',
+      unit: (json['unit'] as String?) ?? (product?['unit'] as String? ?? ''),
+    );
+  }
+}
+
+class RecipeModel {
+  final int id;
+  final String name;
+  final int categoryId;
+  final List<RecipeInputModel> inputs;
+  final List<RecipeOutputModel> outputs;
+  final int? outputWarehouseId;
+  final bool allowProductReentry;
+
+  const RecipeModel({
+    required this.id,
+    required this.name,
+    required this.categoryId,
+    required this.inputs,
+    required this.outputs,
+    required this.outputWarehouseId,
+    required this.allowProductReentry,
+  });
+
+  factory RecipeModel.fromJson(Map<String, dynamic> json) => RecipeModel(
+        id: json['id'] as int,
+        name: json['name'] as String? ?? '',
+        categoryId: json['category_id'] as int? ?? 0,
+        inputs: (json['inputs'] as List? ?? [])
+            .map((e) => RecipeInputModel.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        outputs: (json['outputs'] as List? ?? [])
+            .map((e) => RecipeOutputModel.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        outputWarehouseId: json['output_warehouse_id'] as int?,
+        allowProductReentry: json['allow_product_reentry'] as bool? ?? false,
+      );
+}
+
+// ─── Production batches ("بدء تشغيلة جديدة"/"استلام إنتاج تام") ────────────
+// Mirrors ManufacturingController::index()/show()/store()/complete() — same
+// batch records the web ProductionBatchesPage/MaterialIssuancePage/
+// ProductionReceivingPage use.
+
+class ProductionBatchSummaryModel {
+  final int id;
+  final String? batchNumber;
+  final String? recipeName;
+  final String? categoryName;
+  final String status;
+  final DateTime createdAt;
+
+  const ProductionBatchSummaryModel({
+    required this.id,
+    required this.batchNumber,
+    required this.recipeName,
+    required this.categoryName,
+    required this.status,
+    required this.createdAt,
+  });
+
+  factory ProductionBatchSummaryModel.fromJson(Map<String, dynamic> json) {
+    final recipe = json['recipe'] as Map<String, dynamic>?;
+    final category = recipe?['category'] as Map<String, dynamic>?;
+    return ProductionBatchSummaryModel(
+      id: json['id'] as int,
+      batchNumber: json['batch_number'] as String?,
+      recipeName: recipe?['name'] as String?,
+      categoryName: category?['name'] as String?,
+      status: json['status'] as String? ?? '',
+      createdAt: DateTime.tryParse(json['created_at'] as String? ?? '') ?? DateTime.now(),
+    );
+  }
+}
+
+class ProductionMaterialModel {
+  final int id;
+  final String? materialName;
+  final String? unit;
+  final double quantityUsed;
+  final double? actualQuantityUsed;
+  final String itemType;
+  final bool isReentry;
+
+  const ProductionMaterialModel({
+    required this.id,
+    required this.materialName,
+    required this.unit,
+    required this.quantityUsed,
+    required this.actualQuantityUsed,
+    required this.itemType,
+    required this.isReentry,
+  });
+
+  factory ProductionMaterialModel.fromJson(Map<String, dynamic> json) {
+    final rawMaterial = json['raw_material'] as Map<String, dynamic>?;
+    return ProductionMaterialModel(
+      id: json['id'] as int,
+      materialName: json['material_name'] as String? ?? rawMaterial?['name'] as String?,
+      unit: json['unit'] as String?,
+      quantityUsed: _asDouble(json['quantity_used']),
+      actualQuantityUsed: json['actual_quantity_used'] == null
+          ? null
+          : _asDouble(json['actual_quantity_used']),
+      itemType: json['item_type'] as String? ?? 'raw_material',
+      isReentry: json['is_reentry'] as bool? ?? false,
+    );
+  }
+}
+
+class ProductionOutputModel {
+  final int id;
+  final int productId;
+  final String productName;
+  final String unit;
+  final int? warehouseId;
+  final bool isByproduct;
+  final double? actualQuantity;
+
+  const ProductionOutputModel({
+    required this.id,
+    required this.productId,
+    required this.productName,
+    required this.unit,
+    required this.warehouseId,
+    required this.isByproduct,
+    required this.actualQuantity,
+  });
+
+  factory ProductionOutputModel.fromJson(Map<String, dynamic> json) {
+    final product = json['product'] as Map<String, dynamic>?;
+    final warehouse = json['warehouse'] as Map<String, dynamic>?;
+    return ProductionOutputModel(
+      id: json['id'] as int,
+      productId: json['product_id'] as int,
+      productName: product?['name'] as String? ?? '',
+      unit: product?['unit'] as String? ?? '',
+      warehouseId: json['warehouse_id'] as int? ?? warehouse?['id'] as int?,
+      isByproduct: json['is_byproduct'] as bool? ?? false,
+      actualQuantity:
+          json['actual_quantity'] == null ? null : _asDouble(json['actual_quantity']),
+    );
+  }
+}
+
+class ProductionBatchDetailModel {
+  final int id;
+  final String? batchNumber;
+  final String status;
+  final String? notes;
+  final List<ProductionMaterialModel> materials;
+  final List<ProductionOutputModel> outputs;
+
+  const ProductionBatchDetailModel({
+    required this.id,
+    required this.batchNumber,
+    required this.status,
+    required this.notes,
+    required this.materials,
+    required this.outputs,
+  });
+
+  factory ProductionBatchDetailModel.fromJson(Map<String, dynamic> json) =>
+      ProductionBatchDetailModel(
+        id: json['id'] as int,
+        batchNumber: json['batch_number'] as String?,
+        status: json['status'] as String? ?? '',
+        notes: json['notes'] as String?,
+        materials: (json['manufacturing_materials'] as List? ?? [])
+            .map((e) => ProductionMaterialModel.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        outputs: (json['order_outputs'] as List? ?? [])
+            .map((e) => ProductionOutputModel.fromJson(e as Map<String, dynamic>))
+            .toList(),
+      );
+}
+
+// ─── Admin sale ("عملية بيع") ────────────────────────────────────────────────
+
+class AdminSaleResultModel {
+  final int id;
+  final String? invoiceNumber;
+  final double totalAmount;
+  final double paidAmount;
+
+  const AdminSaleResultModel({
+    required this.id,
+    required this.invoiceNumber,
+    required this.totalAmount,
+    required this.paidAmount,
+  });
+
+  factory AdminSaleResultModel.fromJson(Map<String, dynamic> json) => AdminSaleResultModel(
+        id: json['id'] as int,
+        invoiceNumber: json['invoice_number'] as String?,
+        totalAmount: _asDouble(json['total_amount']),
+        paidAmount: _asDouble(json['paid_amount']),
+      );
+}
+
+// ─── Price edit ("تعديل سعر") ────────────────────────────────────────────────
+
+class PriceUpdateResultModel {
+  final int id;
+  final String name;
+  final double oldPrice;
+  final double newPrice;
+
+  const PriceUpdateResultModel({
+    required this.id,
+    required this.name,
+    required this.oldPrice,
+    required this.newPrice,
+  });
+
+  factory PriceUpdateResultModel.fromJson(Map<String, dynamic> json) => PriceUpdateResultModel(
+        id: json['id'] as int,
+        name: json['name'] as String? ?? '',
+        oldPrice: _asDouble(json['old_price']),
+        newPrice: _asDouble(json['new_price']),
       );
 }

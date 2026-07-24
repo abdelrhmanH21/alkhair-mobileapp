@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:dio/dio.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/di/service_locator.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/utils/app_snackbar.dart';
 import '../../../../core/widgets/state_views.dart';
 import '../../data/datasources/admin_remote_datasource.dart';
 import '../../data/models/admin_models.dart';
+import '../../../delegate/data/models/client_model.dart';
+import '../../../delegate/presentation/widgets/client_search_field.dart';
 import '../../../delegate/presentation/pages/invoice_detail_page.dart';
 
 /// المبيعات والتحصيلات — قائمة موحدة لفواتير الويب وتطبيق المندوب (نفس
@@ -24,12 +28,26 @@ class AdminSalesCollectionsPage extends StatefulWidget {
 class _AdminSalesCollectionsPageState extends State<AdminSalesCollectionsPage>
     with SingleTickerProviderStateMixin {
   final _remote = sl<AdminRemoteDataSource>();
-  late final TabController _tabController = TabController(length: 2, vsync: this);
+  late final TabController _tabController = TabController(length: 2, vsync: this)
+    ..addListener(() => setState(() {}));
+  Future<void> Function()? _reloadCollections;
 
   @override
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  void _openCollectionSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => _AdminCollectionFormSheet(remote: _remote),
+    ).then((saved) {
+      if (saved == true) _reloadCollections?.call();
+    });
   }
 
   @override
@@ -45,11 +63,21 @@ class _AdminSalesCollectionsPageState extends State<AdminSalesCollectionsPage>
           ],
         ),
       ),
+      floatingActionButton: _tabController.index == 1
+          ? FloatingActionButton.extended(
+              onPressed: _openCollectionSheet,
+              icon: const Icon(Icons.payments_outlined),
+              label: const Text('تحصيل من عميل'),
+            )
+          : null,
       body: TabBarView(
         controller: _tabController,
         children: [
           _SalesTab(remote: _remote),
-          _CollectionsTab(remote: _remote),
+          _CollectionsTab(
+            remote: _remote,
+            registerReload: (fn) => _reloadCollections = fn,
+          ),
         ],
       ),
     );
@@ -212,6 +240,8 @@ class _SalesTabState extends State<_SalesTab> {
           }
           final row = _rows[i];
           return Card(
+            color: AppTheme.cardBg,
+            surfaceTintColor: Colors.transparent,
             margin: const EdgeInsets.symmetric(vertical: 4),
             child: ListTile(
               onTap: row.isDelegateSourced ? () => _openRow(row) : null,
@@ -265,7 +295,8 @@ class _SalesTabState extends State<_SalesTab> {
 
 class _CollectionsTab extends StatefulWidget {
   final AdminRemoteDataSource remote;
-  const _CollectionsTab({required this.remote});
+  final void Function(Future<void> Function())? registerReload;
+  const _CollectionsTab({required this.remote, this.registerReload});
 
   @override
   State<_CollectionsTab> createState() => _CollectionsTabState();
@@ -283,6 +314,7 @@ class _CollectionsTabState extends State<_CollectionsTab> {
   @override
   void initState() {
     super.initState();
+    widget.registerReload?.call(_load);
     _load();
   }
 
@@ -431,6 +463,8 @@ class _CollectionsTabState extends State<_CollectionsTab> {
           }
           final c = _rows[idx];
           return Card(
+            color: AppTheme.cardBg,
+            surfaceTintColor: Colors.transparent,
             margin: const EdgeInsets.symmetric(vertical: 4),
             child: ListTile(
               leading: CircleAvatar(
@@ -450,4 +484,182 @@ class _CollectionsTabState extends State<_CollectionsTab> {
       ),
     );
   }
+}
+
+// ─── تحصيل من عميل (admin-initiated, not scoped to any delegate shift) ──────
+
+class _AdminCollectionFormSheet extends StatefulWidget {
+  final AdminRemoteDataSource remote;
+  const _AdminCollectionFormSheet({required this.remote});
+
+  @override
+  State<_AdminCollectionFormSheet> createState() => _AdminCollectionFormSheetState();
+}
+
+class _AdminCollectionFormSheetState extends State<_AdminCollectionFormSheet> {
+  ClientModel? _selectedClient;
+  final _searchCtrl = TextEditingController();
+  final _searchFocus = FocusNode();
+  List<ClientModel> _searchResults = [];
+  bool _searchLoading = false;
+
+  List<TreasuryModel> _treasuries = [];
+  int? _treasuryId;
+  final _amountCtrl = TextEditingController();
+  final _notesCtrl = TextEditingController();
+  bool _submitting = false;
+  bool _loadingTreasuries = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchFocus.addListener(_onSearchFocusChanged);
+    _loadTreasuries();
+  }
+
+  @override
+  void dispose() {
+    _searchFocus.removeListener(_onSearchFocusChanged);
+    _searchFocus.dispose();
+    _searchCtrl.dispose();
+    _amountCtrl.dispose();
+    _notesCtrl.dispose();
+    super.dispose();
+  }
+
+  void _onSearchFocusChanged() {
+    if (_searchFocus.hasFocus && _searchCtrl.text.isEmpty) _search('');
+  }
+
+  Future<void> _loadTreasuries() async {
+    try {
+      final treasuries = await widget.remote.fetchTreasuries();
+      setState(() {
+        _treasuries = treasuries;
+        _treasuryId = treasuries.where((t) => t.isDefault).map((t) => t.id).firstOrNull ??
+            (treasuries.isNotEmpty ? treasuries.first.id : null);
+        _loadingTreasuries = false;
+      });
+    } catch (_) {
+      setState(() => _loadingTreasuries = false);
+    }
+  }
+
+  Future<void> _search(String q) async {
+    setState(() => _searchLoading = true);
+    try {
+      final results = await widget.remote.searchCustomers(q);
+      if (!mounted) return;
+      setState(() {
+        _searchResults = results;
+        _searchLoading = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _searchLoading = false);
+    }
+  }
+
+  Future<void> _submit() async {
+    if (_selectedClient == null) {
+      AppSnackbar.showError(context, 'يرجى اختيار عميل أولاً.');
+      return;
+    }
+    final amount = double.tryParse(_amountCtrl.text);
+    if (amount == null || amount <= 0) {
+      AppSnackbar.showError(context, 'يرجى إدخال مبلغ صحيح.');
+      return;
+    }
+    if (_treasuryId == null) {
+      AppSnackbar.showError(context, 'يرجى اختيار الخزينة.');
+      return;
+    }
+    setState(() => _submitting = true);
+    try {
+      await widget.remote.submitCustomerCollection(
+        customerId: _selectedClient!.id,
+        treasuryId: _treasuryId!,
+        amount: amount,
+        notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+      );
+      if (!mounted) return;
+      Navigator.pop(context, true);
+      AppSnackbar.showSuccess(context, 'تم تسجيل التحصيل بنجاح.');
+    } on DioException catch (e) {
+      setState(() => _submitting = false);
+      AppSnackbar.showError(context, e.response?.data?['message'] as String? ?? 'فشل تسجيل التحصيل.');
+    } catch (_) {
+      setState(() => _submitting = false);
+      AppSnackbar.showError(context, 'حدث خطأ غير متوقع.');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 20,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('تحصيل من عميل', style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 16),
+          ClientSearchField(
+            controller: _searchCtrl,
+            focusNode: _searchFocus,
+            results: _searchResults,
+            isLoading: _searchLoading,
+            selectedClient: _selectedClient,
+            onSearch: _search,
+            onSelect: (c) => setState(() {
+              _selectedClient = c;
+              _searchCtrl.text = c.name;
+              _searchResults.clear();
+            }),
+            onAddNew: () =>
+                AppSnackbar.showInfo(context, 'إضافة عميل جديد متاحة من شاشة بيانات العملاء.'),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _amountCtrl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(labelText: 'المبلغ المحصّل', hintText: '0'),
+          ),
+          const SizedBox(height: 12),
+          if (!_loadingTreasuries)
+            DropdownButtonFormField<int>(
+              initialValue: _treasuryId,
+              decoration: const InputDecoration(labelText: 'الخزينة'),
+              items: _treasuries.map((t) => DropdownMenuItem(value: t.id, child: Text(t.name))).toList(),
+              onChanged: (v) => setState(() => _treasuryId = v),
+            ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _notesCtrl,
+            decoration: const InputDecoration(labelText: 'ملاحظات (اختياري)'),
+            maxLines: 2,
+          ),
+          const SizedBox(height: 20),
+          ElevatedButton.icon(
+            onPressed: _submitting ? null : _submit,
+            icon: _submitting
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                : const Icon(Icons.check_circle_outline),
+            label: Text(_submitting ? 'جاري الحفظ...' : 'حفظ التحصيل'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+extension _FirstOrNull<T> on Iterable<T> {
+  T? get firstOrNull => isEmpty ? null : first;
 }

@@ -31,12 +31,20 @@ class AppTheme {
 
   static ThemeData get theme => ThemeData(
         useMaterial3: true,
+        // Material 3 blends `colorScheme.surfaceTint` (the seed color, i.e.
+        // our blue `primary`) onto elevated surfaces — Card, Dialog,
+        // BottomSheet, etc. — by elevation. Left at its default, every
+        // white card/sheet app-wide picks up a faint blue-grey tint that
+        // washes out text contrast. Setting it transparent here fixes this
+        // once, globally, instead of overriding color/surfaceTintColor on
+        // every individual Card.
         colorScheme: ColorScheme.fromSeed(
           seedColor: primary,
           primary: primary,
           secondary: secondary,
           surface: surface,
           error: danger,
+          surfaceTint: Colors.transparent,
         ),
         scaffoldBackgroundColor: surface,
         textTheme: _textTheme,
@@ -50,6 +58,7 @@ class AppTheme {
         ),
         cardTheme: CardThemeData(
           color: cardBg,
+          surfaceTintColor: Colors.transparent,
           elevation: elevationLow,
           shadowColor: shadowColor,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),

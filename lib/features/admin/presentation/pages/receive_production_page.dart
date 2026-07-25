@@ -222,7 +222,6 @@ class _ReceiveProductionPageState extends State<ReceiveProductionPage> {
                           color: m.isReentry
                               ? AppTheme.accent.withValues(alpha: 0.06)
                               : AppTheme.cardBg,
-                          surfaceTintColor: Colors.transparent,
                           child: ListTile(
                             dense: true,
                             title: Text(m.materialName ?? '—', style: const TextStyle(fontSize: 13)),
@@ -236,8 +235,6 @@ class _ReceiveProductionPageState extends State<ReceiveProductionPage> {
                         style: Theme.of(context).textTheme.titleMedium),
                     const SizedBox(height: 8),
                     ..._outputEntries.map((entry) => Card(
-                          color: AppTheme.cardBg,
-                          surfaceTintColor: Colors.transparent,
                           child: Padding(
                             padding: const EdgeInsets.all(10),
                             child: Column(
@@ -328,8 +325,6 @@ class _ReceiveProductionPageState extends State<ReceiveProductionPage> {
                     const Text('لا توجد تشغيلات مكتملة بعد.', style: TextStyle(color: Colors.grey))
                   else
                     ..._completedBatches.map((b) => Card(
-                          color: AppTheme.cardBg,
-                          surfaceTintColor: Colors.transparent,
                           child: ListTile(
                             leading: const Icon(Icons.check_circle_outline, color: AppTheme.secondary),
                             title: Text(b.batchNumber ?? '#${b.id}',

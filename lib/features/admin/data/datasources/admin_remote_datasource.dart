@@ -122,6 +122,46 @@ abstract class AdminRemoteDataSource {
     required double amount,
     String? notes,
   });
+
+  // ── عملية شراء ────────────────────────────────────────────────────────
+  Future<void> submitPurchase({
+    int? supplierId,
+    int? labId,
+    required int treasuryId,
+    required String purchaseDate,
+    required double paidAmount,
+    String? notes,
+    required List<Map<String, dynamic>> items,
+  });
+
+  // ── عملية سداد لمورد ──────────────────────────────────────────────────
+  Future<void> submitSupplierPayment({
+    required int supplierId,
+    required int treasuryId,
+    required double amount,
+    String? notes,
+  });
+
+  // ── تسجيل هالك ────────────────────────────────────────────────────────
+  Future<void> submitWaste({
+    required String itemType,
+    int? productId,
+    int? rawMaterialId,
+    required int warehouseId,
+    required double quantity,
+    required String reason,
+  });
+
+  // ── عملية جرد ─────────────────────────────────────────────────────────
+  Future<List<InventoryCountItemModel>> fetchInventoryCountItems(int warehouseId);
+  Future<double> submitInventoryCount({
+    required int warehouseId,
+    String? notes,
+    required String settlementType,
+    int? treasuryId,
+    int? customerId,
+    required List<Map<String, dynamic>> counts,
+  });
 }
 
 class AdminRemoteDataSourceImpl implements AdminRemoteDataSource {
@@ -549,5 +589,99 @@ class AdminRemoteDataSourceImpl implements AdminRemoteDataSource {
       'amount': amount,
       if (notes != null && notes.isNotEmpty) 'notes': notes,
     });
+  }
+
+  // ── عملية شراء ────────────────────────────────────────────────────────
+
+  @override
+  Future<void> submitPurchase({
+    int? supplierId,
+    int? labId,
+    required int treasuryId,
+    required String purchaseDate,
+    required double paidAmount,
+    String? notes,
+    required List<Map<String, dynamic>> items,
+  }) async {
+    await _client.dio.post(ApiEndpoints.adminPurchase, data: {
+      if (supplierId != null) 'supplier_id': supplierId,
+      if (labId != null) 'lab_id': labId,
+      'treasury_id': treasuryId,
+      'purchase_date': purchaseDate,
+      'paid_amount': paidAmount,
+      if (notes != null && notes.isNotEmpty) 'notes': notes,
+      'items': items,
+    });
+  }
+
+  // ── عملية سداد لمورد ──────────────────────────────────────────────────
+
+  @override
+  Future<void> submitSupplierPayment({
+    required int supplierId,
+    required int treasuryId,
+    required double amount,
+    String? notes,
+  }) async {
+    await _client.dio.post(ApiEndpoints.adminSupplierPayment, data: {
+      'supplier_id': supplierId,
+      'treasury_id': treasuryId,
+      'amount': amount,
+      if (notes != null && notes.isNotEmpty) 'notes': notes,
+    });
+  }
+
+  // ── تسجيل هالك ────────────────────────────────────────────────────────
+
+  @override
+  Future<void> submitWaste({
+    required String itemType,
+    int? productId,
+    int? rawMaterialId,
+    required int warehouseId,
+    required double quantity,
+    required String reason,
+  }) async {
+    await _client.dio.post(ApiEndpoints.adminWaste, data: {
+      'item_type': itemType,
+      if (productId != null) 'product_id': productId,
+      if (rawMaterialId != null) 'raw_material_id': rawMaterialId,
+      'warehouse_id': warehouseId,
+      'quantity': quantity,
+      'reason': reason,
+    });
+  }
+
+  // ── عملية جرد ─────────────────────────────────────────────────────────
+
+  @override
+  Future<List<InventoryCountItemModel>> fetchInventoryCountItems(int warehouseId) async {
+    final res = await _client.dio.get(
+      ApiEndpoints.adminInventoryCountItems,
+      queryParameters: {'warehouse_id': warehouseId},
+    );
+    final list = (res.data as Map<String, dynamic>)['items'] as List? ?? [];
+    return list.map((e) => InventoryCountItemModel.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  @override
+  Future<double> submitInventoryCount({
+    required int warehouseId,
+    String? notes,
+    required String settlementType,
+    int? treasuryId,
+    int? customerId,
+    required List<Map<String, dynamic>> counts,
+  }) async {
+    final res = await _client.dio.post(ApiEndpoints.adminInventoryCount, data: {
+      'warehouse_id': warehouseId,
+      if (notes != null && notes.isNotEmpty) 'notes': notes,
+      'settlement_type': settlementType,
+      if (treasuryId != null) 'treasury_id': treasuryId,
+      if (customerId != null) 'customer_id': customerId,
+      'counts': counts,
+    });
+    final data = res.data as Map<String, dynamic>;
+    return (data['total_variance_value'] as num? ?? 0).toDouble();
   }
 }

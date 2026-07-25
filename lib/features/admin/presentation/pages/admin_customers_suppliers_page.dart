@@ -152,6 +152,8 @@ class _CustomersTabState extends State<_CustomersTab> {
             ),
           ),
         ),
+        if (!_loading && _error == null && _customers.isNotEmpty)
+          const _ColumnHeadersRow(leadingLabel: 'العميل', trailingLabel: 'الرصيد'),
         Expanded(child: _buildList()),
       ],
     );
@@ -313,6 +315,8 @@ class _SuppliersTabState extends State<_SuppliersTab> {
             ),
           ),
         ),
+        if (!_loading && _error == null && _suppliers.isNotEmpty)
+          const _ColumnHeadersRow(leadingLabel: 'المورد', trailingLabel: 'الرصيد'),
         Expanded(child: _buildList()),
       ],
     );
@@ -366,4 +370,31 @@ class _SuppliersTabState extends State<_SuppliersTab> {
       ),
     );
   }
+}
+
+// ─── Column headers (shared by both tabs) ──────────────────────────────────
+// Each row below is leading-name + trailing-balance with no inline label on
+// the number — a bare header makes it clear what the two columns mean
+// without relying on color alone (red/green) to convey debt vs. credit.
+
+class _ColumnHeadersRow extends StatelessWidget {
+  final String leadingLabel;
+  final String trailingLabel;
+  const _ColumnHeadersRow({required this.leadingLabel, required this.trailingLabel});
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 4),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(leadingLabel,
+                style: TextStyle(
+                    fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade600)),
+            Text(trailingLabel,
+                style: TextStyle(
+                    fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade600)),
+          ],
+        ),
+      );
 }

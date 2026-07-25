@@ -970,3 +970,32 @@ class PriceUpdateResultModel {
         newPrice: _asDouble(json['new_price']),
       );
 }
+
+// ─── Inventory count ("عملية جرد") ──────────────────────────────────────────
+
+class InventoryCountItemModel {
+  final String itemType; // 'product' | 'raw_material'
+  final int? productId;
+  final int? rawMaterialId;
+  final String name;
+  final String unit;
+  final double systemQuantity;
+
+  const InventoryCountItemModel({
+    required this.itemType,
+    required this.productId,
+    required this.rawMaterialId,
+    required this.name,
+    required this.unit,
+    required this.systemQuantity,
+  });
+
+  factory InventoryCountItemModel.fromJson(Map<String, dynamic> json) => InventoryCountItemModel(
+        itemType: json['item_type'] as String? ?? 'product',
+        productId: json['product_id'] as int?,
+        rawMaterialId: json['raw_material_id'] as int?,
+        name: json['name'] as String? ?? '',
+        unit: json['unit'] as String? ?? '',
+        systemQuantity: _asDouble(json['system_quantity']),
+      );
+}

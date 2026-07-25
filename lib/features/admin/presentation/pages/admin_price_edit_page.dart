@@ -210,8 +210,6 @@ class _ProductList extends StatelessWidget {
       itemBuilder: (_, i) {
         final p = products[i];
         return Card(
-          color: AppTheme.cardBg,
-          surfaceTintColor: Colors.transparent,
           margin: const EdgeInsets.symmetric(vertical: 4),
           child: ListTile(
             leading: const Icon(Icons.inventory_outlined, color: AppTheme.primary),
@@ -243,8 +241,6 @@ class _RawMaterialList extends StatelessWidget {
       itemBuilder: (_, i) {
         final m = materials[i];
         return Card(
-          color: AppTheme.cardBg,
-          surfaceTintColor: Colors.transparent,
           margin: const EdgeInsets.symmetric(vertical: 4),
           child: ListTile(
             leading: const Icon(Icons.science_outlined, color: AppTheme.accent),

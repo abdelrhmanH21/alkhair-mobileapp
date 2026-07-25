@@ -18,6 +18,25 @@ import '../../../delegate/presentation/pages/invoice_detail_page.dart';
 /// بنفس أسلوب AdminExpensesPage/AdminCustomersSuppliersPage. معاينة فاتورة
 /// مندوب تعيد استخدام InvoiceDetailPage/ReceiptPreviewCard كما هي — نفس
 /// الشاشة التي يفتحها المندوب لفواتيره، فهي غير مقيدة بمندوب بعينه للإدارة.
+/// Opens the "تحصيل من عميل" form as a standalone modal — reused by the
+/// "العمليات" bottom-nav sub-menu's "عملية تحصيل" entry so it doesn't need
+/// its own parallel form; [onSaved] fires after a successful submit.
+Future<void> openAdminCollectionSheet(
+  BuildContext context,
+  AdminRemoteDataSource remote, {
+  VoidCallback? onSaved,
+}) {
+  return showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+    builder: (_) => AdminCollectionFormSheet(remote: remote),
+  ).then((saved) {
+    if (saved == true) onSaved?.call();
+  });
+}
+
 class AdminSalesCollectionsPage extends StatefulWidget {
   const AdminSalesCollectionsPage({super.key});
 
@@ -39,15 +58,7 @@ class _AdminSalesCollectionsPageState extends State<AdminSalesCollectionsPage>
   }
 
   void _openCollectionSheet() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (_) => _AdminCollectionFormSheet(remote: _remote),
-    ).then((saved) {
-      if (saved == true) _reloadCollections?.call();
-    });
+    openAdminCollectionSheet(context, _remote, onSaved: () => _reloadCollections?.call());
   }
 
   @override
@@ -240,8 +251,6 @@ class _SalesTabState extends State<_SalesTab> {
           }
           final row = _rows[i];
           return Card(
-            color: AppTheme.cardBg,
-            surfaceTintColor: Colors.transparent,
             margin: const EdgeInsets.symmetric(vertical: 4),
             child: ListTile(
               onTap: row.isDelegateSourced ? () => _openRow(row) : null,
@@ -463,8 +472,6 @@ class _CollectionsTabState extends State<_CollectionsTab> {
           }
           final c = _rows[idx];
           return Card(
-            color: AppTheme.cardBg,
-            surfaceTintColor: Colors.transparent,
             margin: const EdgeInsets.symmetric(vertical: 4),
             child: ListTile(
               leading: CircleAvatar(
@@ -488,15 +495,15 @@ class _CollectionsTabState extends State<_CollectionsTab> {
 
 // ─── تحصيل من عميل (admin-initiated, not scoped to any delegate shift) ──────
 
-class _AdminCollectionFormSheet extends StatefulWidget {
+class AdminCollectionFormSheet extends StatefulWidget {
   final AdminRemoteDataSource remote;
-  const _AdminCollectionFormSheet({required this.remote});
+  const AdminCollectionFormSheet({super.key, required this.remote});
 
   @override
-  State<_AdminCollectionFormSheet> createState() => _AdminCollectionFormSheetState();
+  State<AdminCollectionFormSheet> createState() => AdminCollectionFormSheetState();
 }
 
-class _AdminCollectionFormSheetState extends State<_AdminCollectionFormSheet> {
+class AdminCollectionFormSheetState extends State<AdminCollectionFormSheet> {
   ClientModel? _selectedClient;
   final _searchCtrl = TextEditingController();
   final _searchFocus = FocusNode();

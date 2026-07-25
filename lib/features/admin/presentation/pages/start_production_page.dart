@@ -350,7 +350,6 @@ class _StartProductionPageState extends State<StartProductionPage> {
                           qty > row.recipeInput.currentStock!;
                       return Card(
                         color: warn ? AppTheme.danger.withValues(alpha: 0.06) : AppTheme.cardBg,
-                        surfaceTintColor: Colors.transparent,
                         child: Padding(
                           padding: const EdgeInsets.all(10),
                           child: Row(
@@ -404,8 +403,6 @@ class _StartProductionPageState extends State<StartProductionPage> {
                         final idx = entry.key;
                         final row = entry.value;
                         return Card(
-                          color: AppTheme.cardBg,
-                          surfaceTintColor: Colors.transparent,
                           child: Padding(
                             padding: const EdgeInsets.all(10),
                             child: Column(
@@ -463,8 +460,6 @@ class _StartProductionPageState extends State<StartProductionPage> {
                         style: TextStyle(fontSize: 11, color: Colors.grey)),
                     const SizedBox(height: 8),
                     ..._outputRows.map((row) => Card(
-                          color: AppTheme.cardBg,
-                          surfaceTintColor: Colors.transparent,
                           child: Padding(
                             padding: const EdgeInsets.all(10),
                             child: Row(
@@ -521,8 +516,6 @@ class _StartProductionPageState extends State<StartProductionPage> {
                     )
                   else
                     ..._recentBatches.map((b) => Card(
-                          color: AppTheme.cardBg,
-                          surfaceTintColor: Colors.transparent,
                           child: ListTile(
                             leading: const Icon(Icons.hourglass_top_outlined, color: AppTheme.accent),
                             title: Text(b.batchNumber ?? '#${b.id}',

@@ -222,8 +222,6 @@ class _AdminSalePageState extends State<AdminSalePage> {
                 ),
                 const SizedBox(height: 16),
                 Card(
-                  color: AppTheme.cardBg,
-                  surfaceTintColor: Colors.transparent,
                   child: Padding(
                     padding: const EdgeInsets.all(10),
                     child: Column(

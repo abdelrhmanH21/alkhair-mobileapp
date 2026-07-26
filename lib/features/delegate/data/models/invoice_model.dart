@@ -1,3 +1,5 @@
+import '../../../../core/utils/date_parsing.dart';
+
 class InvoiceSaleItem {
   final int productId;
   final String productName;
@@ -81,7 +83,7 @@ class DelegateInvoiceModel {
       balanceAddedToDebt: (json['balance_added_to_debt'] as num? ?? 0).toDouble(),
       debtReduction: (json['debt_reduction'] as num? ?? 0).toDouble(),
       customerBalance: (customer['balance'] as num? ?? 0).toDouble(),
-      createdAt: DateTime.tryParse(json['created_at'] as String? ?? '') ?? DateTime.now(),
+      createdAt: parseServerDateTime(json['created_at'] as String?),
     );
   }
 }

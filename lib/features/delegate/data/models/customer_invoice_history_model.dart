@@ -1,3 +1,5 @@
+import '../../../../core/utils/date_parsing.dart';
+
 /// Mirrors DelegateInvoiceController::customerHistory() rows — a customer's
 /// full purchase history across ALL delegates who ever served them, not just
 /// the currently authenticated one.
@@ -48,7 +50,7 @@ class CustomerInvoiceHistoryRowModel {
     return CustomerInvoiceHistoryRowModel(
       id: json['id'] as int,
       invoiceNumber: json['invoice_number'] as String? ?? '',
-      date: DateTime.tryParse(json['date'] as String? ?? '') ?? DateTime.now(),
+      date: parseServerDateTime(json['date'] as String?),
       netTotal: (json['net_total'] as num? ?? 0).toDouble(),
       cashReceived: (json['cash_received'] as num? ?? 0).toDouble(),
       debtReduction: (json['debt_reduction'] as num? ?? 0).toDouble(),

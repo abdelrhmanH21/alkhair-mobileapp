@@ -1,3 +1,5 @@
+import '../../../../core/utils/date_parsing.dart';
+
 /// Parses a field that may arrive as either a JSON number or a numeric
 /// string (Laravel's `decimal:N` Eloquent cast always serializes as a
 /// string, e.g. "55.00", unlike `float`/`double` casts).
@@ -357,8 +359,7 @@ class ExpenseModel {
       treasuryName: treasury?['name'] as String? ?? '',
       description: json['description'] as String? ?? '',
       amount: _asDouble(json['amount']),
-      expenseDate:
-          DateTime.tryParse(json['expense_date'] as String? ?? '') ?? DateTime.now(),
+      expenseDate: parseServerDateTime(json['expense_date'] as String?),
       notes: json['notes'] as String?,
       createdByName: createdBy?['name'] as String? ?? '',
       isDelegateSourced: json['delegate_loading_id'] != null,
@@ -513,7 +514,7 @@ class SalesCombinedRowModel {
         customerId: json['customer_id'] as int?,
         customerName: json['customer_name'] as String? ?? '',
         repName: json['rep_name'] as String?,
-        date: DateTime.tryParse(json['date'] as String? ?? '') ?? DateTime.now(),
+        date: parseServerDateTime(json['date'] as String?),
         total: _asDouble(json['total']),
         paidAmount: _asDouble(json['paid_amount']),
         paymentStatus: json['payment_status'] as String? ?? 'unpaid',
@@ -564,7 +565,7 @@ class CollectionModel {
       customerName: customer?['name'] as String? ?? 'غير معروف',
       treasuryName: treasury?['name'] as String? ?? '',
       amount: _asDouble(json['amount']),
-      date: DateTime.tryParse(json['date'] as String? ?? '') ?? DateTime.now(),
+      date: parseServerDateTime(json['date'] as String?),
       notes: json['notes'] as String?,
     );
   }
@@ -818,7 +819,7 @@ class ProductionBatchSummaryModel {
       recipeName: recipe?['name'] as String?,
       categoryName: category?['name'] as String?,
       status: json['status'] as String? ?? '',
-      createdAt: DateTime.tryParse(json['created_at'] as String? ?? '') ?? DateTime.now(),
+      createdAt: parseServerDateTime(json['created_at'] as String?),
     );
   }
 }
@@ -1008,7 +1009,7 @@ class AdminSaleResultModel {
       invoiceNumber: json['invoice_number'] as String?,
       totalAmount: _asDouble(json['total_amount']),
       paidAmount: _asDouble(json['paid_amount']),
-      createdAt: DateTime.tryParse(json['created_at'] as String? ?? '') ?? DateTime.now(),
+      createdAt: parseServerDateTime(json['created_at'] as String?),
       customerName: customer['name'] as String? ?? '',
       customerPhone: customer['phone'] as String? ?? '',
       customerBalanceAfterSale: _asDouble(customer['balance']),

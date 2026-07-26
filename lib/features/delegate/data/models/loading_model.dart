@@ -1,3 +1,5 @@
+import '../../../../core/utils/date_parsing.dart';
+
 class LoadingItemModel {
   final int id;
   final int productId;
@@ -59,9 +61,7 @@ class LoadingModel {
       warehouseName: wh['name'] as String? ?? '',
       status: json['status'] as String,
       createdByName: createdBy?['name'] as String?,
-      loadedAt: json['loaded_at'] != null
-          ? DateTime.tryParse(json['loaded_at'] as String)
-          : null,
+      loadedAt: tryParseServerDateTime(json['loaded_at'] as String?),
       items: (json['items'] as List? ?? [])
           .map((e) => LoadingItemModel.fromJson(e as Map<String, dynamic>))
           .toList(),

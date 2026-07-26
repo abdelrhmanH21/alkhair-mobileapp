@@ -15,6 +15,8 @@ import 'package:permission_handler/permission_handler.dart' as ph;
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
+import 'date_parsing.dart';
+
 // Default/fallback raster width (58mm paper) — used only when a receipt's
 // actual configured paper width (InvoicePrintData.paperWidthDots, sourced
 // from ReceiptSetting.paper_width) isn't available, e.g. the standalone
@@ -925,7 +927,7 @@ class InvoicePrintData {
       clientPhone: customer['phone'] as String? ?? '',
       showPhone: showPhone,
       delegateName: delegate['name'] as String? ?? 'مندوب',
-      issuedAt: DateTime.tryParse(invoiceData['created_at'] as String? ?? '') ?? DateTime.now(),
+      issuedAt: parseServerDateTime(invoiceData['created_at'] as String?),
       salesItems: items.map(toLineItem).toList(),
       returnedItems: returns.map(toLineItem).toList(),
       grossSales: (invoiceData['gross_sales_total'] as num? ?? 0).toDouble(),

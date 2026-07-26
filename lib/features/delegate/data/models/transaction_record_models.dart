@@ -1,3 +1,5 @@
+import '../../../../core/utils/date_parsing.dart';
+
 /// Expense.amount / PaymentCollection.amount are cast `decimal:2` on the
 /// backend, which Laravel serializes to JSON as a STRING ("10.00"), unlike
 /// every other money field in this app (all `float`-cast, JSON numbers) —
@@ -35,7 +37,7 @@ class ExpenseRecordModel {
       amount: _toDouble(json['amount']),
       categoryName: category?['name'] as String?,
       notes: json['notes'] as String?,
-      createdAt: DateTime.tryParse(json['created_at'] as String? ?? '') ?? DateTime.now(),
+      createdAt: parseServerDateTime(json['created_at'] as String?),
     );
   }
 }
@@ -68,7 +70,7 @@ class CustomerCollectionRecordModel {
       customerName: customer['name'] as String? ?? '',
       amount: _toDouble(json['amount']),
       notes: json['notes'] as String?,
-      createdAt: DateTime.tryParse(json['created_at'] as String? ?? '') ?? DateTime.now(),
+      createdAt: parseServerDateTime(json['created_at'] as String?),
     );
   }
 }

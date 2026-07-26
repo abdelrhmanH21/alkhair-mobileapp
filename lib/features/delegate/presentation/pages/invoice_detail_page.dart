@@ -7,6 +7,7 @@ import '../../../../core/network/api_client.dart';
 import '../../../../core/network/api_endpoints.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/bluetooth_printer.dart';
+import '../../../../core/utils/date_parsing.dart';
 import '../../../../core/widgets/state_views.dart';
 import '../../../app_config/presentation/bloc/app_config_bloc.dart';
 import 'invoice_page.dart';
@@ -150,7 +151,7 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
     final customer = invoice['customer'] as Map<String, dynamic>? ?? {};
     final items = (invoice['items'] as List? ?? []).cast<Map<String, dynamic>>();
     final returns = (invoice['returns'] as List? ?? []).cast<Map<String, dynamic>>();
-    final createdAt = DateTime.tryParse(invoice['created_at'] as String? ?? '');
+    final createdAt = tryParseServerDateTime(invoice['created_at'] as String?);
 
     return ListView(
       padding: const EdgeInsets.all(12),

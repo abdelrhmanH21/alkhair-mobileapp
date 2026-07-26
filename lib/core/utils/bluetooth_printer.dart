@@ -33,6 +33,19 @@ const int _logoWidthDots = 384;
 /// configured paper size.
 int rasterWidthDotsForPaper(String paperWidth) => paperWidth == '80mm' ? 576 : 384;
 
+/// Point size shared by the totals-block bold lines (إجمالي المبيعات،
+/// المدفوع، etc — see the `bold` branch of _renderReceiptImage's per-line
+/// size switch) and the items/returns table's row cells (name/unit/qty/
+/// price/subtotal — see addItemsTable's cellPainter calls). A real physical
+/// print showed the item rows noticeably smaller than the totals directly
+/// below them; kept as one shared constant (rather than two matching
+/// literals) so they can never drift apart again, and so a test can assert
+/// on this value directly instead of measuring rendered glyph ink (fragile —
+/// digit glyphs vs Arabic letters with descenders visually ink far less
+/// than their nominal font size would suggest).
+@visibleForTesting
+const double kReceiptBoldTextSize = 23;
+
 // SAME fixed URL on every single invoice, everywhere (web + mobile print) —
 // no query params, no per-invoice variation — so every scan, from any
 // invoice, lands on the exact same public feedback form.
@@ -492,13 +505,28 @@ class BluetoothPrinterService {
 
     void addText(String text,
         {required double size, bool bold = false, ReceiptAlign align = ReceiptAlign.left}) {
+      // Mirrors invoice_preview_page.dart's _ReceiptLine: every non-centered
+      // line reads right-aligned RTL (buildReceiptPlan's ReceiptAlign.left
+      // default is a leftover from the old raw-text printer format and
+      // isn't meaningful once real Arabic text is being laid out — the
+      // on-screen preview already ignores it the same way).
       final centered = align == ReceiptAlign.center;
       final tp = TextPainter(
         text: TextSpan(text: text, style: textStyle(size: size, bold: bold)),
         textDirection: TextDirection.rtl,
         textAlign: centered ? TextAlign.center : TextAlign.right,
       )..layout(maxWidth: contentWidth);
-      ops.add(_ReceiptDrawOp(tp.height + 6, (canvas, y) => tp.paint(canvas, Offset(hPad, y))));
+      // TextPainter.width after layout(maxWidth: ...) is the text's own
+      // measured width, NOT the maxWidth box — so painting at a fixed
+      // Offset(hPad, y) always left-anchors the glyphs regardless of
+      // textAlign above (textAlign only matters if this paragraph actually
+      // wraps to multiple lines of differing width). This is the real
+      // physical-print bug: every line rendered flush-left instead of
+      // right-aligned. Fixed by computing x from the measured width
+      // ourselves, exactly like addRow/cellPainter below already does for
+      // the items table.
+      final double x = centered ? (width - tp.width) / 2 : (width - hPad - tp.width);
+      ops.add(_ReceiptDrawOp(tp.height + 6, (canvas, y) => tp.paint(canvas, Offset(x, y))));
     }
 
     void addSeparator() {
@@ -592,7 +620,7 @@ class BluetoothPrinterService {
         ];
         addRow([
           for (var c = 0; c < 5; c++)
-            cellPainter(cells[c], c, bold: c == 0 || c == 4, size: c == 0 ? 18 : 16)
+            cellPainter(cells[c], c, bold: c == 0 || c == 4, size: kReceiptBoldTextSize)
         ], vPad: 10);
       }
     }
@@ -606,7 +634,7 @@ class BluetoothPrinterService {
         addItemsTable(d.salesItems);
         if (d.returnedItems.isNotEmpty) {
           addSeparator();
-          addText('المرتجعات:', bold: true, size: 23);
+          addText('المرتجعات:', bold: true, size: kReceiptBoldTextSize);
           addItemsTable(d.returnedItems, isReturns: true);
         }
         i++;
@@ -636,7 +664,7 @@ class BluetoothPrinterService {
           } else if (isHero) {
             size = 26;
           } else if (bold) {
-            size = 23; // rest of the totals block
+            size = kReceiptBoldTextSize; // rest of the totals block
           } else {
             size = 22;
           }

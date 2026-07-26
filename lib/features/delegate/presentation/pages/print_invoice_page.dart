@@ -9,7 +9,6 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/app_snackbar.dart';
 import '../../../../core/utils/bluetooth_printer.dart';
 import '../../../app_config/presentation/bloc/app_config_bloc.dart';
-import '../../../app_config/presentation/bloc/app_config_state.dart';
 import 'invoice_preview_page.dart';
 
 class PrintInvoicePage extends StatefulWidget {
@@ -96,10 +95,13 @@ class _PrintInvoicePageState extends State<PrintInvoicePage> {
   }
 
   /// Same construction print and preview both use, so they always render
-  /// from identical data.
-  InvoicePrintData _buildPrintData() {
-    final configState = context.read<AppConfigBloc>().state;
-    final config = configState is AppConfigLoaded ? configState.config : null;
+  /// from identical data. Awaits [AppConfigBloc.ensureLoaded] rather than
+  /// reading its state directly, so a config fetch that failed/hadn't
+  /// finished at app startup doesn't silently print a logo-less,
+  /// company-name-less receipt for the rest of the session (see
+  /// ensureLoaded's doc comment).
+  Future<InvoicePrintData> _buildPrintData() async {
+    final config = await context.read<AppConfigBloc>().ensureLoaded();
     return InvoicePrintData.fromInvoiceJson(
       _invoiceData!,
       showPhone: config?.showPhone ?? true,
@@ -111,11 +113,13 @@ class _PrintInvoicePageState extends State<PrintInvoicePage> {
     );
   }
 
-  void _openPreview() {
+  Future<void> _openPreview() async {
     if (_invoiceData == null) return;
+    final data = await _buildPrintData();
+    if (!mounted) return;
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => InvoicePreviewPage(data: _buildPrintData())),
+      MaterialPageRoute(builder: (_) => InvoicePreviewPage(data: data)),
     );
   }
 
@@ -123,7 +127,9 @@ class _PrintInvoicePageState extends State<PrintInvoicePage> {
     if (_invoiceData == null) return;
     setState(() => _printing = true);
 
-    final ok = await _printer.printInvoice(_buildPrintData());
+    final data = await _buildPrintData();
+    if (!mounted) return;
+    final ok = await _printer.printInvoice(data);
     if (!mounted) return;
     setState(() => _printing = false);
     if (ok) {

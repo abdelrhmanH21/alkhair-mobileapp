@@ -9,7 +9,6 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/bluetooth_printer.dart';
 import '../../../../core/widgets/state_views.dart';
 import '../../../app_config/presentation/bloc/app_config_bloc.dart';
-import '../../../app_config/presentation/bloc/app_config_state.dart';
 import 'invoice_page.dart';
 import 'invoice_preview_page.dart';
 import 'print_invoice_page.dart';
@@ -123,10 +122,12 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
 
   /// Builds the same InvoicePrintData print_invoice_page.dart's print flow
   /// does (via InvoicePrintData.fromInvoiceJson), so this preview always
-  /// shows exactly what would be printed.
-  void _openPreview(BuildContext context, Map<String, dynamic> invoice) {
-    final configState = context.read<AppConfigBloc>().state;
-    final config = configState is AppConfigLoaded ? configState.config : null;
+  /// shows exactly what would be printed. Awaits AppConfigBloc.ensureLoaded
+  /// (see its doc comment) rather than reading state directly, so a failed
+  /// startup config fetch doesn't silently drop the logo/company name.
+  Future<void> _openPreview(BuildContext context, Map<String, dynamic> invoice) async {
+    final config = await context.read<AppConfigBloc>().ensureLoaded();
+    if (!context.mounted) return;
     Navigator.push(
       context,
       MaterialPageRoute(

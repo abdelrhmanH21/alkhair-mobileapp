@@ -927,25 +927,97 @@ class ProductionBatchDetailModel {
 
 // ─── Admin sale ("عملية بيع") ────────────────────────────────────────────────
 
+/// One `sale_items` row from the admin-sale response, product name/unit
+/// read from its loaded `product` relation — same shape a receipt's items
+/// table needs, just under Sale/SaleItem's own field names rather than
+/// DelegateInvoiceItem's.
+class AdminSaleItemModel {
+  final String productName;
+  final String unit;
+  final double quantity;
+  final double unitPrice;
+  final double subtotal;
+
+  const AdminSaleItemModel({
+    required this.productName,
+    required this.unit,
+    required this.quantity,
+    required this.unitPrice,
+    required this.subtotal,
+  });
+
+  factory AdminSaleItemModel.fromJson(Map<String, dynamic> json) {
+    final product = json['product'] as Map<String, dynamic>? ?? {};
+    return AdminSaleItemModel(
+      productName: product['name'] as String? ?? '',
+      unit: product['unit'] as String? ?? '',
+      quantity: _asDouble(json['quantity']),
+      unitPrice: _asDouble(json['unit_price']),
+      subtotal: _asDouble(json['total']),
+    );
+  }
+}
+
+/// AdminSaleController::store()'s response — a plain `Sale` (not a
+/// DelegateInvoice) loaded with `customer`/`createdBy`/`items.product`.
+/// Carries everything a receipt needs (see admin_sale_page.dart's
+/// buildAdminSaleReceiptData adapter) rather than just the id/total/paid
+/// summary this originally held, since the admin-sale screen shows a full
+/// receipt preview/print right after submitting.
 class AdminSaleResultModel {
   final int id;
   final String? invoiceNumber;
   final double totalAmount;
   final double paidAmount;
+  final DateTime createdAt;
+  final String customerName;
+  final String customerPhone;
+  // Customer.balance AFTER this sale's own remaining-debt increment was
+  // applied (AdminSaleController::store() increments it within the same
+  // request/transaction) — the receipt adapter derives the customer's
+  // PRIOR debt from this by subtracting this sale's own remaining amount,
+  // mirroring DelegateInvoiceController's prior_debt snapshot semantics.
+  final double customerBalanceAfterSale;
+  // `created_by` in the raw JSON is the loaded User relation object (Sale's
+  // own `created_by` FK column and the `createdBy()` relation share the
+  // same snake_case key, so the eager-loaded relation wins in the
+  // serialized response) — this is the admin/manager who recorded the
+  // sale, shown as "المندوب:" on the receipt since there's no delegate.
+  final String createdByName;
+  final List<AdminSaleItemModel> items;
 
   const AdminSaleResultModel({
     required this.id,
     required this.invoiceNumber,
     required this.totalAmount,
     required this.paidAmount,
+    required this.createdAt,
+    required this.customerName,
+    required this.customerPhone,
+    required this.customerBalanceAfterSale,
+    required this.createdByName,
+    required this.items,
   });
 
-  factory AdminSaleResultModel.fromJson(Map<String, dynamic> json) => AdminSaleResultModel(
-        id: json['id'] as int,
-        invoiceNumber: json['invoice_number'] as String?,
-        totalAmount: _asDouble(json['total_amount']),
-        paidAmount: _asDouble(json['paid_amount']),
-      );
+  factory AdminSaleResultModel.fromJson(Map<String, dynamic> json) {
+    final customer = json['customer'] as Map<String, dynamic>? ?? {};
+    final createdBy = json['created_by'] as Map<String, dynamic>? ?? {};
+    final items = json['items'] as List? ?? [];
+    return AdminSaleResultModel(
+      id: json['id'] as int,
+      invoiceNumber: json['invoice_number'] as String?,
+      totalAmount: _asDouble(json['total_amount']),
+      paidAmount: _asDouble(json['paid_amount']),
+      createdAt: DateTime.tryParse(json['created_at'] as String? ?? '') ?? DateTime.now(),
+      customerName: customer['name'] as String? ?? '',
+      customerPhone: customer['phone'] as String? ?? '',
+      customerBalanceAfterSale: _asDouble(customer['balance']),
+      createdByName: createdBy['name'] as String? ?? '',
+      items: items
+          .map((e) => AdminSaleItemModel.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    );
+  }
 }
 
 // ─── Price edit ("تعديل سعر") ────────────────────────────────────────────────

@@ -12,8 +12,25 @@ import '../../../app_config/presentation/bloc/app_config_bloc.dart';
 import 'invoice_preview_page.dart';
 
 class PrintInvoicePage extends StatefulWidget {
-  final int invoiceId;
-  const PrintInvoicePage({super.key, required this.invoiceId});
+  /// Delegate-invoice path: fetched by id from
+  /// `GET /delegate/invoices/{id}` and mapped via
+  /// `InvoicePrintData.fromInvoiceJson`.
+  final int? invoiceId;
+
+  /// Pre-built print-data path: for callers (e.g. the admin "عملية بيع"
+  /// screen) that already have everything a receipt needs right in their
+  /// own submit response, with a shape too different from the delegate
+  /// invoice JSON to share `fromInvoiceJson` — they build an
+  /// [InvoicePrintData] themselves (see admin_sale_page.dart's small
+  /// adapter) and this screen just renders/prints it, skipping the fetch
+  /// entirely. Reuses this exact screen (and InvoicePreviewPage/
+  /// ReceiptPreviewCard below it) rather than a parallel print screen, so
+  /// both entry points always share one rendering/printing pipeline.
+  final InvoicePrintData? initialData;
+
+  const PrintInvoicePage({super.key, this.invoiceId, this.initialData})
+      : assert(invoiceId != null || initialData != null,
+            'PrintInvoicePage needs either invoiceId or initialData');
 
   @override
   State<PrintInvoicePage> createState() => _PrintInvoicePageState();
@@ -34,7 +51,11 @@ class _PrintInvoicePageState extends State<PrintInvoicePage> {
   @override
   void initState() {
     super.initState();
-    _loadInvoice();
+    if (widget.initialData != null) {
+      _loading = false;
+    } else {
+      _loadInvoice();
+    }
     _discoverDevices();
   }
 
@@ -95,12 +116,16 @@ class _PrintInvoicePageState extends State<PrintInvoicePage> {
   }
 
   /// Same construction print and preview both use, so they always render
-  /// from identical data. Awaits [AppConfigBloc.ensureLoaded] rather than
-  /// reading its state directly, so a config fetch that failed/hadn't
-  /// finished at app startup doesn't silently print a logo-less,
-  /// company-name-less receipt for the rest of the session (see
-  /// ensureLoaded's doc comment).
+  /// from identical data. When [PrintInvoicePage.initialData] was supplied,
+  /// the caller already built the final print data (including config
+  /// fields) themselves, so this just returns it unchanged. Otherwise
+  /// awaits [AppConfigBloc.ensureLoaded] rather than reading its state
+  /// directly, so a config fetch that failed/hadn't finished at app startup
+  /// doesn't silently print a logo-less, company-name-less receipt for the
+  /// rest of the session (see ensureLoaded's doc comment).
   Future<InvoicePrintData> _buildPrintData() async {
+    final initial = widget.initialData;
+    if (initial != null) return initial;
     final config = await context.read<AppConfigBloc>().ensureLoaded();
     return InvoicePrintData.fromInvoiceJson(
       _invoiceData!,
@@ -114,7 +139,6 @@ class _PrintInvoicePageState extends State<PrintInvoicePage> {
   }
 
   Future<void> _openPreview() async {
-    if (_invoiceData == null) return;
     final data = await _buildPrintData();
     if (!mounted) return;
     Navigator.push(
@@ -124,7 +148,6 @@ class _PrintInvoicePageState extends State<PrintInvoicePage> {
   }
 
   Future<void> _print() async {
-    if (_invoiceData == null) return;
     setState(() => _printing = true);
 
     final data = await _buildPrintData();
@@ -173,7 +196,7 @@ class _PrintInvoicePageState extends State<PrintInvoicePage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  if (_invoiceData != null) ...[
+                  if (_invoiceData != null || widget.initialData != null) ...[
                     Card(
                       child: Padding(
                         padding: const EdgeInsets.all(14),
@@ -181,16 +204,16 @@ class _PrintInvoicePageState extends State<PrintInvoicePage> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'فاتورة: ${_invoiceData!['invoice_number']}',
+                              'فاتورة: ${widget.initialData?.invoiceNumber ?? _invoiceData!['invoice_number']}',
                               style: const TextStyle(
                                   fontSize: 16, fontWeight: FontWeight.bold),
                             ),
                             const SizedBox(height: 6),
                             Text(
-                              'العميل: ${(_invoiceData!['customer'] as Map?)?['name'] ?? ''}',
+                              'العميل: ${widget.initialData?.clientName ?? (_invoiceData!['customer'] as Map?)?['name'] ?? ''}',
                             ),
                             Text(
-                              'الصافي: ${_invoiceData!['net_total']}',
+                              'الصافي: ${widget.initialData?.netTotal ?? _invoiceData!['net_total']}',
                               style: const TextStyle(
                                   color: AppTheme.primary,
                                   fontWeight: FontWeight.bold),

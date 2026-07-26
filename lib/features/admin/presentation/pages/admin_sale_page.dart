@@ -4,14 +4,70 @@ import 'package:dio/dio.dart';
 import '../../../../core/di/service_locator.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/app_snackbar.dart';
+import '../../../../core/utils/bluetooth_printer.dart';
+import '../../../app_config/data/models/app_config_model.dart';
 import '../../../app_config/presentation/bloc/app_config_bloc.dart';
 import '../../../app_config/presentation/bloc/app_config_state.dart';
 import '../../../delegate/data/models/client_model.dart';
 import '../../../delegate/presentation/bloc/delegate_bloc.dart';
+import '../../../delegate/presentation/pages/print_invoice_page.dart';
 import '../../../delegate/presentation/widgets/add_client_sheet.dart';
 import '../../../delegate/presentation/widgets/client_search_field.dart';
 import '../../data/datasources/admin_remote_datasource.dart';
 import '../../data/models/admin_models.dart';
+
+/// Maps an admin-sale submission result onto the same [InvoicePrintData]
+/// shape delegate invoices use, so it can go through the exact same
+/// ReceiptPreviewCard/PrintInvoicePage pipeline instead of a parallel one.
+/// AdminSaleController has no delegate, so "المندوب:" shows the admin who
+/// recorded the sale (r.createdByName) — chosen over omitting the line
+/// entirely, since it's genuinely useful here (who processed this sale) and
+/// needs no change to the shared buildReceiptPlan().
+InvoicePrintData buildAdminSaleReceiptData(AdminSaleResultModel r, {AppConfigModel? config}) {
+  final remaining = (r.totalAmount - r.paidAmount).clamp(0, double.infinity).toDouble();
+  // customerBalanceAfterSale already includes this sale's own `remaining`
+  // (AdminSaleController::store() increments Customer.balance in the same
+  // transaction) — subtracting it back out recovers what the customer owed
+  // BEFORE this sale, exactly like DelegateInvoiceController's prior_debt
+  // snapshot. Safe here because this preview always happens immediately
+  // after creation, in the very same response — no time for the balance to
+  // have moved for any other reason yet.
+  final priorDebt = (r.customerBalanceAfterSale - remaining).clamp(0, double.infinity).toDouble();
+  return InvoicePrintData(
+    invoiceNumber: r.invoiceNumber ?? '#${r.id}',
+    clientName: r.customerName,
+    clientPhone: r.customerPhone,
+    showPhone: config?.showPhone ?? true,
+    delegateName: r.createdByName,
+    issuedAt: r.createdAt,
+    salesItems: r.items
+        .map((i) => PrintLineItem(
+              productName: i.productName,
+              unit: i.unit,
+              quantity: i.quantity,
+              unitPrice: i.unitPrice,
+              subtotal: i.subtotal,
+            ))
+        .toList(),
+    returnedItems: const [],
+    grossSales: r.totalAmount,
+    totalReturns: 0,
+    netTotal: r.totalAmount,
+    cashReceived: r.paidAmount,
+    balanceAddedToDebt: remaining,
+    priorDebt: priorDebt,
+    // AdminSaleController::store() has no overpayment-reduces-prior-debt
+    // logic (unlike DelegateInvoiceController) — paidAmount is capped at
+    // totalAmount, so no receipt data would ever justify a "تم سداد ..."
+    // line for this endpoint.
+    debtReduction: 0,
+    companyName: config?.companyName ?? '',
+    headerText: config?.headerText,
+    footerText: config?.footerText,
+    logoUrl: config?.logoUrl,
+    paperWidthDots: rasterWidthDotsForPaper(config?.paperWidth ?? '80mm'),
+  );
+}
 
 class _SaleLineItem {
   final int productId;
@@ -214,6 +270,21 @@ class _AdminSalePageState extends State<AdminSalePage> {
       });
       AppSnackbar.showSuccess(
           context, 'تم حفظ عملية البيع${result.invoiceNumber != null ? ' — ${result.invoiceNumber}' : ''}');
+
+      // Same receipt-preview/print flow delegate invoices use — see
+      // buildAdminSaleReceiptData's adapter above. AppConfigBloc.ensureLoaded
+      // (not reading .state directly) so a failed startup config fetch
+      // doesn't silently print a logo-less receipt (see its doc comment).
+      final config = await context.read<AppConfigBloc>().ensureLoaded();
+      if (!mounted) return;
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PrintInvoicePage(
+            initialData: buildAdminSaleReceiptData(result, config: config),
+          ),
+        ),
+      );
     } on DioException catch (e) {
       setState(() => _submitting = false);
       AppSnackbar.showError(

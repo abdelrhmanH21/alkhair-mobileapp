@@ -58,7 +58,6 @@ void main() {
       netTotal: 35,
       cashReceived: 35,
       balanceAddedToDebt: 0,
-      customerBalanceAfter: 0,
       companyName: 'الخير للألبان',
       // No logoUrl — keeps this test free of network/image decoding.
     );

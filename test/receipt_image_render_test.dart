@@ -45,7 +45,7 @@ void main() {
       netTotal: 85,
       cashReceived: 50,
       balanceAddedToDebt: 35,
-      customerBalanceAfter: 120,
+      priorDebt: 120,
       companyName: 'الخير للألبان',
       headerText: 'أهلاً بكم',
       footerText: 'شكراً لتعاملكم معنا',
@@ -99,5 +99,36 @@ void main() {
     expect(image, isNotNull);
     expect(image!.width, 384);
     expect(image.height, greaterThan(50));
+  });
+
+  testWidgets('rasterWidthDotsForPaper: an 80mm receipt renders at 576 dots, not the 58mm default',
+      (tester) async {
+    // Regression test for the "receipt shifted right / not centered on an
+    // 80mm roll" report: the renderer used to always render at a fixed
+    // 384-dot (58mm) width regardless of ReceiptSetting.paper_width, so an
+    // 80mm printer only ever filled the left ~2/3 of its paper instead of
+    // the image matching (and thus centering on) the actual roll width.
+    final data = InvoicePrintData(
+      invoiceNumber: 'DINV-000302',
+      clientName: 'عميل',
+      clientPhone: '',
+      delegateName: 'مندوب',
+      issuedAt: DateTime(2026, 7, 17),
+      salesItems: const [
+        PrintLineItem(productName: 'زبادي', unit: 'كيس', quantity: 3, unitPrice: 12.5, subtotal: 37.5),
+      ],
+      returnedItems: const [],
+      grossSales: 37.5,
+      totalReturns: 0,
+      netTotal: 37.5,
+      cashReceived: 37.5,
+      balanceAddedToDebt: 0,
+      paperWidthDots: rasterWidthDotsForPaper('80mm'),
+    );
+
+    final image = await tester.runAsync(() => BluetoothPrinterService()
+        .renderReceiptImageForTest(data, styleBuilder: _offlineStyle));
+    expect(image, isNotNull);
+    expect(image!.width, 576);
   });
 }

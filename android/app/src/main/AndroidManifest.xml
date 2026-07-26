@@ -1,5 +1,21 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- Bluetooth thermal-printer connectivity (Xprinter etc. over SPP).
+         Pre-Android 12 (API < 31): BLUETOOTH/BLUETOOTH_ADMIN are normal
+         permissions granted at install time; classic-Bluetooth device
+         discovery on these versions also requires ACCESS_FINE_LOCATION.
+         Android 12+ (API 31+): BLUETOOTH_CONNECT/BLUETOOTH_SCAN replace them
+         as dangerous runtime permissions that must be explicitly requested
+         (see BluetoothPrinterService.ensureBluetoothPermission) — declaring
+         them here is necessary but not sufficient. neverForLocation on
+         BLUETOOTH_SCAN is safe since this app only connects to an
+         already-paired device and never derives location from scan
+         results, which lets Android 12+ skip the location permission. -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30"/>
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="30"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation"/>
     <application
         android:label="Alkhair Dairies"
         android:name="${applicationName}"

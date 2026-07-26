@@ -30,6 +30,7 @@ class _PrintInvoicePageState extends State<PrintInvoicePage> {
   BluetoothInfo? _selectedDevice;
   bool _printing = false;
   bool _connected = false;
+  bool _connecting = false;
 
   @override
   void initState() {
@@ -66,13 +67,31 @@ class _PrintInvoicePageState extends State<PrintInvoicePage> {
 
   Future<void> _connect() async {
     if (_selectedDevice == null) return;
-    final ok = await _printer.connect(_selectedDevice!.macAdress);
-    setState(() => _connected = ok);
+    setState(() => _connecting = true);
+    final result = await _printer.connect(_selectedDevice!.macAdress);
     if (!mounted) return;
-    if (ok) {
+    setState(() {
+      _connecting = false;
+      _connected = result.success;
+    });
+    if (result.success) {
       AppSnackbar.showSuccess(context, 'متصل بالطابعة');
-    } else {
-      AppSnackbar.showError(context, 'فشل الاتصال بالطابعة');
+      return;
+    }
+    AppSnackbar.showError(context, _connectErrorMessage(result.error));
+  }
+
+  String _connectErrorMessage(PrinterConnectError? error) {
+    switch (error) {
+      case PrinterConnectError.permissionDenied:
+        return 'تأكد من صلاحيات البلوتوث في إعدادات الهاتف';
+      case PrinterConnectError.bluetoothOff:
+        return 'يرجى تفعيل البلوتوث في الهاتف';
+      case PrinterConnectError.timeout:
+        return 'انتهت مهلة الاتصال، تأكد أن الطابعة قريبة ومُشغّلة وحاول مرة أخرى';
+      case PrinterConnectError.unknown:
+      case null:
+        return 'فشل الاتصال بالطابعة، تأكد من تشغيلها وقربها من الهاتف';
     }
   }
 
@@ -88,6 +107,7 @@ class _PrintInvoicePageState extends State<PrintInvoicePage> {
       headerText: config?.headerText,
       footerText: config?.footerText,
       logoUrl: config?.logoUrl,
+      paperWidth: config?.paperWidth ?? '80mm',
     );
   }
 
@@ -212,14 +232,23 @@ class _PrintInvoicePageState extends State<PrintInvoicePage> {
                   ),
                   const SizedBox(height: 8),
                   OutlinedButton.icon(
-                    onPressed: _selectedDevice == null ? null : _connect,
-                    icon: Icon(
-                      _connected
-                          ? Icons.bluetooth_connected
-                          : Icons.bluetooth,
-                      color: _connected ? AppTheme.secondary : null,
-                    ),
-                    label: Text(_connected ? 'متصل' : 'اتصال بالطابعة'),
+                    onPressed:
+                        (_selectedDevice == null || _connecting) ? null : _connect,
+                    icon: _connecting
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Icon(
+                            _connected
+                                ? Icons.bluetooth_connected
+                                : Icons.bluetooth,
+                            color: _connected ? AppTheme.secondary : null,
+                          ),
+                    label: Text(_connecting
+                        ? 'جارٍ الاتصال...'
+                        : (_connected ? 'متصل' : 'اتصال بالطابعة')),
                   ),
                   const Spacer(),
                   ElevatedButton.icon(

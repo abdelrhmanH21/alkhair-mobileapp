@@ -11,6 +11,10 @@ class AppConfigModel {
   final String headerText;
   final String footerText;
   final bool showPhone;
+  // '58mm' or '80mm' — matches ReceiptSetting::paper_width on the backend.
+  // Drives the printed receipt's raster width so it fills/centers on the
+  // physical paper roll instead of always rendering at a fixed width.
+  final String paperWidth;
 
   const AppConfigModel({
     required this.companyName,
@@ -20,6 +24,7 @@ class AppConfigModel {
     this.headerText = '',
     this.footerText = '',
     this.showPhone = true,
+    this.paperWidth = '80mm',
   });
 
   factory AppConfigModel.fromJson(Map<String, dynamic> json) => AppConfigModel(
@@ -31,5 +36,6 @@ class AppConfigModel {
         headerText: json['header_text'] as String? ?? '',
         footerText: json['footer_text'] as String? ?? '',
         showPhone: json['show_phone'] as bool? ?? true,
+        paperWidth: json['paper_width'] as String? ?? '80mm',
       );
 }

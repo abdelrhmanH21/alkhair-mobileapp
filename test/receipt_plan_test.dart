@@ -32,7 +32,7 @@ void main() {
     netTotal: 296.5,
     cashReceived: 200,
     balanceAddedToDebt: 96.5,
-    customerBalanceAfter: 596.5,
+    priorDebt: 300,
     companyName: 'الخير للألبان',
     headerText: 'مرحباً بكم',
     footerText: 'شكراً لتعاملكم معنا',
@@ -57,7 +57,29 @@ void main() {
     netTotal: 20,
     cashReceived: 20,
     balanceAddedToDebt: 0,
-    customerBalanceAfter: 0,
+  );
+
+  final overpaid = InvoicePrintData(
+    invoiceNumber: 'DINV-000125',
+    clientName: 'منى سيد',
+    clientPhone: '01055555555',
+    delegateName: 'مندوب',
+    issuedAt: DateTime(2026, 7, 17),
+    salesItems: const [
+      PrintLineItem(productName: 'لبن', unit: 'لتر', quantity: 1, unitPrice: 20, subtotal: 20),
+    ],
+    returnedItems: const [],
+    grossSales: 20,
+    totalReturns: 0,
+    netTotal: 20,
+    cashReceived: 100,
+    balanceAddedToDebt: 0,
+    // Prior debt (30) is smaller than the overpayment (100 - 20 = 80), so
+    // it's fully paid off — debtReduction caps at priorDebt, and the
+    // leftover 50 beyond that is a separate unapplied_overpayment the
+    // receipt doesn't need to show here.
+    priorDebt: 30,
+    debtReduction: 30,
   );
 
   group('buildReceiptPlan — conditional lines present when applicable', () {
@@ -86,12 +108,17 @@ void main() {
       expect(plan.whereType<ReceiptLogoElement>().length, 1);
     });
 
-    test('المتبقي reflects balanceAddedToDebt when positive', () {
-      expect(texts.singleWhere((t) => t.startsWith('المتبقي:')), contains('96.50'));
+    test('المتبقي reflects netDue (netTotal + priorDebt) minus cashReceived', () {
+      // netDue = 296.5 + 300 (priorDebt) = 596.5; remaining = 596.5 - 200 = 396.5
+      expect(texts.singleWhere((t) => t.startsWith('المتبقي:')), contains('396.50'));
     });
 
-    test('إجمالي المديونية reflects customerBalanceAfter', () {
-      expect(texts.singleWhere((t) => t.startsWith('إجمالي المديونية:')), contains('596.50'));
+    test('إجمالي المديونية reflects priorDebt (customer balance BEFORE this invoice)', () {
+      expect(texts.singleWhere((t) => t.startsWith('إجمالي المديونية:')), contains('300.00'));
+    });
+
+    test('الصافي المستحق reflects netTotal + priorDebt', () {
+      expect(texts.singleWhere((t) => t.startsWith('الصافي المستحق:')), contains('596.50'));
     });
 
     test('long product name wraps onto continuation lines (12-char chunks)', () {
@@ -166,8 +193,33 @@ void main() {
       expect(texts.any((t) => t == full.companyName), isFalse);
     });
 
-    test('المتبقي is 0.00 when balanceAddedToDebt is 0', () {
-      expect(texts.singleWhere((t) => t.startsWith('المتبقي:')), contains('0.00'));
+    test('المتبقي is omitted when netDue - cashReceived is 0', () {
+      expect(texts.any((t) => t.startsWith('المتبقي:')), isFalse);
+    });
+
+    test('إجمالي المديونية is omitted when priorDebt is 0', () {
+      expect(texts.any((t) => t.startsWith('إجمالي المديونية:')), isFalse);
+    });
+  });
+
+  group('buildReceiptPlan — overpayment beyond prior debt shows سداد message', () {
+    late List<String> texts;
+
+    setUp(() {
+      final plan = buildReceiptPlan(overpaid);
+      texts = plan.whereType<ReceiptTextLine>().map((e) => e.text).toList();
+    });
+
+    test('shows إجمالي المديونية for the prior debt', () {
+      expect(texts.singleWhere((t) => t.startsWith('إجمالي المديونية:')), contains('30.00'));
+    });
+
+    test('omits المتبقي since netDue - cashReceived is negative', () {
+      expect(texts.any((t) => t.startsWith('المتبقي:')), isFalse);
+    });
+
+    test('shows the سداد من الدين السابق message with debtReduction instead', () {
+      expect(texts.any((t) => t.contains('تم سداد 30.00 ج.م من دين العميل السابق')), isTrue);
     });
   });
 }

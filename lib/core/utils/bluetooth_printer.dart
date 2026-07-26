@@ -11,17 +11,68 @@ import 'package:image/image.dart' as img;
 // otherwise collide with dart:ui's TextDirection (rtl/ltr) that Canvas text
 // painting below needs — only DateFormat is used from this import.
 import 'package:intl/intl.dart' hide TextDirection;
+import 'package:permission_handler/permission_handler.dart' as ph;
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 
-// Safe raster width for both 58mm and 80mm printers (no per-printer paper
-// width is plumbed into this flow yet — see ReceiptSetting.paper_width).
+// Default/fallback raster width (58mm paper) — used only when a receipt's
+// actual configured paper width (InvoicePrintData.paperWidthDots, sourced
+// from ReceiptSetting.paper_width) isn't available, e.g. the standalone
+// logo preview in invoice_preview_page.dart which isn't tied to a specific
+// receipt render.
 const int _logoWidthDots = 384;
+
+/// Printer raster width in dots for a given `ReceiptSetting.paper_width`
+/// value ('58mm'/'80mm'). Standard ESC/POS thermal printers at 203dpi print
+/// 384 dots on 58mm paper (~48mm printable) and 576 dots on 80mm paper
+/// (~72mm printable) — rendering the receipt at a width that doesn't match
+/// the physical paper leaves it flush to one side of the roll instead of
+/// filling/centering it, which is what "receipt shifted right and not
+/// centered" in a real 80mm print turned out to be: the image was always
+/// rendered at the 58mm-equivalent 384-dot width regardless of the admin's
+/// configured paper size.
+int rasterWidthDotsForPaper(String paperWidth) => paperWidth == '80mm' ? 576 : 384;
 // Luminance below this prints as a black dot — shared by the real ESC/POS
 // rasterizer and the on-screen preview's logo rendering so both show the
 // exact same monochrome conversion.
 const int _blackThreshold = 160;
 
 enum ReceiptAlign { left, center, right }
+
+/// Why a [BluetoothPrinterService.connect] attempt failed, specific enough
+/// for the UI to show an actionable Arabic message instead of one generic
+/// "فشل الاتصال بالطابعة" regardless of cause.
+enum PrinterConnectError {
+  /// BLUETOOTH_CONNECT/BLUETOOTH_SCAN runtime permission not granted. On
+  /// Android 12+ this is the most likely root cause of "connection
+  /// failures" — declaring the permissions in the manifest is not enough,
+  /// they must be requested at runtime, and the native
+  /// print_bluetooth_thermal plugin silently no-ops (never resolves the
+  /// method-channel call) rather than erroring when they're missing.
+  permissionDenied,
+
+  /// The phone's Bluetooth radio itself is off.
+  bluetoothOff,
+
+  /// Bluetooth Classic (SPP) connect attempt exceeded [BluetoothPrinterService._connectTimeout] —
+  /// thermal printers can legitimately take a few seconds to accept a
+  /// connection, but an unreachable/powered-off printer would otherwise
+  /// hang the UI indefinitely instead of failing.
+  timeout,
+
+  /// Permission granted, Bluetooth on, connect attempt returned/threw
+  /// without a more specific reason (e.g. printer off, out of range,
+  /// already connected to another phone).
+  unknown,
+}
+
+class PrinterConnectResult {
+  final bool success;
+  final PrinterConnectError? error;
+  const PrinterConnectResult.ok()
+      : success = true,
+        error = null;
+  const PrinterConnectResult.fail(this.error) : success = false;
+}
 
 /// One structural element of a receipt, in print order. This is the single
 /// source of truth for "what a receipt contains" — [buildReceiptPlan] builds
@@ -149,22 +200,37 @@ List<ReceiptElement> buildReceiptPlan(InvoicePrintData d) {
 
   separator();
 
-  // 10. Overall customer debt AFTER this invoice's effect
-  addLine('إجمالي المديونية: ${d.customerBalanceAfter.toStringAsFixed(2)} ج.م',
-      bold: true, align: ReceiptAlign.right);
+  // 10. Customer's PRIOR outstanding balance — BEFORE this invoice's own
+  // effect is applied — only shown when there was existing debt.
+  if (d.priorDebt > 0) {
+    addLine('إجمالي المديونية: ${d.priorDebt.toStringAsFixed(2)} ج.م',
+        bold: true, align: ReceiptAlign.right);
+  }
 
-  // 11. This invoice's own net total
-  addLine('الصافي المستحق: ${d.netTotal.toStringAsFixed(2)} ج.م',
+  // 11. Total now due against this invoice: its own net total plus
+  // whatever the customer already owed beforehand.
+  final netDue = d.netTotal + d.priorDebt;
+  addLine('الصافي المستحق: ${netDue.toStringAsFixed(2)} ج.م',
       bold: true, align: ReceiptAlign.right);
 
   // 12. Cash received
   addLine('المدفوع: ${d.cashReceived.toStringAsFixed(2)} ج.م',
       bold: true, align: ReceiptAlign.right);
 
-  // 13. This invoice's own remaining amount only (distinct from #10)
-  final remaining = d.balanceAddedToDebt > 0 ? d.balanceAddedToDebt : 0.0;
-  addLine('المتبقي: ${remaining.toStringAsFixed(2)} ج.م',
-      bold: true, align: ReceiptAlign.right);
+  // 13. What's left of #11 after cash received — equals the customer's
+  // actual new balance (see DelegateInvoiceController::store()'s
+  // debtDelta/debtReduction logic). Mutually exclusive with the
+  // overpayment message: an overpayment beyond the prior debt can make
+  // this negative, in which case debt_reduction (the actual amount paid
+  // off) is shown instead rather than a computed negative "remaining".
+  final remaining = netDue - d.cashReceived;
+  if (remaining > 0) {
+    addLine('المتبقي: ${remaining.toStringAsFixed(2)} ج.م',
+        bold: true, align: ReceiptAlign.right);
+  } else if (d.debtReduction > 0) {
+    addLine('تم سداد ${d.debtReduction.toStringAsFixed(2)} ج.م من دين العميل السابق',
+        bold: true, align: ReceiptAlign.right);
+  }
 
   // 14. Footer text
   if (d.footerText != null && d.footerText!.isNotEmpty) {
@@ -212,31 +278,83 @@ class _ReceiptDrawOp {
 }
 
 class BluetoothPrinterService {
+  /// Bluetooth Classic (SPP) connect can legitimately take a few seconds on
+  /// a real thermal printer — long enough that a short timeout would read
+  /// as an intermittent failure, but bounded so an unreachable printer
+  /// can't hang the UI forever (see [PrinterConnectError.timeout] doc).
+  static const _connectTimeout = Duration(seconds: 12);
+
+  /// Requests BLUETOOTH_CONNECT + BLUETOOTH_SCAN (Android 12+ dangerous
+  /// runtime permissions — declaring them in the manifest alone does not
+  /// grant them). On pre-Android-12 devices permission_handler reports
+  /// these as already granted since the OS has no such runtime permission
+  /// there, so this is safe to call unconditionally regardless of SDK
+  /// version.
+  Future<bool> ensureBluetoothPermission() async {
+    final statuses = await [
+      ph.Permission.bluetoothConnect,
+      ph.Permission.bluetoothScan,
+    ].request();
+    return statuses.values.every((s) => s.isGranted);
+  }
+
   Future<List<BluetoothInfo>> discoverDevices() async {
+    if (!await ensureBluetoothPermission()) return [];
     try {
-      return await PrintBluetoothThermal.pairedBluetooths;
+      // Defensive timeout: the native plugin silently never resolves this
+      // call when BLUETOOTH_CONNECT is missing instead of throwing, so a
+      // permission revoked after ensureBluetoothPermission() returned
+      // (e.g. via OS settings mid-session) would otherwise hang forever.
+      return await PrintBluetoothThermal.pairedBluetooths.timeout(_connectTimeout);
     } catch (_) {
       return [];
     }
   }
 
-  Future<bool> connect(String macAddress) async {
-    try {
-      return await PrintBluetoothThermal.connect(macPrinterAddress: macAddress);
-    } catch (_) {
-      return false;
+  /// Connects to [macAddress], surfacing *why* a failure happened via
+  /// [PrinterConnectResult.error] instead of collapsing every cause into a
+  /// single generic false. Always disconnects any stale/half-open
+  /// connection first and retries once (also disconnect-first) before
+  /// giving up, since a previous connection left dangling by a killed app
+  /// or a dropped socket is a common intermittent-failure cause on
+  /// Bluetooth Classic thermal printers.
+  Future<PrinterConnectResult> connect(String macAddress) async {
+    if (!await ensureBluetoothPermission()) {
+      return const PrinterConnectResult.fail(PrinterConnectError.permissionDenied);
     }
+    if (!await PrintBluetoothThermal.bluetoothEnabled) {
+      return const PrinterConnectResult.fail(PrinterConnectError.bluetoothOff);
+    }
+
+    Future<PrinterConnectResult> attempt() async {
+      await disconnect();
+      try {
+        final ok = await PrintBluetoothThermal.connect(macPrinterAddress: macAddress)
+            .timeout(_connectTimeout);
+        return ok
+            ? const PrinterConnectResult.ok()
+            : const PrinterConnectResult.fail(PrinterConnectError.unknown);
+      } on TimeoutException {
+        return const PrinterConnectResult.fail(PrinterConnectError.timeout);
+      } catch (_) {
+        return const PrinterConnectResult.fail(PrinterConnectError.unknown);
+      }
+    }
+
+    final first = await attempt();
+    if (first.success) return first;
+    return attempt();
   }
 
   Future<void> disconnect() async {
     try {
-      await PrintBluetoothThermal.disconnect;
+      await PrintBluetoothThermal.disconnect.timeout(_connectTimeout);
     } catch (_) {}
   }
 
   Future<bool> get isConnected async {
     try {
-      return await PrintBluetoothThermal.connectionStatus;
+      return await PrintBluetoothThermal.connectionStatus.timeout(_connectTimeout);
     } catch (_) {
       return false;
     }
@@ -245,7 +363,10 @@ class BluetoothPrinterService {
   Future<bool> printInvoice(InvoicePrintData data) async {
     try {
       final ticket = await _buildTicket(data);
-      return await PrintBluetoothThermal.writeBytes(ticket);
+      // Same defensive timeout as connect()/disconnect() — a receipt bitmap
+      // is a much larger payload than a bare connect handshake, so this
+      // gets more headroom.
+      return await PrintBluetoothThermal.writeBytes(ticket).timeout(const Duration(seconds: 25));
     } catch (e) {
       debugPrint('Print error: $e');
       return false;
@@ -325,9 +446,9 @@ class BluetoothPrinterService {
     InvoicePrintData d, {
     TextStyle Function({required double size, required bool bold})? styleBuilder,
   }) async {
-    const double width = 384.0; // == _logoWidthDots, the logo's raster width
+    final double width = d.paperWidthDots.toDouble();
     const double hPad = 10;
-    const double contentWidth = width - hPad * 2;
+    final double contentWidth = width - hPad * 2;
 
     final ops = <_ReceiptDrawOp>[];
 
@@ -370,7 +491,7 @@ class BluetoothPrinterService {
     }
 
     Future<void> addLogo(String logoUrl) async {
-      final resized = await _fetchAndResizeLogo(logoUrl);
+      final resized = await _fetchAndResizeLogo(logoUrl, width: width.toInt());
       if (resized == null) return;
       final uiImage = await _decodeUiImage(resized);
       final h = uiImage.height.toDouble();
@@ -378,10 +499,13 @@ class BluetoothPrinterService {
           h + 12, (canvas, y) => canvas.drawImage(uiImage, Offset(0, y), Paint())));
     }
 
-    // Right-to-left column order (rightmost = الصنف, leftmost = الإجمالي),
-    // matching invoice_preview_page.dart's RTL items table — relative flex
-    // widths carried over unchanged from that widget's _columnWidths.
-    const columnFlex = [3.2, 1.1, 1.1, 1.4, 1.6];
+    // Right-to-left column order (rightmost = الصنف, leftmost = الإجمالي).
+    // Widened relative to invoice_preview_page.dart's on-screen
+    // _columnWidths (which has much more horizontal room to work with) —
+    // on a real 58mm/384-dot print the old [3.2, 1.1, 1.1, 1.4, 1.6] ratio
+    // left الوحدة/الكمية/السعر too narrow for their own header labels at
+    // 16px bold, clipping them mid-glyph ("الوحدة" → "الوحـ").
+    const columnFlex = [2.6, 1.4, 1.2, 1.5, 1.7];
     final columnFlexTotal = columnFlex.reduce((a, b) => a + b);
     final columnWidths =
         columnFlex.map((f) => contentWidth * f / columnFlexTotal).toList(growable: false);
@@ -392,14 +516,18 @@ class BluetoothPrinterService {
       edgeCursor -= w;
     }
 
+    // No maxLines/ellipsis on any column: wider columns above make a
+    // header/cell wrapping to a second line the rare case rather than the
+    // norm, but when it does happen the row simply grows taller (addRow's
+    // rowHeight is the max of its cells' measured heights) instead of ever
+    // silently clipping text — the failure mode this whole table rewrite
+    // exists to eliminate.
     TextPainter cellPainter(String text, int col, {required bool bold, required double size}) {
       final isNameCol = col == 0;
       return TextPainter(
         text: TextSpan(text: text, style: textStyle(size: size, bold: bold)),
         textDirection: TextDirection.rtl,
         textAlign: isNameCol ? TextAlign.right : TextAlign.center,
-        maxLines: isNameCol ? null : 1,
-        ellipsis: isNameCol ? null : '…',
       )..layout(maxWidth: columnWidths[col] - 4);
     }
 
@@ -418,7 +546,7 @@ class BluetoothPrinterService {
 
     void addItemsTable(List<PrintLineItem> items, {bool isReturns = false}) {
       const headers = ['الصنف', 'الوحدة', 'الكمية', 'السعر', 'الإجمالي'];
-      addRow([for (var c = 0; c < 5; c++) cellPainter(headers[c], c, bold: true, size: 16)],
+      addRow([for (var c = 0; c < 5; c++) cellPainter(headers[c], c, bold: true, size: 14)],
           vPad: 8);
       addSeparator();
       for (final item in items) {
@@ -433,7 +561,7 @@ class BluetoothPrinterService {
         ];
         addRow([
           for (var c = 0; c < 5; c++)
-            cellPainter(cells[c], c, bold: c == 0 || c == 4, size: c == 0 ? 20 : 18)
+            cellPainter(cells[c], c, bold: c == 0 || c == 4, size: c == 0 ? 18 : 16)
         ], vPad: 10);
       }
     }
@@ -557,12 +685,12 @@ class BluetoothPrinterService {
     }
   }
 
-  Future<img.Image?> _fetchAndResizeLogo(String logoUrl) async {
+  Future<img.Image?> _fetchAndResizeLogo(String logoUrl, {int width = _logoWidthDots}) async {
     final bytes = await _fetchLogoBytes(logoUrl);
     if (bytes == null) return null;
     final decoded = img.decodeImage(bytes);
     if (decoded == null) return null;
-    return img.copyResize(decoded, width: _logoWidthDots);
+    return img.copyResize(decoded, width: width);
   }
 
   /// Same fetch → resize → 1-bit threshold pipeline as the real print path,
@@ -646,11 +774,20 @@ class InvoicePrintData {
   final double netTotal;
   final double cashReceived;
   final double balanceAddedToDebt;
-  final double customerBalanceAfter;
+  // Customer's outstanding balance BEFORE this invoice's own effect —
+  // drives "إجمالي المديونية"/"الصافي المستحق" (see buildReceiptPlan).
+  final double priorDebt;
+  // Amount of priorDebt actually paid off by an overpayment on this
+  // invoice — mutually exclusive with a positive "المتبقي" in the receipt.
+  final double debtReduction;
   final String companyName;
   final String? headerText;
   final String? footerText;
   final String? logoUrl;
+  // Printer raster width in dots — see rasterWidthDotsForPaper. Defaults to
+  // the 58mm width so existing callers/tests that don't pass it keep the
+  // prior fixed-width behavior.
+  final int paperWidthDots;
 
   const InvoicePrintData({
     required this.invoiceNumber,
@@ -667,11 +804,13 @@ class InvoicePrintData {
     required this.netTotal,
     required this.cashReceived,
     required this.balanceAddedToDebt,
-    this.customerBalanceAfter = 0,
+    this.priorDebt = 0,
+    this.debtReduction = 0,
     this.companyName = '',
     this.headerText,
     this.footerText,
     this.logoUrl,
+    this.paperWidthDots = _logoWidthDots,
   });
 
   /// Builds print data from a raw `/delegate/invoices/{id}` JSON payload —
@@ -685,6 +824,7 @@ class InvoicePrintData {
     String? headerText,
     String? footerText,
     String? logoUrl,
+    String paperWidth = '58mm',
   }) {
     final customer = invoiceData['customer'] as Map<String, dynamic>? ?? {};
     final delegate = invoiceData['delegate'] as Map<String, dynamic>? ?? {};
@@ -718,11 +858,13 @@ class InvoicePrintData {
       netTotal: (invoiceData['net_total'] as num? ?? 0).toDouble(),
       cashReceived: (invoiceData['cash_received'] as num? ?? 0).toDouble(),
       balanceAddedToDebt: (invoiceData['balance_added_to_debt'] as num? ?? 0).toDouble(),
-      customerBalanceAfter: (customer['balance'] as num? ?? 0).toDouble(),
+      priorDebt: (invoiceData['prior_debt'] as num? ?? 0).toDouble(),
+      debtReduction: (invoiceData['debt_reduction'] as num? ?? 0).toDouble(),
       companyName: companyName,
       headerText: headerText,
       footerText: footerText,
       logoUrl: logoUrl,
+      paperWidthDots: rasterWidthDotsForPaper(paperWidth),
     );
   }
 }

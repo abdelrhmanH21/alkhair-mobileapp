@@ -138,6 +138,7 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
             headerText: config?.headerText,
             footerText: config?.footerText,
             logoUrl: config?.logoUrl,
+            paperWidth: config?.paperWidth ?? '80mm',
           ),
         ),
       ),
@@ -200,26 +201,44 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
           ),
           const SizedBox(height: 12),
         ],
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _TotalRow('إجمالي المبيعات', invoice['gross_sales_total']),
-                _TotalRow('إجمالي المرتجعات', invoice['total_returns']),
-                const Divider(),
-                _TotalRow('الصافي', invoice['net_total'], bold: true),
-                _TotalRow('النقد المستلم', invoice['cash_received']),
-                if (((invoice['balance_added_to_debt'] as num?) ?? 0) > 0)
-                  _TotalRow('دين مضاف', invoice['balance_added_to_debt'], color: AppTheme.danger),
-                if (((invoice['debt_reduction'] as num?) ?? 0) > 0)
-                  _TotalRow('سداد من الدين السابق', invoice['debt_reduction'],
-                      color: AppTheme.secondary),
-              ],
+        Builder(builder: (context) {
+          // الصافي المستحق = this invoice's own net (gross - discount -
+          // returns) plus the customer's prior outstanding balance —
+          // matches buildReceiptPlan()/DelegateInvoiceReceiptModal.tsx's
+          // formula exactly, so all three surfaces agree. المتبقي is what's
+          // left of that after cash_received; it equals the customer's
+          // actual new balance (see DelegateInvoiceController::store()'s
+          // debtDelta/debtReduction logic) — shown only when positive,
+          // mutually exclusive with the "سداد من الدين السابق" banner below.
+          final netTotal = (invoice['net_total'] as num? ?? 0).toDouble();
+          final priorDebt = (invoice['prior_debt'] as num? ?? 0).toDouble();
+          final cashReceived = (invoice['cash_received'] as num? ?? 0).toDouble();
+          final netDue = netTotal + priorDebt;
+          final remaining = netDue - cashReceived;
+          final discountAmount = (invoice['discount_amount'] as num? ?? 0).toDouble();
+          final totalReturns = (invoice['total_returns'] as num? ?? 0).toDouble();
+
+          return Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _TotalRow('إجمالي المبيعات', invoice['gross_sales_total']),
+                  if (discountAmount > 0)
+                    _TotalRow('الخصم', -discountAmount, color: AppTheme.danger),
+                  if (totalReturns > 0)
+                    _TotalRow('المرتجعات', -totalReturns, color: AppTheme.danger),
+                  const Divider(),
+                  if (priorDebt > 0) _TotalRow('إجمالي المديونية', priorDebt),
+                  _TotalRow('الصافي المستحق', netDue, bold: true),
+                  _TotalRow('المدفوع', cashReceived),
+                  if (remaining > 0) _TotalRow('المتبقي', remaining, color: AppTheme.danger),
+                ],
+              ),
             ),
-          ),
-        ),
+          );
+        }),
         if (((invoice['debt_reduction'] as num?) ?? 0) > 0) ...[
           const SizedBox(height: 12),
           Container(

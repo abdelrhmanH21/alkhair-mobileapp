@@ -440,7 +440,7 @@ class _ReportsEntryCard extends StatelessWidget {
                       Text('التقارير', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                       SizedBox(height: 2),
                       Text('تقارير المناطق والأصناف لمبيعاتك',
-                          style: TextStyle(fontSize: 12, color: Colors.grey)),
+                          style: TextStyle(fontSize: 12, color: AppTheme.textMuted)),
                     ],
                   ),
                 ),
@@ -469,7 +469,10 @@ class _ShipmentSummaryCard extends StatelessWidget {
     if (loading.isPendingPickup) return AppTheme.accent;
     if (loading.isAccepted || loading.isInTransit) return AppTheme.primary;
     if (loading.isCompleted) return AppTheme.secondary;
-    return Colors.grey;
+    // Background fill behind white badge text — needs to stay dark enough
+    // for that text to stay readable (bare Colors.grey/500 fails contrast
+    // with white text on top; shade600 keeps ~4.6:1).
+    return Colors.grey.shade600;
   }
 
   String get _statusLabel {

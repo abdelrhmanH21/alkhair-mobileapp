@@ -71,7 +71,7 @@ class _TruckStockPageState extends State<TruckStockPage> {
                   Icon(Icons.inventory_2_outlined, size: 64, color: Colors.grey),
                   SizedBox(height: 12),
                   Text('لا يوجد مخزون في الشاحنة',
-                      style: TextStyle(color: Colors.grey)),
+                      style: TextStyle(color: AppTheme.textMuted)),
                 ],
               ),
             );
@@ -103,7 +103,7 @@ class _TruckStockPageState extends State<TruckStockPage> {
                             color: AppTheme.primary),
                       ),
                       const Text('متبقي',
-                          style: TextStyle(fontSize: 10, color: Colors.grey)),
+                          style: TextStyle(fontSize: 10, color: AppTheme.textMuted)),
                     ],
                   ),
                 ),

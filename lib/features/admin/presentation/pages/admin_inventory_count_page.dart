@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import '../../../../core/di/service_locator.dart';
+import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/app_snackbar.dart';
 import '../../data/datasources/admin_remote_datasource.dart';
 import '../../data/models/admin_models.dart';
@@ -193,7 +194,7 @@ class _AdminInventoryCountPageState extends State<AdminInventoryCountPage> {
                 const SizedBox(height: 16),
                 if (_loadingItems) const Center(child: CircularProgressIndicator()),
                 if (!_loadingItems && _warehouseId != null && _items.isEmpty)
-                  const Text('لا توجد أصناف في هذا المخزن.', style: TextStyle(color: Colors.grey)),
+                  const Text('لا توجد أصناف في هذا المخزن.', style: TextStyle(color: AppTheme.textMuted)),
                 ..._items.map((item) => Card(
                       child: Padding(
                         padding: const EdgeInsets.all(10),
@@ -207,7 +208,7 @@ class _AdminInventoryCountPageState extends State<AdminInventoryCountPage> {
                                   Text(item.name,
                                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                                   Text('النظام: ${item.systemQuantity.toStringAsFixed(2)} ${item.unit}',
-                                      style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                                      style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
                                 ],
                               ),
                             ),

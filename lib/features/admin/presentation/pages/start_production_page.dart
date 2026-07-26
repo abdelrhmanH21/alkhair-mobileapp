@@ -342,7 +342,7 @@ class _StartProductionPageState extends State<StartProductionPage> {
                         style: Theme.of(context).textTheme.titleMedium),
                     const SizedBox(height: 4),
                     const Text('ستُخصم فوراً من المخزون. اترك فارغاً للمكوّنات غير المستخدمة.',
-                        style: TextStyle(fontSize: 11, color: Colors.grey)),
+                        style: TextStyle(fontSize: 11, color: AppTheme.textMuted)),
                     const SizedBox(height: 8),
                     ..._inputRows.map((row) {
                       final qty = double.tryParse(row._qtyCtrl.text) ?? 0;
@@ -457,7 +457,7 @@ class _StartProductionPageState extends State<StartProductionPage> {
                         style: Theme.of(context).textTheme.titleMedium),
                     const SizedBox(height: 4),
                     const Text('الكميات الفعلية تُسجَّل لاحقاً في «استلام إنتاج تام»',
-                        style: TextStyle(fontSize: 11, color: Colors.grey)),
+                        style: TextStyle(fontSize: 11, color: AppTheme.textMuted)),
                     const SizedBox(height: 8),
                     ..._outputRows.map((row) => Card(
                           child: Padding(
@@ -512,7 +512,7 @@ class _StartProductionPageState extends State<StartProductionPage> {
                   if (_recentBatches.isEmpty)
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 8),
-                      child: Text('لا توجد تشغيلات جارية', style: TextStyle(color: Colors.grey)),
+                      child: Text('لا توجد تشغيلات جارية', style: TextStyle(color: AppTheme.textMuted)),
                     )
                   else
                     ..._recentBatches.map((b) => Card(

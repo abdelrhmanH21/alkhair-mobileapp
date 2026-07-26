@@ -235,7 +235,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 12),
                 child: Text('لا توجد مصروفات مسجلة في هذه الوردية.',
-                    style: TextStyle(color: Colors.grey)),
+                    style: TextStyle(color: AppTheme.textMuted)),
               )
             else
               ..._expenses.map((e) => Card(
@@ -273,7 +273,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 12),
                 child: Text('لا توجد تحصيلات مسجلة في هذه الوردية.',
-                    style: TextStyle(color: Colors.grey)),
+                    style: TextStyle(color: AppTheme.textMuted)),
               )
             else
               ..._collections.map((c) => Card(
@@ -352,7 +352,7 @@ class _ActionCard extends StatelessWidget {
                           style: TextStyle(
                               fontWeight: FontWeight.bold,
                               fontSize: 16,
-                              color: enabled ? null : Colors.grey)),
+                              color: enabled ? null : AppTheme.textMuted)),
                       const SizedBox(height: 2),
                       Text(subtitle,
                           style: TextStyle(

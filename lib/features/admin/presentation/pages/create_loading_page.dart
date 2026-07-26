@@ -239,7 +239,7 @@ class _FormBody extends StatelessWidget {
                 ),
                 child: const Center(
                   child: Text('اضغط على "إضافة منتج" لإضافة بنود التحميلة',
-                      style: TextStyle(color: Colors.grey)),
+                      style: TextStyle(color: AppTheme.textMuted)),
                 ),
               ),
 

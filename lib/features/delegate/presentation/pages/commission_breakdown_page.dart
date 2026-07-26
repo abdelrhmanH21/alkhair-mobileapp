@@ -50,7 +50,7 @@ class _CommissionBreakdownPageState extends State<CommissionBreakdownPage> {
           final days = _days ?? [];
           if (days.isEmpty) {
             return const Center(
-                child: Text('لا توجد مبيعات هذا الشهر بعد.', style: TextStyle(color: Colors.grey)));
+                child: Text('لا توجد مبيعات هذا الشهر بعد.', style: TextStyle(color: AppTheme.textMuted)));
           }
           final totalCommission = days.fold<double>(0, (s, d) => s + d.commissionEarned);
           final totalSales = days.fold<double>(0, (s, d) => s + d.totalSales);

@@ -1,12 +1,18 @@
+import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:image/image.dart' as img;
-import 'package:intl/intl.dart';
+// intl's own TextDirection (LTR/RTL, used for locale directionality) would
+// otherwise collide with dart:ui's TextDirection (rtl/ltr) that Canvas text
+// painting below needs — only DateFormat is used from this import.
+import 'package:intl/intl.dart' hide TextDirection;
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
 
-const int _charsPerLine = 42; // standard 80mm ESC/POS columns
 // Safe raster width for both 58mm and 80mm printers (no per-printer paper
 // width is plumbed into this flow yet — see ReceiptSetting.paper_width).
 const int _logoWidthDots = 384;
@@ -191,6 +197,20 @@ List<String> _wrapText(String text, int maxWidth) {
   return lines;
 }
 
+/// One already-measured piece of [BluetoothPrinterService._renderReceiptImage]'s
+/// layout: its final height, and a callback that paints it onto the receipt
+/// [Canvas] at a given `y`. Building the whole layout as a list of these
+/// first (each already knows its own height from a completed [TextPainter]
+/// layout pass) is what lets the canvas's total height be known before a
+/// single pixel is drawn — a [ui.PictureRecorder]'s canvas can be painted
+/// at any coordinate, but converting it to a fixed-size image up front
+/// requires that size in advance.
+class _ReceiptDrawOp {
+  final double height;
+  final void Function(Canvas canvas, double y) paint;
+  _ReceiptDrawOp(this.height, this.paint);
+}
+
 class BluetoothPrinterService {
   Future<List<BluetoothInfo>> discoverDevices() async {
     try {
@@ -232,56 +252,32 @@ class BluetoothPrinterService {
     }
   }
 
+  /// Builds the full print ticket. The *entire* receipt — logo, header,
+  /// invoice info, items table, totals, footer — is rendered once as a
+  /// single bitmap ([_renderReceiptImage]) and sent as one or more ESC/POS
+  /// raster-image commands, instead of the raw ESC/POS text commands this
+  /// used to send line-by-line.
+  ///
+  /// Why: a real physical print showed the logo rendering fine (it already
+  /// went through this bitmap path) but every line of Arabic *text* printing
+  /// as garbled/wrong characters — thermal printers generally have no
+  /// correct Arabic codepage for their built-in text commands, so raw text
+  /// bytes sent via ESC/POS's text command are misinterpreted regardless of
+  /// encoding. Routing everything through Flutter's own text
+  /// shaping/painting (the same engine that already renders Arabic
+  /// correctly on-screen in InvoicePreviewPage) and sending the result as
+  /// pixels sidesteps that entirely — the printer never has to interpret a
+  /// single Arabic character.
   Future<List<int>> _buildTicket(InvoicePrintData d) async {
     final List<int> bytes = [];
-
     void addBytes(List<int> b) => bytes.addAll(b);
-
-    // ESC/POS helper: add text as UTF-8 + LF
-    void line(String text) {
-      addBytes([...text.codeUnits, 0x0A]);
-    }
-
-    // Bold ON: ESC E 1
-    void boldOn() => addBytes([0x1B, 0x45, 0x01]);
-    void boldOff() => addBytes([0x1B, 0x45, 0x00]);
-
-    // Align center: ESC a 1 / right: ESC a 2 / left: ESC a 0
-    void alignCenter() => addBytes([0x1B, 0x61, 0x01]);
-    void alignRight() => addBytes([0x1B, 0x61, 0x02]);
-    void alignLeft() => addBytes([0x1B, 0x61, 0x00]);
-    void setAlign(ReceiptAlign a) {
-      switch (a) {
-        case ReceiptAlign.left:
-          alignLeft();
-        case ReceiptAlign.center:
-          alignCenter();
-        case ReceiptAlign.right:
-          alignRight();
-      }
-    }
+    void line(String text) => addBytes([...text.codeUnits, 0x0A]);
 
     // Initialize printer
     addBytes([0x1B, 0x40]);
 
-    for (final element in buildReceiptPlan(d)) {
-      switch (element) {
-        case ReceiptLogoElement(:final logoUrl):
-          final raster = await _fetchAndRasterizeLogo(logoUrl);
-          if (raster != null) {
-            alignCenter();
-            addBytes(raster);
-            line('');
-          }
-        case ReceiptSeparatorLine():
-          line('-' * _charsPerLine);
-        case ReceiptTextLine(:final text, :final bold, :final align):
-          setAlign(align);
-          if (bold) boldOn();
-          line(text);
-          if (bold) boldOff();
-      }
-    }
+    final receiptImage = await _renderReceiptImage(d);
+    addBytes(_toChunkedRasterCommands(receiptImage));
 
     line('');
     line('');
@@ -290,6 +286,254 @@ class BluetoothPrinterService {
     // Feed and cut: GS V 66 3
     addBytes([0x1D, 0x56, 0x42, 0x03]);
 
+    return bytes;
+  }
+
+  /// Test-only seam onto [_renderReceiptImage] — kept private/underscored
+  /// internally so nothing outside this file relies on the rendering
+  /// pipeline's shape, but exposed for a widget test to exercise the real
+  /// Canvas/TextPainter layout code (privacy in Dart is per-file, so a test
+  /// file in test/ genuinely cannot call a leading-underscore member here).
+  /// [styleBuilder] lets a test skip google_fonts' network font fetch
+  /// entirely (see _renderReceiptImage's own doc comment) — omit it to test
+  /// against the real Cairo font.
+  @visibleForTesting
+  Future<img.Image> renderReceiptImageForTest(
+    InvoicePrintData d, {
+    TextStyle Function({required double size, required bool bold})? styleBuilder,
+  }) =>
+      _renderReceiptImage(d, styleBuilder: styleBuilder);
+
+  /// Renders [d]'s full receipt — via [buildReceiptPlan], the same content
+  /// plan the on-screen preview (InvoicePreviewPage/ReceiptPreviewCard)
+  /// renders from — onto a single white-background RGBA image at
+  /// [_logoWidthDots] width (the same safe width already used for the
+  /// logo). Text is laid out/painted with Flutter's own TextPainter (Cairo,
+  /// matching the app's theme font), so Arabic shaping/joining is correct;
+  /// [_toChunkedRasterCommands] later thresholds the whole image (text,
+  /// logo and all) to 1-bit black/white for the printer, exactly like the
+  /// logo-only path already did.
+  ///
+  /// The items/returns table is special-cased exactly like
+  /// invoice_preview_page.dart's ReceiptPreviewCard does: buildReceiptPlan()
+  /// bakes item rows into fixed-width monospace strings meant for a printer
+  /// text column grid, which isn't meaningful once we're laying out real
+  /// wrapped/shaped text, so a proper table is drawn directly from
+  /// d.salesItems/d.returnedItems instead, and every raw printer-formatted
+  /// item line buildReceiptPlan() emitted for that span is skipped.
+  Future<img.Image> _renderReceiptImage(
+    InvoicePrintData d, {
+    TextStyle Function({required double size, required bool bold})? styleBuilder,
+  }) async {
+    const double width = 384.0; // == _logoWidthDots, the logo's raster width
+    const double hPad = 10;
+    const double contentWidth = width - hPad * 2;
+
+    final ops = <_ReceiptDrawOp>[];
+
+    // Overridable only so a widget test can inject a plain TextStyle and
+    // avoid google_fonts' network font fetch — production always uses the
+    // real Cairo builder below (same font the rest of the app's theme uses).
+    final buildTextStyle = styleBuilder ??
+        ({required double size, required bool bold}) => GoogleFonts.cairo(
+              fontSize: size,
+              fontWeight: bold ? FontWeight.bold : FontWeight.normal,
+              color: Colors.black,
+              height: 1.25,
+            );
+    TextStyle textStyle({required double size, required bool bold}) => buildTextStyle(
+          size: size,
+          bold: bold,
+        );
+
+    void addText(String text,
+        {required double size, bool bold = false, ReceiptAlign align = ReceiptAlign.left}) {
+      final centered = align == ReceiptAlign.center;
+      final tp = TextPainter(
+        text: TextSpan(text: text, style: textStyle(size: size, bold: bold)),
+        textDirection: TextDirection.rtl,
+        textAlign: centered ? TextAlign.center : TextAlign.right,
+      )..layout(maxWidth: contentWidth);
+      ops.add(_ReceiptDrawOp(tp.height + 6, (canvas, y) => tp.paint(canvas, Offset(hPad, y))));
+    }
+
+    void addSeparator() {
+      ops.add(_ReceiptDrawOp(16, (canvas, y) {
+        canvas.drawLine(
+          Offset(hPad, y + 8),
+          Offset(width - hPad, y + 8),
+          Paint()
+            ..color = Colors.black
+            ..strokeWidth = 1.4,
+        );
+      }));
+    }
+
+    Future<void> addLogo(String logoUrl) async {
+      final resized = await _fetchAndResizeLogo(logoUrl);
+      if (resized == null) return;
+      final uiImage = await _decodeUiImage(resized);
+      final h = uiImage.height.toDouble();
+      ops.add(_ReceiptDrawOp(
+          h + 12, (canvas, y) => canvas.drawImage(uiImage, Offset(0, y), Paint())));
+    }
+
+    // Right-to-left column order (rightmost = الصنف, leftmost = الإجمالي),
+    // matching invoice_preview_page.dart's RTL items table — relative flex
+    // widths carried over unchanged from that widget's _columnWidths.
+    const columnFlex = [3.2, 1.1, 1.1, 1.4, 1.6];
+    final columnFlexTotal = columnFlex.reduce((a, b) => a + b);
+    final columnWidths =
+        columnFlex.map((f) => contentWidth * f / columnFlexTotal).toList(growable: false);
+    final columnRightEdges = <double>[];
+    var edgeCursor = width - hPad;
+    for (final w in columnWidths) {
+      columnRightEdges.add(edgeCursor);
+      edgeCursor -= w;
+    }
+
+    TextPainter cellPainter(String text, int col, {required bool bold, required double size}) {
+      final isNameCol = col == 0;
+      return TextPainter(
+        text: TextSpan(text: text, style: textStyle(size: size, bold: bold)),
+        textDirection: TextDirection.rtl,
+        textAlign: isNameCol ? TextAlign.right : TextAlign.center,
+        maxLines: isNameCol ? null : 1,
+        ellipsis: isNameCol ? null : '…',
+      )..layout(maxWidth: columnWidths[col] - 4);
+    }
+
+    void addRow(List<TextPainter> cells, {required double vPad}) {
+      final rowHeight = cells.map((p) => p.height).reduce((a, b) => a > b ? a : b);
+      ops.add(_ReceiptDrawOp(rowHeight + vPad, (canvas, y) {
+        for (var c = 0; c < cells.length; c++) {
+          final p = cells[c];
+          final x = c == 0
+              ? columnRightEdges[c] - p.width
+              : columnRightEdges[c] - columnWidths[c] + (columnWidths[c] - p.width) / 2;
+          p.paint(canvas, Offset(x, y));
+        }
+      }));
+    }
+
+    void addItemsTable(List<PrintLineItem> items, {bool isReturns = false}) {
+      const headers = ['الصنف', 'الوحدة', 'الكمية', 'السعر', 'الإجمالي'];
+      addRow([for (var c = 0; c < 5; c++) cellPainter(headers[c], c, bold: true, size: 16)],
+          vPad: 8);
+      addSeparator();
+      for (final item in items) {
+        final qtyText =
+            isReturns ? '-${item.quantity.toStringAsFixed(2)}' : item.quantity.toStringAsFixed(2);
+        final cells = [
+          item.productName,
+          item.unit,
+          qtyText,
+          item.unitPrice.toStringAsFixed(2),
+          item.subtotal.toStringAsFixed(2),
+        ];
+        addRow([
+          for (var c = 0; c < 5; c++)
+            cellPainter(cells[c], c, bold: c == 0 || c == 4, size: c == 0 ? 20 : 18)
+        ], vPad: 10);
+      }
+    }
+
+    final elements = buildReceiptPlan(d);
+    var i = 0;
+    while (i < elements.length) {
+      final el = elements[i];
+
+      if (el is ReceiptTextLine && el.text.trimLeft().startsWith('الصنف')) {
+        addItemsTable(d.salesItems);
+        if (d.returnedItems.isNotEmpty) {
+          addSeparator();
+          addText('المرتجعات:', bold: true, size: 23);
+          addItemsTable(d.returnedItems, isReturns: true);
+        }
+        i++;
+        while (i < elements.length) {
+          final next = elements[i];
+          if (next is ReceiptTextLine && next.text.startsWith('إجمالي المبيعات:')) break;
+          i++;
+        }
+        continue;
+      }
+
+      switch (el) {
+        case ReceiptLogoElement(:final logoUrl):
+          await addLogo(logoUrl);
+        case ReceiptSeparatorLine():
+          addSeparator();
+        case ReceiptTextLine(:final text, :final bold, :final align):
+          final isHero = text.startsWith('الصافي المستحق:');
+          final isCentered = align == ReceiptAlign.center;
+          final double size;
+          if (isCentered && bold) {
+            size = 30; // company name — receipt title
+          } else if (isCentered) {
+            size = 20; // header/footer welcome text
+          } else if (isHero) {
+            size = 26;
+          } else if (bold) {
+            size = 23; // rest of the totals block
+          } else {
+            size = 22;
+          }
+          addText(text, bold: bold, align: align, size: size);
+      }
+      i++;
+    }
+
+    final totalHeight = (ops.fold<double>(0, (s, o) => s + o.height) + 20).ceil();
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder);
+    canvas.drawRect(
+        Rect.fromLTWH(0, 0, width, totalHeight.toDouble()), Paint()..color = Colors.white);
+    var y = 10.0;
+    for (final op in ops) {
+      op.paint(canvas, y);
+      y += op.height;
+    }
+    final picture = recorder.endRecording();
+    final uiImage = await picture.toImage(width.toInt(), totalHeight);
+    final byteData = await uiImage.toByteData(format: ui.ImageByteFormat.rawRgba);
+    return img.Image.fromBytes(
+      width: width.toInt(),
+      height: totalHeight,
+      bytes: byteData!.buffer,
+      numChannels: 4,
+    );
+  }
+
+  /// Decodes an [img.Image] (already-resized logo pixels) into a [ui.Image]
+  /// so it can be drawn onto the receipt [Canvas] with `drawImage` —
+  /// avoids a PNG-encode/decode round trip since [img.Image.getBytes] can
+  /// hand back raw RGBA directly.
+  Future<ui.Image> _decodeUiImage(img.Image image) {
+    final completer = Completer<ui.Image>();
+    ui.decodeImageFromPixels(
+      image.getBytes(order: img.ChannelOrder.rgba),
+      image.width,
+      image.height,
+      ui.PixelFormat.rgba8888,
+      completer.complete,
+    );
+    return completer.future;
+  }
+
+  /// Thresholds [image] to 1-bit black/white (via [_isDarkOnWhite], the same
+  /// alpha-aware check the logo path uses) and slices it into horizontal
+  /// bands before ESC/POS-encoding each one via [_toRasterCommand] — a
+  /// single GS-v-0 command for a whole multi-hundred-dot-tall receipt risks
+  /// overrunning a thermal printer's print buffer, so this sends it as
+  /// several shorter raster commands instead, back to back.
+  List<int> _toChunkedRasterCommands(img.Image image, {int bandHeight = 200}) {
+    final bytes = <int>[];
+    for (var y = 0; y < image.height; y += bandHeight) {
+      final h = (y + bandHeight <= image.height) ? bandHeight : image.height - y;
+      final band = img.copyCrop(image, x: 0, y: y, width: image.width, height: h);
+      bytes.addAll(_toRasterCommand(band));
+    }
     return bytes;
   }
 
@@ -319,13 +563,6 @@ class BluetoothPrinterService {
     final decoded = img.decodeImage(bytes);
     if (decoded == null) return null;
     return img.copyResize(decoded, width: _logoWidthDots);
-  }
-
-  /// Rasterizes the logo into an ESC/POS GS-v-0 monochrome bitmap command.
-  Future<List<int>?> _fetchAndRasterizeLogo(String logoUrl) async {
-    final resized = await _fetchAndResizeLogo(logoUrl);
-    if (resized == null) return null;
-    return _toRasterCommand(resized);
   }
 
   /// Same fetch → resize → 1-bit threshold pipeline as the real print path,

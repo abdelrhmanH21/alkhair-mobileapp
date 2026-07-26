@@ -108,7 +108,7 @@ class _InvoiceHistoryPageState extends State<InvoiceHistoryPage> {
           if (_invoices.isEmpty) {
             return const Center(
                 child: Text('لا توجد فواتير بعد.',
-                    style: TextStyle(color: Colors.grey)));
+                    style: TextStyle(color: AppTheme.textMuted)));
           }
           return ListView.builder(
             itemCount: _invoices.length,

@@ -261,7 +261,7 @@ class _ErrorView extends StatelessWidget {
               Text(
                 message,
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.grey, fontSize: 13),
+                style: const TextStyle(color: AppTheme.textMuted, fontSize: 13),
               ),
               const SizedBox(height: 24),
               ElevatedButton.icon(
@@ -289,10 +289,10 @@ class _EmptyLoadingView extends StatelessWidget {
             const Icon(Icons.inventory_2_outlined, size: 72, color: Colors.grey),
             const SizedBox(height: 16),
             const Text('لا توجد تحميلة نشطة',
-                style: TextStyle(fontSize: 18, color: Colors.grey)),
+                style: TextStyle(fontSize: 18, color: AppTheme.textMuted)),
             const SizedBox(height: 8),
             const Text('سيتم تعيين تحميلة لك من المدير',
-                style: TextStyle(fontSize: 13, color: Colors.grey)),
+                style: TextStyle(fontSize: 13, color: AppTheme.textMuted)),
             const SizedBox(height: 24),
             ElevatedButton.icon(
               onPressed: onRefresh,
@@ -332,7 +332,7 @@ class _LoadingView extends StatelessWidget {
                         TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 const Spacer(),
                 Text('${loading.items.length} منتج',
-                    style: const TextStyle(color: Colors.grey, fontSize: 13)),
+                    style: const TextStyle(color: AppTheme.textMuted, fontSize: 13)),
               ],
             ),
           ),
@@ -409,7 +409,7 @@ class _InTransitView extends StatelessWidget {
                           fontSize: 20, fontWeight: FontWeight.bold)),
                   const SizedBox(height: 6),
                   const Text('أنت حالياً في طريقك لتوصيل الطلبات',
-                      style: TextStyle(color: Colors.grey)),
+                      style: TextStyle(color: AppTheme.textMuted)),
                 ],
               ),
             ),
@@ -479,7 +479,7 @@ class _CompletedView extends StatelessWidget {
                   const SizedBox(height: 6),
                   const Text(
                     'انتظر المدير لإتمام عملية التسوية',
-                    style: TextStyle(color: Colors.grey),
+                    style: TextStyle(color: AppTheme.textMuted),
                     textAlign: TextAlign.center,
                   ),
                 ],
@@ -513,7 +513,10 @@ class _HeaderCard extends StatelessWidget {
     if (loading.isAccepted) return AppTheme.primary;
     if (loading.isInTransit) return Colors.orange;
     if (loading.isCompleted) return AppTheme.secondary;
-    return Colors.grey;
+    // Background fill behind white badge text — needs to stay dark enough
+    // for that text to stay readable (bare Colors.grey/500 fails contrast
+    // with white text on top; shade600 keeps ~4.6:1).
+    return Colors.grey.shade600;
   }
 
   String get _statusLabel {
@@ -605,7 +608,7 @@ class _ItemsList extends StatelessWidget {
                         color: AppTheme.primary),
                   ),
                   const Text('كمية',
-                      style: TextStyle(fontSize: 10, color: Colors.grey)),
+                      style: TextStyle(fontSize: 10, color: AppTheme.textMuted)),
                 ],
               ),
             ),

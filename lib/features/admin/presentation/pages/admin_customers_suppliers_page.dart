@@ -164,7 +164,7 @@ class _CustomersTabState extends State<_CustomersTab> {
     if (_error != null) return AppErrorView(message: _error!, onRetry: _load);
     if (_customers.isEmpty) {
       return const Center(
-          child: Text('لا يوجد عملاء مطابقون.', style: TextStyle(color: Colors.grey)));
+          child: Text('لا يوجد عملاء مطابقون.', style: TextStyle(color: AppTheme.textMuted)));
     }
     return RefreshIndicator(
       onRefresh: _load,
@@ -327,7 +327,7 @@ class _SuppliersTabState extends State<_SuppliersTab> {
     if (_error != null) return AppErrorView(message: _error!, onRetry: _load);
     if (_suppliers.isEmpty) {
       return const Center(
-          child: Text('لا يوجد موردون مطابقون.', style: TextStyle(color: Colors.grey)));
+          child: Text('لا يوجد موردون مطابقون.', style: TextStyle(color: AppTheme.textMuted)));
     }
     return RefreshIndicator(
       onRefresh: _load,
@@ -389,11 +389,11 @@ class _ColumnHeadersRow extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(leadingLabel,
-                style: TextStyle(
-                    fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade600)),
+                style: const TextStyle(
+                    fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.textMuted)),
             Text(trailingLabel,
-                style: TextStyle(
-                    fontSize: 11, fontWeight: FontWeight.bold, color: Colors.grey.shade600)),
+                style: const TextStyle(
+                    fontSize: 11, fontWeight: FontWeight.bold, color: AppTheme.textMuted)),
           ],
         ),
       );

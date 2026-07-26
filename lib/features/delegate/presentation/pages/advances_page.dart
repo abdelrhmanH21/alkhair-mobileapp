@@ -50,7 +50,7 @@ class _AdvancesPageState extends State<AdvancesPage> {
           final advances = _advances ?? [];
           if (advances.isEmpty) {
             return const Center(
-                child: Text('لا توجد سلف هذا الشهر.', style: TextStyle(color: Colors.grey)));
+                child: Text('لا توجد سلف هذا الشهر.', style: TextStyle(color: AppTheme.textMuted)));
           }
           final total = advances.fold<double>(0, (s, a) => s + a.amount);
           return Column(

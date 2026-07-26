@@ -243,7 +243,7 @@ class _RegionReportView extends StatelessWidget {
     }
     if (rows!.isEmpty) {
       return const Center(
-          child: Text('لا توجد مبيعات في هذه الفترة.', style: TextStyle(color: Colors.grey)));
+          child: Text('لا توجد مبيعات في هذه الفترة.', style: TextStyle(color: AppTheme.textMuted)));
     }
     return ListView.builder(
       padding: const EdgeInsets.all(12),
@@ -322,7 +322,7 @@ class _ProductReportView extends StatelessWidget {
     }
     if (rows!.isEmpty) {
       return const Center(
-          child: Text('لا توجد مبيعات في هذه الفترة.', style: TextStyle(color: Colors.grey)));
+          child: Text('لا توجد مبيعات في هذه الفترة.', style: TextStyle(color: AppTheme.textMuted)));
     }
     return ListView.builder(
       padding: const EdgeInsets.all(12),
@@ -434,7 +434,7 @@ class _ReportMiniStat extends StatelessWidget {
         children: [
           Text(value, style: const TextStyle(fontWeight: FontWeight.bold)),
           const SizedBox(height: 2),
-          Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+          Text(label, style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
         ],
       );
 }

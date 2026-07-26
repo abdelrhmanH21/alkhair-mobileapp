@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../../core/theme/app_theme.dart';
 
 /// One entry in an operations bottom sheet (icon + title + subtitle,
 /// tapping it runs [onTap] after the sheet closes).
@@ -90,7 +91,7 @@ class _OperationCard extends StatelessWidget {
                           style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                       const SizedBox(height: 2),
                       Text(item.subtitle,
-                          style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                          style: const TextStyle(fontSize: 12, color: AppTheme.textMuted)),
                     ],
                   ),
                 ),

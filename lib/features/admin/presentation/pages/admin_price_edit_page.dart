@@ -108,7 +108,7 @@ class _AdminPriceEditPageState extends State<AdminPriceEditPage>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('السعر الحالي: ${currentPrice.toStringAsFixed(2)}',
-                style: const TextStyle(color: Colors.grey)),
+                style: const TextStyle(color: AppTheme.textMuted)),
             const SizedBox(height: 12),
             TextField(
               controller: ctrl,
@@ -202,7 +202,7 @@ class _ProductList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (products.isEmpty) {
-      return const Center(child: Text('لا توجد منتجات', style: TextStyle(color: Colors.grey)));
+      return const Center(child: Text('لا توجد منتجات', style: TextStyle(color: AppTheme.textMuted)));
     }
     return ListView.builder(
       padding: const EdgeInsets.all(12),
@@ -233,7 +233,7 @@ class _RawMaterialList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (materials.isEmpty) {
-      return const Center(child: Text('لا توجد مواد خام', style: TextStyle(color: Colors.grey)));
+      return const Center(child: Text('لا توجد مواد خام', style: TextStyle(color: AppTheme.textMuted)));
     }
     return ListView.builder(
       padding: const EdgeInsets.all(12),

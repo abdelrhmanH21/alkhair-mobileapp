@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:dio/dio.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/di/service_locator.dart';
@@ -8,6 +9,8 @@ import '../../../../core/widgets/state_views.dart';
 import '../../data/datasources/admin_remote_datasource.dart';
 import '../../data/models/admin_models.dart';
 import '../../../delegate/data/models/client_model.dart';
+import '../../../delegate/presentation/bloc/delegate_bloc.dart';
+import '../../../delegate/presentation/widgets/add_client_sheet.dart';
 import '../../../delegate/presentation/widgets/client_search_field.dart';
 import '../../../delegate/presentation/pages/invoice_detail_page.dart';
 
@@ -230,7 +233,7 @@ class _SalesTabState extends State<_SalesTab> {
     if (_error != null) return AppErrorView(message: _error!, onRetry: _load);
     if (_rows.isEmpty) {
       return const Center(
-          child: Text('لا توجد فواتير في هذه الفترة.', style: TextStyle(color: Colors.grey)));
+          child: Text('لا توجد فواتير في هذه الفترة.', style: TextStyle(color: AppTheme.textMuted)));
     }
     return RefreshIndicator(
       onRefresh: _load,
@@ -429,7 +432,7 @@ class _CollectionsTabState extends State<_CollectionsTab> {
     if (_error != null) return AppErrorView(message: _error!, onRetry: _load);
     if (_rows.isEmpty) {
       return const Center(
-          child: Text('لا توجد تحصيلات في هذه الفترة.', style: TextStyle(color: Colors.grey)));
+          child: Text('لا توجد تحصيلات في هذه الفترة.', style: TextStyle(color: AppTheme.textMuted)));
     }
     final total = _rows.fold<double>(0, (s, c) => s + c.amount);
     return RefreshIndicator(
@@ -566,6 +569,29 @@ class AdminCollectionFormSheetState extends State<AdminCollectionFormSheet> {
     }
   }
 
+  /// Same AddClientSheet the delegate invoice flow and admin_sale_page.dart
+  /// use — see admin_sale_page.dart's _openAddClientSheet for why this works
+  /// for an admin/manager caller (server-side DelegateLoading gate only
+  /// applies to role 'delegate'; DelegateBloc is provided at the app root).
+  void _openAddClientSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => BlocProvider.value(
+        value: context.read<DelegateBloc>(),
+        child: AddClientSheet(
+          onClientAdded: (client) => setState(() {
+            _selectedClient = client;
+            _searchCtrl.text = client.name;
+            _searchResults.clear();
+          }),
+        ),
+      ),
+    );
+  }
+
   Future<void> _submit() async {
     if (_selectedClient == null) {
       AppSnackbar.showError(context, 'يرجى اختيار عميل أولاً.');
@@ -627,8 +653,7 @@ class AdminCollectionFormSheetState extends State<AdminCollectionFormSheet> {
               _searchCtrl.text = c.name;
               _searchResults.clear();
             }),
-            onAddNew: () =>
-                AppSnackbar.showInfo(context, 'إضافة عميل جديد متاحة من شاشة بيانات العملاء.'),
+            onAddNew: _openAddClientSheet,
           ),
           const SizedBox(height: 12),
           TextField(

@@ -204,7 +204,7 @@ class _ExpensesTabState extends State<_ExpensesTab> {
     if (_error != null) return AppErrorView(message: _error!, onRetry: _load);
     if (_expenses.isEmpty) {
       return const Center(
-          child: Text('لا توجد مصروفات في هذه الفترة.', style: TextStyle(color: Colors.grey)));
+          child: Text('لا توجد مصروفات في هذه الفترة.', style: TextStyle(color: AppTheme.textMuted)));
     }
     return RefreshIndicator(
       onRefresh: _load,
@@ -255,7 +255,7 @@ class _ExpensesTabState extends State<_ExpensesTab> {
                       ),
                       const Spacer(),
                       Text(DateFormat('yyyy-MM-dd').format(e.expenseDate),
-                          style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                          style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
                     ],
                   ),
                 ],
@@ -275,7 +275,7 @@ class _Chip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final c = color ?? Colors.grey.shade600;
+    final c = color ?? AppTheme.textMuted;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
       decoration: BoxDecoration(
@@ -543,7 +543,7 @@ class _TreasuriesTabState extends State<_TreasuriesTab> {
     if (_error != null) return AppErrorView(message: _error!, onRetry: _load);
     final treasuries = _treasuries ?? [];
     if (treasuries.isEmpty) {
-      return const Center(child: Text('لا توجد خزائن.', style: TextStyle(color: Colors.grey)));
+      return const Center(child: Text('لا توجد خزائن.', style: TextStyle(color: AppTheme.textMuted)));
     }
     final total = treasuries.fold<double>(0, (s, t) => s + t.balance);
     return RefreshIndicator(

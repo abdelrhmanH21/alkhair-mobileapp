@@ -119,7 +119,7 @@ class _CustomerInvoiceHistoryPageState extends State<CustomerInvoiceHistoryPage>
               padding: EdgeInsets.symmetric(vertical: 40),
               child: Center(
                 child: Text('لا توجد فواتير سابقة لهذا العميل.',
-                    style: TextStyle(color: Colors.grey)),
+                    style: TextStyle(color: AppTheme.textMuted)),
               ),
             )
           else
@@ -208,7 +208,7 @@ class _StatColumn extends StatelessWidget {
               style: TextStyle(
                   fontWeight: FontWeight.bold, fontSize: 16, color: color ?? AppTheme.primary)),
           const SizedBox(height: 4),
-          Text(label, style: const TextStyle(fontSize: 11, color: Colors.grey)),
+          Text(label, style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
         ],
       );
 }

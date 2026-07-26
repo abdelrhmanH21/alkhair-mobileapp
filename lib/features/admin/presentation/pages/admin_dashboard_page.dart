@@ -322,29 +322,43 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
         shape: const CircularNotchedRectangle(),
         notchMargin: 8,
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          // Each destination is wrapped in Expanded so the two items left of
+          // the notch and the two right of it each claim an equal half of
+          // the remaining width — with mainAxisAlignment.spaceAround (the
+          // previous approach), the fixed-width notch spacer was treated as
+          // just another flex child among four unequally-sized items, so
+          // the gap never landed under the FAB and "العمليات" (immediately
+          // after the spacer) rendered visibly off-center.
           children: [
-            _BottomNavAction(
-              icon: Icons.science_outlined,
-              label: 'التصنيع',
-              onTap: _openManufacturingMenu,
+            Expanded(
+              child: _BottomNavAction(
+                icon: Icons.science_outlined,
+                label: 'التصنيع',
+                onTap: _openManufacturingMenu,
+              ),
             ),
-            _BottomNavAction(
-              icon: Icons.local_shipping_outlined,
-              label: 'التوزيع',
-              onTap: _openDistributionMenu,
+            Expanded(
+              child: _BottomNavAction(
+                icon: Icons.local_shipping_outlined,
+                label: 'التوزيع',
+                onTap: _openDistributionMenu,
+              ),
             ),
             const SizedBox(width: 48), // space for the docked FAB notch
-            _BottomNavAction(
-              icon: Icons.touch_app_outlined,
-              label: 'العمليات',
-              onTap: _openOperationsMenu,
+            Expanded(
+              child: _BottomNavAction(
+                icon: Icons.touch_app_outlined,
+                label: 'العمليات',
+                onTap: _openOperationsMenu,
+              ),
             ),
-            _BottomNavAction(
-              icon: Icons.groups_outlined,
-              label: 'العملاء والموردين',
-              onTap: () => Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const AdminCustomersSuppliersPage())),
+            Expanded(
+              child: _BottomNavAction(
+                icon: Icons.groups_outlined,
+                label: 'العملاء والموردين',
+                onTap: () => Navigator.push(context,
+                    MaterialPageRoute(builder: (_) => const AdminCustomersSuppliersPage())),
+              ),
             ),
           ],
         ),
@@ -462,7 +476,7 @@ class _DashboardContent extends StatelessWidget {
                     fontSize: 20, fontWeight: FontWeight.bold),
               ),
               const Text('إحصائيات اليوم',
-                  style: TextStyle(color: Colors.grey)),
+                  style: TextStyle(color: AppTheme.textMuted)),
               const SizedBox(height: 16),
 
               _WorkingCapitalSection(
@@ -584,7 +598,7 @@ class _KpiCard extends StatelessWidget {
                     style: TextStyle(
                         fontSize: 22, fontWeight: FontWeight.bold, color: color)),
                 Text(label,
-                    style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                    style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
               ],
             ),
           ],
@@ -820,7 +834,7 @@ class _DelegatesTab extends StatelessWidget {
           }
           return const Center(
             child: Text('اضغط على قائمة المندوبين للتحميل',
-                style: TextStyle(color: Colors.grey)),
+                style: TextStyle(color: AppTheme.textMuted)),
           );
         },
       );
@@ -890,7 +904,7 @@ class _DelegatesList extends StatelessWidget {
   _StatusBadge _statusBadge(DelegateTrackingStatus status) {
     switch (status) {
       case DelegateTrackingStatus.idle:
-        return const _StatusBadge('غير نشط', Colors.grey);
+        return const _StatusBadge('غير نشط', AppTheme.textMuted);
       case DelegateTrackingStatus.pendingPickup:
         return const _StatusBadge('بانتظار الاستلام', AppTheme.accent);
       case DelegateTrackingStatus.accepted:

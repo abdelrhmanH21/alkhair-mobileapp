@@ -7,6 +7,8 @@ import '../../../../core/utils/app_snackbar.dart';
 import '../../../app_config/presentation/bloc/app_config_bloc.dart';
 import '../../../app_config/presentation/bloc/app_config_state.dart';
 import '../../../delegate/data/models/client_model.dart';
+import '../../../delegate/presentation/bloc/delegate_bloc.dart';
+import '../../../delegate/presentation/widgets/add_client_sheet.dart';
 import '../../../delegate/presentation/widgets/client_search_field.dart';
 import '../../data/datasources/admin_remote_datasource.dart';
 import '../../data/models/admin_models.dart';
@@ -145,6 +147,32 @@ class _AdminSalePageState extends State<AdminSalePage> {
     );
   }
 
+  /// Opens the same AddClientSheet the delegate invoice flow uses — DINV
+  /// customer creation (POST /v1/mobile/delegate/clients) now allows
+  /// admin/manager callers server-side (the active-DelegateLoading gate on
+  /// DelegateClientController::store() only applies when the caller's role
+  /// is 'delegate'), and DelegateBloc is provided at the app root for every
+  /// role, so this works the same way invoice_page.dart's
+  /// _openAddClientSheet does.
+  void _openAddClientSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => BlocProvider.value(
+        value: context.read<DelegateBloc>(),
+        child: AddClientSheet(
+          onClientAdded: (client) => setState(() {
+            _selectedClient = client;
+            _searchCtrl.text = client.name;
+            _searchResults.clear();
+          }),
+        ),
+      ),
+    );
+  }
+
   Future<void> _submit() async {
     if (_selectedClient == null) {
       AppSnackbar.showError(context, 'يرجى اختيار عميل أولاً.');
@@ -217,8 +245,7 @@ class _AdminSalePageState extends State<AdminSalePage> {
                     _searchCtrl.text = c.name;
                     _searchResults.clear();
                   }),
-                  onAddNew: () => AppSnackbar.showInfo(
-                      context, 'إضافة عميل جديد متاحة من شاشة بيانات العملاء.'),
+                  onAddNew: _openAddClientSheet,
                 ),
                 const SizedBox(height: 16),
                 Card(
@@ -243,7 +270,7 @@ class _AdminSalePageState extends State<AdminSalePage> {
                         ),
                         if (_items.isEmpty)
                           const Center(
-                              child: Text('لا توجد أصناف', style: TextStyle(color: Colors.grey)))
+                              child: Text('لا توجد أصناف', style: TextStyle(color: AppTheme.textMuted)))
                         else
                           ..._items.asMap().entries.map((e) => ListTile(
                                 dense: true,

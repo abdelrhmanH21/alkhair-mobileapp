@@ -196,7 +196,7 @@ class _ReceiveProductionPageState extends State<ReceiveProductionPage> {
                       style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: 8),
                   if (_inProgressBatches.isEmpty)
-                    const Text('لا توجد تشغيلات جارية.', style: TextStyle(color: Colors.grey))
+                    const Text('لا توجد تشغيلات جارية.', style: TextStyle(color: AppTheme.textMuted))
                   else
                     DropdownButtonFormField<int>(
                       initialValue: _selectedBatchId,
@@ -322,7 +322,7 @@ class _ReceiveProductionPageState extends State<ReceiveProductionPage> {
                   Text('تشغيلات مكتملة مؤخراً', style: Theme.of(context).textTheme.titleMedium),
                   const SizedBox(height: 8),
                   if (_completedBatches.isEmpty)
-                    const Text('لا توجد تشغيلات مكتملة بعد.', style: TextStyle(color: Colors.grey))
+                    const Text('لا توجد تشغيلات مكتملة بعد.', style: TextStyle(color: AppTheme.textMuted))
                   else
                     ..._completedBatches.map((b) => Card(
                           child: ListTile(

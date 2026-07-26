@@ -54,7 +54,7 @@ class _PenaltiesPageState extends State<PenaltiesPage> {
           final penalties = _penalties ?? [];
           if (penalties.isEmpty) {
             return const Center(
-                child: Text('لا توجد جزاءات هذا الشهر.', style: TextStyle(color: Colors.grey)));
+                child: Text('لا توجد جزاءات هذا الشهر.', style: TextStyle(color: AppTheme.textMuted)));
           }
           final total = penalties.fold<double>(0, (s, p) => s + p.amount);
           return Column(

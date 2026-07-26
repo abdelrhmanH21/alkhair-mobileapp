@@ -9,6 +9,11 @@ class AppTheme {
   static const Color danger    = Color(0xFFD32F2F);
   static const Color surface   = Color(0xFFF7F9FC); // off-white, cool tint
   static const Color cardBg    = Colors.white;
+  // Secondary/muted text (captions, empty-state hints, column headers, list
+  // subtitles) — chosen for a safe ~6:1 contrast against white/`surface`,
+  // unlike bare `Colors.grey` (Material grey 500, ~2.3:1, fails WCAG AA).
+  // Use this instead of any hardcoded Colors.grey/greyXXX in a TextStyle.
+  static const Color textMuted = Color(0xFF616161);
 
   // ── Elevation tokens ──────────────────────────────────────────────────────
   static const double elevationLow  = 1.5;

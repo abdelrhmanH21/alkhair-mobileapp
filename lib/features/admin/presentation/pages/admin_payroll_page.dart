@@ -75,7 +75,7 @@ class _AdminPayrollPageState extends State<AdminPayrollPage> {
               ? AppErrorView(message: _error!, onRetry: _load)
               : _rows.isEmpty
                   ? const Center(
-                      child: Text('لا يوجد مناديب نشطون.', style: TextStyle(color: Colors.grey)))
+                      child: Text('لا يوجد مناديب نشطون.', style: TextStyle(color: AppTheme.textMuted)))
                   : RefreshIndicator(
                       onRefresh: _load,
                       child: ListView.builder(
@@ -132,9 +132,9 @@ class _RepCard extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text('الهدف: ${rep.monthlyTarget.toStringAsFixed(0)}',
-                      style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                      style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
                   Text('المحقق: ${rep.achievedThisMonth.toStringAsFixed(0)}',
-                      style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                      style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
                   Text(pct == null ? '—' : '${pct.toStringAsFixed(0)}%',
                       style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                 ],
@@ -168,7 +168,7 @@ class _MiniStat extends StatelessWidget {
           Text(value.toStringAsFixed(0),
               style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 13)),
           const SizedBox(height: 2),
-          Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey)),
+          Text(label, style: const TextStyle(fontSize: 10, color: AppTheme.textMuted)),
         ],
       );
 }
@@ -287,7 +287,7 @@ class _CommissionBreakdownTabState extends State<_CommissionBreakdownTab> {
     if (_rows == null) return const Center(child: CircularProgressIndicator());
     if (_rows!.isEmpty) {
       return const Center(
-          child: Text('لا توجد مبيعات هذا الشهر.', style: TextStyle(color: Colors.grey)));
+          child: Text('لا توجد مبيعات هذا الشهر.', style: TextStyle(color: AppTheme.textMuted)));
     }
     return ListView.builder(
       padding: const EdgeInsets.all(12),
@@ -344,7 +344,7 @@ class _RepPenaltiesTabState extends State<_RepPenaltiesTab> {
     if (_rows == null) return const Center(child: CircularProgressIndicator());
     if (_rows!.isEmpty) {
       return const Center(
-          child: Text('لا توجد جزاءات هذا الشهر.', style: TextStyle(color: Colors.grey)));
+          child: Text('لا توجد جزاءات هذا الشهر.', style: TextStyle(color: AppTheme.textMuted)));
     }
     return ListView.builder(
       padding: const EdgeInsets.all(12),
@@ -401,7 +401,7 @@ class _RepAdvancesTabState extends State<_RepAdvancesTab> {
     if (_rows == null) return const Center(child: CircularProgressIndicator());
     if (_rows!.isEmpty) {
       return const Center(
-          child: Text('لا توجد سلف هذا الشهر.', style: TextStyle(color: Colors.grey)));
+          child: Text('لا توجد سلف هذا الشهر.', style: TextStyle(color: AppTheme.textMuted)));
     }
     return ListView.builder(
       padding: const EdgeInsets.all(12),
@@ -489,7 +489,7 @@ class _EditTargetSheetState extends State<_EditTargetSheet> {
                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
               const SizedBox(height: 4),
               Text('الشهر: ${widget.month}',
-                  style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                  style: const TextStyle(fontSize: 12, color: AppTheme.textMuted)),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _amountCtrl,

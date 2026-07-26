@@ -543,7 +543,7 @@ class _EditingClientCard extends StatelessWidget {
                 Text(c.name,
                     style: const TextStyle(fontWeight: FontWeight.bold)),
                 Text(c.phone,
-                    style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                    style: const TextStyle(fontSize: 12, color: AppTheme.textMuted)),
               ],
             ),
           ),
@@ -610,7 +610,7 @@ class _SalesSection extends StatelessWidget {
               if (items.isEmpty)
                 const Center(
                     child: Text('لا توجد بنود',
-                        style: TextStyle(color: Colors.grey, fontSize: 12)))
+                        style: TextStyle(color: AppTheme.textMuted, fontSize: 12)))
               else
                 ...items.asMap().entries.map((e) => _SaleItemRow(
                       item: e.value,
@@ -690,7 +690,7 @@ class _SaleItemRow extends StatelessWidget {
             ),
             Text(
               '= ${item.subtotal.toStringAsFixed(2)}',
-              style: const TextStyle(fontSize: 11, color: Colors.grey),
+              style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
             ),
           ],
         ),
@@ -749,7 +749,7 @@ class _ReturnsSection extends StatelessWidget {
               if (items.isEmpty)
                 const Center(
                     child: Text('لا توجد مرتجعات',
-                        style: TextStyle(color: Colors.grey, fontSize: 12)))
+                        style: TextStyle(color: AppTheme.textMuted, fontSize: 12)))
               else
                 ...items.asMap().entries.map((e) => _ReturnItemRow(
                       item: e.value,
@@ -1132,7 +1132,7 @@ class _SellableProductPickerSheetState
                   const Expanded(
                     child: Center(
                       child: Text('لا يوجد مخزون متاح في الشاحنة',
-                          style: TextStyle(color: Colors.grey)),
+                          style: TextStyle(color: AppTheme.textMuted)),
                     ),
                   )
                 else
@@ -1329,7 +1329,7 @@ class _ReturnProductPickerSheetState extends State<_ReturnProductPickerSheet> {
                   const Expanded(
                     child: Center(
                       child: Text('لا توجد منتجات متاحة',
-                          style: TextStyle(color: Colors.grey)),
+                          style: TextStyle(color: AppTheme.textMuted)),
                     ),
                   )
                 else

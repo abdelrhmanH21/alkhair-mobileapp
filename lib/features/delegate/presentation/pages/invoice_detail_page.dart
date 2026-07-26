@@ -281,7 +281,7 @@ class _ItemRow extends StatelessWidget {
           Text(
             '${qty.toStringAsFixed(2)} ${product['unit'] ?? ''} × ${unitPrice.toStringAsFixed(2)}'
             '${isReturn && condition != null ? ' — $condition' : ''}',
-            style: const TextStyle(fontSize: 12, color: Colors.grey),
+            style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
           ),
           if (note != null && note.isNotEmpty) ...[
             const SizedBox(height: 4),

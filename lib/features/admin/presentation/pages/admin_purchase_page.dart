@@ -233,7 +233,7 @@ class _AdminPurchasePageState extends State<AdminPurchasePage> {
                           ],
                         ),
                         if (_items.isEmpty)
-                          const Center(child: Text('لا توجد أصناف', style: TextStyle(color: Colors.grey)))
+                          const Center(child: Text('لا توجد أصناف', style: TextStyle(color: AppTheme.textMuted)))
                         else
                           ..._items.asMap().entries.map((e) => ListTile(
                                 dense: true,

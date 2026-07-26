@@ -99,7 +99,7 @@ class ClientSearchField extends StatelessWidget {
                         Text(selectedClient!.name,
                             style: const TextStyle(fontWeight: FontWeight.bold)),
                         Text(selectedClient!.phone,
-                            style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                            style: const TextStyle(fontSize: 12, color: AppTheme.textMuted)),
                       ],
                     ),
                   ),
@@ -148,7 +148,7 @@ class ClientSearchField extends StatelessWidget {
                     leading: const Icon(Icons.person_outline, size: 20),
                     title: Text(c.name, style: const TextStyle(fontWeight: FontWeight.w600)),
                     subtitle: Text(c.phone,
-                        style: const TextStyle(fontSize: 11, color: Colors.grey)),
+                        style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [

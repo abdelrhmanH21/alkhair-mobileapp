@@ -63,6 +63,14 @@ abstract class AdminRemoteDataSource {
   // ── Payroll (العمالة) ─────────────────────────────────────────────────
   Future<List<PayrollSummaryRowModel>> fetchPayrollSummary({String? month});
   Future<List<PenaltyModel>> fetchRepPenalties(int repId);
+
+  // ── Settlement history (سجل التسويات) ──────────────────────────────────
+  Future<SettlementRecordPageModel> fetchSettlementHistory({
+    int? delegateId,
+    String? dateFrom,
+    String? dateTo,
+    int page = 1,
+  });
   Future<List<AdvanceModel>> fetchRepAdvances(int repId);
   Future<List<CommissionDayModel>> fetchRepCommissionBreakdown(int repId);
   Future<void> setRepTarget({
@@ -359,6 +367,24 @@ class AdminRemoteDataSourceImpl implements AdminRemoteDataSource {
       if (dateTo != null) 'date_to': dateTo,
     });
     return CollectionPageModel.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  // ── Settlement history (سجل التسويات) ──────────────────────────────────
+
+  @override
+  Future<SettlementRecordPageModel> fetchSettlementHistory({
+    int? delegateId,
+    String? dateFrom,
+    String? dateTo,
+    int page = 1,
+  }) async {
+    final res = await _client.dio.get(ApiEndpoints.adminSettlementHistory, queryParameters: {
+      'page': page,
+      if (delegateId != null) 'delegate_id': delegateId,
+      if (dateFrom != null) 'date_from': dateFrom,
+      if (dateTo != null) 'date_to': dateTo,
+    });
+    return SettlementRecordPageModel.fromJson(res.data as Map<String, dynamic>);
   }
 
   // ── Payroll (العمالة) ─────────────────────────────────────────────────

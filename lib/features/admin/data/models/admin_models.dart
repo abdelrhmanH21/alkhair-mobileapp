@@ -1072,3 +1072,95 @@ class InventoryCountItemModel {
         systemQuantity: _asDouble(json['system_quantity']),
       );
 }
+
+// ─── Settlement history ("سجل التسويات") ────────────────────────────────────
+
+/// Mirrors AdminDelegateController::settlementHistory() — a structured
+/// DelegateSettlementRecord row written at the moment a delegate's shift is
+/// settled (see settleDelegate()), rather than only ever appearing once in
+/// that request's response and as free text in DelegateLoading.notes.
+class SettlementRecordModel {
+  final int id;
+  final int loadingId;
+  final String delegateName;
+  final DateTime settledAt;
+  // Null when genuinely unrecoverable for an old, pre-this-feature
+  // settlement — never fabricated, see the backfill command's doc comment.
+  final double? grossSales;
+  final double expectedCash;
+  final double physicalCash;
+  final double cashVariance;
+  final double walletAmount;
+  final String? treasuryName;
+  final String? walletTreasuryName;
+  final double cashShortageDeduction;
+  final double stockShortageDeduction;
+  final double damagedGoodsValue;
+  final String? settledByName;
+  final bool isBackfilled;
+
+  const SettlementRecordModel({
+    required this.id,
+    required this.loadingId,
+    required this.delegateName,
+    required this.settledAt,
+    required this.grossSales,
+    required this.expectedCash,
+    required this.physicalCash,
+    required this.cashVariance,
+    required this.walletAmount,
+    required this.treasuryName,
+    required this.walletTreasuryName,
+    required this.cashShortageDeduction,
+    required this.stockShortageDeduction,
+    required this.damagedGoodsValue,
+    required this.settledByName,
+    required this.isBackfilled,
+  });
+
+  double get totalDeductions => cashShortageDeduction + stockShortageDeduction;
+
+  factory SettlementRecordModel.fromJson(Map<String, dynamic> json) {
+    final delegate = json['delegate'] as Map<String, dynamic>?;
+    final treasury = json['treasury'] as Map<String, dynamic>?;
+    final walletTreasury = json['wallet_treasury'] as Map<String, dynamic>?;
+    final settledBy = json['settled_by'] as Map<String, dynamic>?;
+    return SettlementRecordModel(
+      id: json['id'] as int,
+      loadingId: json['loading_id'] as int? ?? 0,
+      delegateName: delegate?['name'] as String? ?? 'غير معروف',
+      settledAt: parseServerDateTime(json['settled_at'] as String?),
+      grossSales: json['gross_sales'] != null ? _asDouble(json['gross_sales']) : null,
+      expectedCash: _asDouble(json['expected_cash']),
+      physicalCash: _asDouble(json['physical_cash']),
+      cashVariance: _asDouble(json['cash_variance']),
+      walletAmount: _asDouble(json['wallet_amount']),
+      treasuryName: treasury?['name'] as String?,
+      walletTreasuryName: walletTreasury?['name'] as String?,
+      cashShortageDeduction: _asDouble(json['cash_shortage_deduction']),
+      stockShortageDeduction: _asDouble(json['stock_shortage_deduction']),
+      damagedGoodsValue: _asDouble(json['damaged_goods_value']),
+      settledByName: settledBy?['name'] as String?,
+      isBackfilled: json['is_backfilled'] as bool? ?? false,
+    );
+  }
+}
+
+class SettlementRecordPageModel {
+  final List<SettlementRecordModel> data;
+  final int currentPage;
+  final int lastPage;
+  const SettlementRecordPageModel(
+      {required this.data, required this.currentPage, required this.lastPage});
+
+  bool get hasMore => currentPage < lastPage;
+
+  factory SettlementRecordPageModel.fromJson(Map<String, dynamic> json) =>
+      SettlementRecordPageModel(
+        data: (json['data'] as List? ?? [])
+            .map((e) => SettlementRecordModel.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        currentPage: (json['current_page'] as num? ?? 1).toInt(),
+        lastPage: (json['last_page'] as num? ?? 1).toInt(),
+      );
+}

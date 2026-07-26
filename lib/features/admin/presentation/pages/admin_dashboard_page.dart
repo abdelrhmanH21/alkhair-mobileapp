@@ -29,11 +29,12 @@ import 'admin_price_edit_page.dart';
 import 'admin_supplier_payment_page.dart';
 import 'admin_waste_page.dart';
 import 'admin_inventory_count_page.dart';
+import 'admin_settlement_history_page.dart';
 
 /// Admin shell: bottom nav with exactly 5 destinations —
 ///   1. الرئيسية (center, emphasized — the working-capital dashboard, unchanged)
 ///   2. التصنيع (sub-menu: بدء تشغيلة جديدة / استلام إنتاج تام)
-///   3. التوزيع (sub-menu: توزيعة جديدة / طلبات التسليم / التقارير / العمالة)
+///   3. التوزيع (sub-menu: توزيعة جديدة / طلبات التسليم / سجل التسويات / التقارير / العمالة)
 ///   4. العمليات (sub-menu: بيع / شراء / تعديل سعر / تحصيل / سداد لمورد /
 ///      هالك / جرد / المبيعات والتحصيلات / المصروفات والخزائن)
 ///   5. العملاء والموردين
@@ -176,6 +177,14 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
               ),
             ),
           ),
+        ),
+        OperationSheetItem(
+          icon: Icons.receipt_long_outlined,
+          color: Colors.deepPurple,
+          title: 'سجل التسويات',
+          subtitle: 'تاريخ تسويات ورديات المناديب المكتملة',
+          onTap: () => Navigator.push(
+              context, MaterialPageRoute(builder: (_) => const AdminSettlementHistoryPage())),
         ),
         OperationSheetItem(
           icon: Icons.bar_chart_rounded,

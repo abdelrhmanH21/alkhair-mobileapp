@@ -159,6 +159,46 @@ void main() {
       expect(netIdx, lessThan(paidIdx));
       expect(paidIdx, lessThan(remainingIdx));
       expect(remainingIdx, lessThan(footerIdx));
+
+      // QR block (label + element), all indices in `plan` (not the
+      // text-only `texts` list) since ReceiptQrElement isn't a text line.
+      final planRemainingIdx = plan.indexWhere((e) => e is ReceiptTextLine && e.text.startsWith('المتبقي:'));
+      final planQrLabelIdx = plan.indexWhere((e) => e is ReceiptTextLine && e.text == 'امسح للشكاوى والمقترحات');
+      final planQrIdx = plan.indexWhere((e) => e is ReceiptQrElement);
+      final planFooterIdx = plan.indexWhere((e) => e is ReceiptTextLine && e.text == 'شكراً لتعاملكم معنا');
+
+      expect(planRemainingIdx, lessThan(planQrLabelIdx));
+      expect(planQrLabelIdx, lessThan(planQrIdx));
+      expect(planQrIdx, lessThan(planFooterIdx));
+    });
+  });
+
+  group('buildReceiptPlan — feedback QR code', () {
+    test('includes exactly one QR element encoding the fixed feedback URL', () {
+      final plan = buildReceiptPlan(full);
+      final qrElements = plan.whereType<ReceiptQrElement>().toList();
+      expect(qrElements.length, 1);
+      expect(qrElements.single.data, kFeedbackUrl);
+    });
+
+    test('is byte-for-byte identical across different invoices — same URL, no per-invoice variation', () {
+      final qrFull = buildReceiptPlan(full).whereType<ReceiptQrElement>().single;
+      final qrMinimal = buildReceiptPlan(minimal).whereType<ReceiptQrElement>().single;
+      final qrOverpaid = buildReceiptPlan(overpaid).whereType<ReceiptQrElement>().single;
+      expect(qrFull.data, qrMinimal.data);
+      expect(qrFull.data, qrOverpaid.data);
+      expect(qrFull.data, 'https://feedback.alkhairdairies.com/complain');
+    });
+
+    test('has the "امسح للشكاوى والمقترحات" label immediately before it, always present regardless of invoice content', () {
+      for (final data in [full, minimal, overpaid]) {
+        final plan = buildReceiptPlan(data);
+        final qrIdx = plan.indexWhere((e) => e is ReceiptQrElement);
+        expect(qrIdx, greaterThan(0));
+        final labelBefore = plan[qrIdx - 1];
+        expect(labelBefore, isA<ReceiptTextLine>());
+        expect((labelBefore as ReceiptTextLine).text, 'امسح للشكاوى والمقترحات');
+      }
     });
   });
 

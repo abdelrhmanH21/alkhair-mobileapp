@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import '../../../../core/di/service_locator.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/bluetooth_printer.dart';
@@ -100,6 +101,12 @@ class ReceiptPreviewCard extends StatelessWidget {
       ReceiptLogoElement(:final logoUrl) => Padding(
           padding: const EdgeInsets.only(bottom: 10),
           child: Center(child: _ReceiptLogo(logoUrl: logoUrl)),
+        ),
+      ReceiptQrElement(:final data) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          child: Center(
+            child: QrImageView(data: data, size: 100, gapless: true),
+          ),
         ),
       ReceiptSeparatorLine() => const Padding(
           padding: EdgeInsets.symmetric(vertical: 6),

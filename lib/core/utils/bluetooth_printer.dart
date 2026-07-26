@@ -13,6 +13,7 @@ import 'package:image/image.dart' as img;
 import 'package:intl/intl.dart' hide TextDirection;
 import 'package:permission_handler/permission_handler.dart' as ph;
 import 'package:print_bluetooth_thermal/print_bluetooth_thermal.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 
 // Default/fallback raster width (58mm paper) — used only when a receipt's
 // actual configured paper width (InvoicePrintData.paperWidthDots, sourced
@@ -31,6 +32,15 @@ const int _logoWidthDots = 384;
 /// rendered at the 58mm-equivalent 384-dot width regardless of the admin's
 /// configured paper size.
 int rasterWidthDotsForPaper(String paperWidth) => paperWidth == '80mm' ? 576 : 384;
+
+// SAME fixed URL on every single invoice, everywhere (web + mobile print) —
+// no query params, no per-invoice variation — so every scan, from any
+// invoice, lands on the exact same public feedback form.
+const String kFeedbackUrl = 'https://feedback.alkhairdairies.com/complain';
+// QR raster size in dots — fixed regardless of paper width (58mm/80mm both
+// have plenty of room at this size) so the QR itself is byte-for-byte
+// identical across every receipt, not just its encoded URL.
+const double _qrSizeDots = 160;
 // Luminance below this prints as a black dot — shared by the real ESC/POS
 // rasterizer and the on-screen preview's logo rendering so both show the
 // exact same monochrome conversion.
@@ -96,12 +106,18 @@ class ReceiptLogoElement extends ReceiptElement {
   ReceiptLogoElement(this.logoUrl);
 }
 
+class ReceiptQrElement extends ReceiptElement {
+  final String data;
+  ReceiptQrElement(this.data);
+}
+
 /// Builds the ordered content plan for [d]'s receipt — every line, in the
 /// same order and under the same conditions a physical thermal receipt would
 /// print them (logo, header, invoice#/date, customer+phone, delegate name,
 /// items table, sales/discount/returns totals, إجمالي المديونية/الصافي
-/// المستحق/المدفوع/المتبقي, footer). Trailing paper-feed blank lines and the
-/// cut command are print-mechanics only, not content, so they're added by
+/// المستحق/المدفوع/المتبقي, feedback QR code, footer). Trailing paper-feed
+/// blank lines and the cut command are print-mechanics only, not content,
+/// so they're added by
 /// [BluetoothPrinterService._buildTicket] directly rather than here.
 List<ReceiptElement> buildReceiptPlan(InvoicePrintData d) {
   final elements = <ReceiptElement>[];
@@ -232,7 +248,14 @@ List<ReceiptElement> buildReceiptPlan(InvoicePrintData d) {
         bold: true, align: ReceiptAlign.right);
   }
 
-  // 14. Footer text
+  // 14. QR code linking to the public feedback/complaints form — the SAME
+  // fixed URL on every single receipt (kFeedbackUrl), placed near the
+  // footer with a short label above it.
+  separator();
+  addLine('امسح للشكاوى والمقترحات', align: ReceiptAlign.center);
+  elements.add(ReceiptQrElement(kFeedbackUrl));
+
+  // 15. Footer text
   if (d.footerText != null && d.footerText!.isNotEmpty) {
     separator();
     addLine(d.footerText!, align: ReceiptAlign.center);
@@ -499,6 +522,14 @@ class BluetoothPrinterService {
           h + 12, (canvas, y) => canvas.drawImage(uiImage, Offset(0, y), Paint())));
     }
 
+    Future<void> addQr(String qrData) async {
+      final uiImage = await _qrImage(qrData);
+      final h = uiImage.height.toDouble();
+      final x = (width - uiImage.width) / 2;
+      ops.add(_ReceiptDrawOp(
+          h + 10, (canvas, y) => canvas.drawImage(uiImage, Offset(x, y), Paint())));
+    }
+
     // Right-to-left column order (rightmost = الصنف, leftmost = الإجمالي).
     // Widened relative to invoice_preview_page.dart's on-screen
     // _columnWidths (which has much more horizontal room to work with) —
@@ -590,6 +621,8 @@ class BluetoothPrinterService {
       switch (el) {
         case ReceiptLogoElement(:final logoUrl):
           await addLogo(logoUrl);
+        case ReceiptQrElement(:final data):
+          await addQr(data);
         case ReceiptSeparatorLine():
           addSeparator();
         case ReceiptTextLine(:final text, :final bold, :final align):
@@ -631,6 +664,21 @@ class BluetoothPrinterService {
       bytes: byteData!.buffer,
       numChannels: 4,
     );
+  }
+
+  /// Renders [kFeedbackUrl] as a QR code image once and caches it — every
+  /// receipt everywhere encodes the exact same fixed URL, so there's no
+  /// reason to re-run QR generation/rasterization on every single print or
+  /// preview. Static (not instance-level) so the cache survives regardless
+  /// of how many [BluetoothPrinterService] instances get created.
+  static ui.Image? _cachedQrImage;
+  Future<ui.Image> _qrImage(String data) async {
+    final cached = _cachedQrImage;
+    if (cached != null) return cached;
+    final painter = QrPainter(data: data, version: QrVersions.auto, gapless: true);
+    final image = await painter.toImage(_qrSizeDots);
+    _cachedQrImage = image;
+    return image;
   }
 
   /// Decodes an [img.Image] (already-resized logo pixels) into a [ui.Image]

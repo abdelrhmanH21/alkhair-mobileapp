@@ -15,11 +15,23 @@ class AppConfigBloc extends Bloc<AppConfigEvent, AppConfigState> {
     AppConfigFetchRequested event,
     Emitter<AppConfigState> emit,
   ) async {
+    // Seed instantly from whatever was cached on a PRIOR successful fetch —
+    // synchronous, so this lands before the very first frame the login
+    // screen builds — so the logo/company name never sit on a blank
+    // placeholder for a cold-launch network round trip that hasn't
+    // resolved yet. Overwritten below once the fresh fetch completes.
+    final cached = _repository.getCachedSettings();
+    if (cached != null) emit(AppConfigLoaded(cached));
+
     try {
       final config = await _repository.fetchSettings();
       emit(AppConfigLoaded(config));
     } catch (_) {
-      emit(AppConfigLoadFailed());
+      // A stale cached config (already emitted above) is still strictly
+      // better than dropping the logo/company name for the rest of the
+      // session, so only surface a hard failure when there was nothing to
+      // fall back on.
+      if (cached == null) emit(AppConfigLoadFailed());
     }
   }
 

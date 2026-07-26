@@ -388,6 +388,7 @@ class BluetoothPrinterService {
     try {
       await PrintBluetoothThermal.disconnect.timeout(_connectTimeout);
     } catch (_) {}
+    _connectedDevice = null;
   }
 
   Future<bool> get isConnected async {
@@ -398,9 +399,59 @@ class BluetoothPrinterService {
     }
   }
 
-  Future<bool> printInvoice(InvoicePrintData data) async {
+  /// The printer this service believes it's currently connected to, kept
+  /// alive on this DI singleton across print_invoice_page.dart's widget
+  /// lifecycle — the page gets torn down and rebuilt every time the user
+  /// navigates away and back, but this service does not, so a printer
+  /// connected on a previous visit doesn't need re-selecting/re-connecting.
+  BluetoothInfo? _connectedDevice;
+  BluetoothInfo? get connectedDevice => _connectedDevice;
+
+  /// Connects to [device] only if not already connected to it — verified
+  /// via [isConnected] rather than trusting [_connectedDevice] alone, since
+  /// a real Bluetooth Classic link can silently drop (printer powered off,
+  /// walked out of range) without this app being told. Only falls through
+  /// to the full disconnect-before-connect [connect] sequence when a
+  /// genuinely new connection is needed (different printer, or [isConnected]
+  /// reports false despite matching [_connectedDevice]) — this is what keeps
+  /// repeat prints from paying a full reconnect handshake every time.
+  Future<PrinterConnectResult> ensureConnected(BluetoothInfo device) async {
+    if (_connectedDevice?.macAdress == device.macAdress && await isConnected) {
+      return const PrinterConnectResult.ok();
+    }
+    final result = await connect(device.macAdress);
+    _connectedDevice = result.success ? device : null;
+    return result;
+  }
+
+  /// Prints [data] over whatever connection is already live. When [device]
+  /// is supplied and the write fails — the "persistent" connection turning
+  /// out to be stale (printer turned off/out of range mid-session) — falls
+  /// back to the full reconnect-and-retry flow instead of just failing
+  /// silently, then retries the SAME already-rendered ticket once (no need
+  /// to re-render the receipt bitmap just because the printer needed a
+  /// fresh handshake).
+  Future<bool> printInvoice(InvoicePrintData data, {BluetoothInfo? device}) async {
+    final List<int> ticket;
     try {
-      final ticket = await _buildTicket(data);
+      ticket = await _buildTicket(data);
+    } catch (e) {
+      debugPrint('Print render error: $e');
+      return false;
+    }
+
+    if (await _writeTicket(ticket)) return true;
+    if (device == null) return false;
+
+    debugPrint('Print write failed on presumed-live connection, retrying with full reconnect');
+    final reconnect = await connect(device.macAdress);
+    _connectedDevice = reconnect.success ? device : null;
+    if (!reconnect.success) return false;
+    return _writeTicket(ticket);
+  }
+
+  Future<bool> _writeTicket(List<int> ticket) async {
+    try {
       // Same defensive timeout as connect()/disconnect() — a receipt bitmap
       // is a much larger payload than a bare connect handshake, so this
       // gets more headroom.
@@ -544,12 +595,17 @@ class BluetoothPrinterService {
     }
 
     Future<void> addLogo(String logoUrl) async {
-      final resized = await _fetchAndResizeLogo(logoUrl, width: width.toInt());
-      if (resized == null) return;
-      final uiImage = await _decodeUiImage(resized);
+      final cacheKey = '$logoUrl@${width.toInt()}';
+      var uiImage = _logoImageCache[cacheKey];
+      if (uiImage == null) {
+        final resized = await _fetchAndResizeLogo(logoUrl, width: width.toInt());
+        if (resized == null) return;
+        uiImage = await _decodeUiImage(resized);
+        _logoImageCache[cacheKey] = uiImage;
+      }
       final h = uiImage.height.toDouble();
       ops.add(_ReceiptDrawOp(
-          h + 12, (canvas, y) => canvas.drawImage(uiImage, Offset(0, y), Paint())));
+          h + 12, (canvas, y) => canvas.drawImage(uiImage!, Offset(0, y), Paint())));
     }
 
     Future<void> addQr(String qrData) async {
@@ -695,6 +751,16 @@ class BluetoothPrinterService {
       numChannels: 4,
     );
   }
+
+  /// Decoded+resized receipt logo, keyed by `'$logoUrl@$widthDots'` — the
+  /// same [InvoicePrintData.logoUrl] is printed over and over for every
+  /// invoice, and (unless the admin re-uploads a logo) never changes, so a
+  /// real network fetch (when `logoUrl` isn't an inline `data:` URI) plus
+  /// decode/resize is pure repeated work on every single print. Instance-
+  /// level (not static, unlike [_cachedQrImage]) since it holds actual image
+  /// bytes worth potentially several logos' worth of memory, and this
+  /// service is already a DI singleton so one cache per app run is enough.
+  final Map<String, ui.Image> _logoImageCache = {};
 
   /// Renders [kFeedbackUrl] as a QR code image once and caches it — every
   /// receipt everywhere encodes the exact same fixed URL, so there's no

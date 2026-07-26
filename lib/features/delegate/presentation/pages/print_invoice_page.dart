@@ -57,6 +57,28 @@ class _PrintInvoicePageState extends State<PrintInvoicePage> {
       _loadInvoice();
     }
     _discoverDevices();
+    _restoreConnection();
+  }
+
+  /// Re-shows whatever printer this DI-singleton service is already
+  /// connected to (or was last connected to) from a previous visit to this
+  /// screen, without forcing the user to re-pick a device and tap "اتصال"
+  /// again every single time. [BluetoothPrinterService.ensureConnected]
+  /// itself verifies the connection is still actually live before deciding
+  /// whether a real reconnect handshake is needed.
+  Future<void> _restoreConnection() async {
+    final remembered = _printer.connectedDevice;
+    if (remembered == null) return;
+    setState(() {
+      _selectedDevice = remembered;
+      _connecting = true;
+    });
+    final result = await _printer.ensureConnected(remembered);
+    if (!mounted) return;
+    setState(() {
+      _connecting = false;
+      _connected = result.success;
+    });
   }
 
   Future<void> _loadInvoice() async {
@@ -88,7 +110,7 @@ class _PrintInvoicePageState extends State<PrintInvoicePage> {
   Future<void> _connect() async {
     if (_selectedDevice == null) return;
     setState(() => _connecting = true);
-    final result = await _printer.connect(_selectedDevice!.macAdress);
+    final result = await _printer.ensureConnected(_selectedDevice!);
     if (!mounted) return;
     setState(() {
       _connecting = false;
@@ -152,13 +174,24 @@ class _PrintInvoicePageState extends State<PrintInvoicePage> {
 
     final data = await _buildPrintData();
     if (!mounted) return;
-    final ok = await _printer.printInvoice(data);
+    // Passing the selected device lets printInvoice fall back to a full
+    // reconnect+retry if the "persistent" connection turned out to be
+    // stale (printer powered off/out of range) instead of just failing.
+    final ok = await _printer.printInvoice(data, device: _selectedDevice);
     if (!mounted) return;
-    setState(() => _printing = false);
+    // Reflect whatever printInvoice's own reconnect attempt actually left
+    // the connection in, so a failure that couldn't be recovered disables
+    // the print button again instead of showing a stale "متصل" state.
+    final stillConnected = await _printer.isConnected;
+    if (!mounted) return;
+    setState(() {
+      _printing = false;
+      _connected = stillConnected;
+    });
     if (ok) {
       AppSnackbar.showSuccess(context, 'تم الطباعة بنجاح');
     } else {
-      AppSnackbar.showError(context, 'فشل الطباعة');
+      AppSnackbar.showError(context, 'فشل الطباعة، تأكد من تشغيل الطابعة وقربها من الهاتف');
     }
   }
 

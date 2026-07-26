@@ -38,4 +38,18 @@ class AppConfigModel {
         showPhone: json['show_phone'] as bool? ?? true,
         paperWidth: json['paper_width'] as String? ?? '80mm',
       );
+
+  // Mirrors fromJson's keys — used solely to persist the last-fetched config
+  // to disk (see AppConfigLocalDataSource) so it can seed the next cold
+  // launch instantly, before a fresh fetch completes.
+  Map<String, dynamic> toJson() => {
+        'company_name': companyName,
+        'logo_url': logoUrl,
+        'logo_color_url': logoColorUrl,
+        'max_price_override_pct': maxPriceOverridePct,
+        'header_text': headerText,
+        'footer_text': footerText,
+        'show_phone': showPhone,
+        'paper_width': paperWidth,
+      };
 }

@@ -19,7 +19,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
-  setupServiceLocator();
+  await setupServiceLocator();
   sl<PushNotificationService>().initialize();
   runApp(const AlKhairApp());
 }

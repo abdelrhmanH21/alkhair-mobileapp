@@ -1,4 +1,5 @@
 import 'package:get_it/get_it.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../network/api_client.dart';
 import '../utils/secure_session.dart';
@@ -6,6 +7,7 @@ import '../utils/gps_service.dart';
 import '../utils/bluetooth_printer.dart';
 import '../utils/push_notification_service.dart';
 
+import '../../features/app_config/data/datasources/app_config_local_datasource.dart';
 import '../../features/app_config/data/datasources/app_config_remote_datasource.dart';
 import '../../features/app_config/data/repositories/app_config_repository_impl.dart';
 import '../../features/app_config/domain/repositories/app_config_repository.dart';
@@ -27,7 +29,7 @@ import '../../features/admin/presentation/bloc/admin_bloc.dart';
 
 final sl = GetIt.instance;
 
-void setupServiceLocator() {
+Future<void> setupServiceLocator() async {
   // ── Core ────────────────────────────────────────────────────────────────────
   sl.registerLazySingleton<SecureSession>(() => SecureSession());
   sl.registerLazySingleton<ApiClient>(() => ApiClient());
@@ -36,8 +38,10 @@ void setupServiceLocator() {
   sl.registerLazySingleton<PushNotificationService>(() => PushNotificationService(sl()));
 
   // ── AppConfig feature ────────────────────────────────────────────────────
+  final prefs = await SharedPreferences.getInstance();
+  sl.registerLazySingleton<AppConfigLocalDataSource>(() => AppConfigLocalDataSource(prefs));
   sl.registerLazySingleton<AppConfigRemoteDataSource>(() => AppConfigRemoteDataSourceImpl(sl()));
-  sl.registerLazySingleton<AppConfigRepository>(() => AppConfigRepositoryImpl(sl()));
+  sl.registerLazySingleton<AppConfigRepository>(() => AppConfigRepositoryImpl(sl(), sl()));
   sl.registerFactory<AppConfigBloc>(() => AppConfigBloc(sl()));
 
   // ── Auth feature ─────────────────────────────────────────────────────────

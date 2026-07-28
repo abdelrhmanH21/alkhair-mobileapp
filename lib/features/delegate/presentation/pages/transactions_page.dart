@@ -639,9 +639,13 @@ class _CollectionFormSheetState extends State<_CollectionFormSheet> {
 
   void _onSearchFocusChanged() {
     if (_searchFocus.hasFocus && _searchCtrl.text.isEmpty) {
+      final cached = context.read<DelegateBloc>().getCachedCustomerList();
       final event = DelegateClientSearchRequested('');
       _tracker.start(event.requestId, _CollectionReq.search);
-      setState(() => _searchLoading = true);
+      setState(() {
+        if (cached.isNotEmpty) _searchResults = cached;
+        _searchLoading = cached.isEmpty;
+      });
       context.read<DelegateBloc>().add(event);
     }
   }

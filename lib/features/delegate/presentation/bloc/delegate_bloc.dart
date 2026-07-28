@@ -1,6 +1,10 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:dio/dio.dart';
 import '../../domain/repositories/delegate_repository.dart';
+import '../../data/models/loading_model.dart';
+import '../../data/models/client_model.dart';
+import '../../data/models/dashboard_model.dart';
+import '../../data/models/sellable_product_model.dart';
 import '../../../../core/utils/gps_service.dart';
 import 'delegate_event.dart';
 import 'delegate_state.dart';
@@ -8,6 +12,18 @@ import 'delegate_state.dart';
 class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
   final DelegateRepository _repo;
   final GpsService _gps;
+
+  // ── Offline cache reads (synchronous passthroughs) ───────────────────────
+  // Screens read these via context.read<DelegateBloc>() — the bloc's own
+  // injected repository instance — rather than reaching into the global
+  // service-locator singleton directly, so tests that construct a
+  // DelegateBloc with a fake/in-memory DelegateRepository (never registered
+  // with `sl`) keep working unchanged.
+  LoadingModel? getCachedLoading() => _repo.getCachedLoading();
+  List<TruckStockModel> getCachedTruckStock() => _repo.getCachedTruckStock();
+  DashboardModel? getCachedDashboard() => _repo.getCachedDashboard();
+  List<SellableProductModel> getCachedSellableProducts() => _repo.getCachedSellableProducts();
+  List<ClientModel> getCachedCustomerList() => _repo.getCachedCustomerList();
 
   DelegateBloc(this._repo, this._gps) : super(const DelegateInitial()) {
     on<DelegateLoadingFetched>(_onFetchLoading);

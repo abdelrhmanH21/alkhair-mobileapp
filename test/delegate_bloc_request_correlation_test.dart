@@ -51,6 +51,13 @@ class _FakeDelegateRepository implements DelegateRepository {
   @override
   Future<LoadingModel> confirmLoading() => confirmCompleter.future;
 
+  // LoadingPage seeds itself from the cache synchronously in initState
+  // before this fake's getCurrentLoading() future above ever resolves — no
+  // cached snapshot in this test, so the page falls through to its normal
+  // (non-offline) loading/fetch behavior exactly as before this method existed.
+  @override
+  LoadingModel? getCachedLoading() => null;
+
   @override
   Never noSuchMethod(Invocation invocation) => throw UnimplementedError(
       'DelegateRepository.${invocation.memberName} not used by this test');

@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/app_snackbar.dart';
 import '../../../../core/utils/polling_mixin.dart';
+import '../../../../core/widgets/state_views.dart';
 import '../bloc/delegate_bloc.dart';
 import '../bloc/delegate_event.dart';
 import '../bloc/delegate_state.dart';
@@ -22,6 +23,10 @@ class LoadingPage extends StatefulWidget {
 
 class _LoadingPageState extends State<LoadingPage> with PollingMixin<LoadingPage> {
   LoadingModel? _currentLoading;
+  // True while `_currentLoading` is last-known data from OfflineCacheService
+  // rather than a confirmed-fresh fetch — drives the calm offline banner
+  // instead of the red error view when the refresh underneath it fails.
+  bool _isCachedFallback = false;
 
   // Tracks every outstanding dispatch THIS page has made — explicit fetch,
   // silent poll tick, or confirm/status-update action — by requestId. This
@@ -43,9 +48,15 @@ class _LoadingPageState extends State<LoadingPage> with PollingMixin<LoadingPage
     super.initState();
     // Set directly rather than via _fetchLoading()'s setState — calling
     // setState before the first build is redundant (nothing to rebuild yet).
+    final delegateBloc = context.read<DelegateBloc>();
+    final cached = delegateBloc.getCachedLoading();
+    if (cached != null) {
+      _currentLoading = cached;
+      _isCachedFallback = true;
+    }
     final event = DelegateLoadingFetched();
     _tracker.start(event.requestId, _RequestKind.fetch);
-    context.read<DelegateBloc>().add(event);
+    delegateBloc.add(event);
     startPolling();
   }
 
@@ -130,8 +141,15 @@ class _LoadingPageState extends State<LoadingPage> with PollingMixin<LoadingPage
               setState(() {});
               AppSnackbar.showError(ctx, state.message);
             } else if (kind == _RequestKind.fetch) {
-              setState(() => _loadError = state.message);
-              AppSnackbar.showError(ctx, state.message);
+              if (_currentLoading != null) {
+                // Cached/last-known loading is still on screen — the
+                // offline banner covers a failed refresh here instead of a
+                // red error view + snackbar replacing real (if stale) data.
+                setState(() {});
+              } else {
+                setState(() => _loadError = state.message);
+                AppSnackbar.showError(ctx, state.message);
+              }
             }
             // else (poll): silent — retry next tick, never surface it.
           }
@@ -148,13 +166,18 @@ class _LoadingPageState extends State<LoadingPage> with PollingMixin<LoadingPage
               setState(() {
                 _currentLoading = state.loading;
                 _loadError = null;
+                _isCachedFallback = false;
               });
             } else if (kind == _RequestKind.poll) {
               // Silent refresh: update data with no spinner/flicker. Skip
               // the rebuild entirely if nothing actually changed.
               if (_currentLoading?.status != state.loading?.status ||
-                  _currentLoading?.items.length != state.loading?.items.length) {
-                setState(() => _currentLoading = state.loading);
+                  _currentLoading?.items.length != state.loading?.items.length ||
+                  _isCachedFallback) {
+                setState(() {
+                  _currentLoading = state.loading;
+                  _isCachedFallback = false;
+                });
               } else {
                 _currentLoading = state.loading;
               }
@@ -185,8 +208,9 @@ class _LoadingPageState extends State<LoadingPage> with PollingMixin<LoadingPage
           final loading = _currentLoading!;
           final isBusy = _actionInFlight;
 
+          Widget content;
           if (loading.isInTransit) {
-            return _InTransitView(
+            content = _InTransitView(
               loading: loading,
               isBusy: isBusy,
               onContinueSales: () => Navigator.of(context).push(
@@ -198,10 +222,8 @@ class _LoadingPageState extends State<LoadingPage> with PollingMixin<LoadingPage
                     status: 'completed',
                   )),
             );
-          }
-
-          if (loading.isCompleted) {
-            return _CompletedView(
+          } else if (loading.isCompleted) {
+            content = _CompletedView(
               loading: loading,
               onViewInvoices: () => Navigator.of(context).push(
                 // hasActiveLoading defaults to false here — this view only
@@ -210,20 +232,31 @@ class _LoadingPageState extends State<LoadingPage> with PollingMixin<LoadingPage
                 MaterialPageRoute(builder: (_) => const InvoiceHistoryPage()),
               ),
             );
+          } else {
+            content = _LoadingView(
+              loading: loading,
+              isBusy: isBusy,
+              onConfirm: loading.isPendingPickup
+                  ? () => _runAction(() => DelegateLoadingConfirmed())
+                  : null,
+              onMarkInTransit: loading.canUpdateToInTransit
+                  ? () => _runAction(() => DelegateLoadingStatusUpdateRequested(
+                        loadingId: loading.id,
+                        status: 'in_transit',
+                      ))
+                  : null,
+            );
           }
 
-          return _LoadingView(
-            loading: loading,
-            isBusy: isBusy,
-            onConfirm: loading.isPendingPickup
-                ? () => _runAction(() => DelegateLoadingConfirmed())
-                : null,
-            onMarkInTransit: loading.canUpdateToInTransit
-                ? () => _runAction(() => DelegateLoadingStatusUpdateRequested(
-                      loadingId: loading.id,
-                      status: 'in_transit',
-                    ))
-                : null,
+          return Column(
+            children: [
+              if (_isCachedFallback)
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(12, 8, 12, 0),
+                  child: OfflineDataBanner(show: true),
+                ),
+              Expanded(child: content),
+            ],
           );
         },
       ),

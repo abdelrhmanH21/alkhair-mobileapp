@@ -27,6 +27,10 @@ class _DashboardSectionState extends State<DashboardSection> {
   DashboardModel? _dashboard;
   String? _errorMessage;
   bool _retrying = false;
+  // True while `_dashboard` is last-known data from OfflineCacheService
+  // rather than a confirmed-fresh fetch — drives the calm offline banner
+  // instead of the red AppErrorView when the refresh underneath it fails.
+  bool _isCachedFallback = false;
   // Replaces the old _settled bool: tracks the requestId of THIS widget's
   // own outstanding dashboard fetch, so a DelegateLoadingLoaded/DelegateFailure
   // dispatched later by a sibling widget on the same shared DelegateBloc
@@ -43,6 +47,11 @@ class _DashboardSectionState extends State<DashboardSection> {
   @override
   void initState() {
     super.initState();
+    final cached = context.read<DelegateBloc>().getCachedDashboard();
+    if (cached != null) {
+      _dashboard = cached;
+      _isCachedFallback = true;
+    }
     _dispatchFetch();
   }
 
@@ -67,12 +76,16 @@ class _DashboardSectionState extends State<DashboardSection> {
             _dashboard = state.dashboard;
             _errorMessage = null;
             _retrying = false;
+            _isCachedFallback = false;
           });
         } else if (state is DelegateFailure) {
           if (_tracker.resolve(state.requestId) == null) return;
           setState(() {
-            _errorMessage = state.message;
             _retrying = false;
+            // A cached dashboard is already on screen — keep it and let the
+            // calm offline banner cover the failed refresh instead of
+            // replacing real (if stale) numbers with an error view.
+            if (_dashboard == null) _errorMessage = state.message;
           });
         }
       },
@@ -98,6 +111,7 @@ class _DashboardSectionState extends State<DashboardSection> {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            OfflineDataBanner(show: _isCachedFallback),
             _MonthHeader(month: dashboard!.currentMonth, onRefresh: _refresh),
             const SizedBox(height: 12),
             _HeroTargetCard(dashboard: dashboard),

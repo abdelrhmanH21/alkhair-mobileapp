@@ -22,4 +22,12 @@ class SellableProductModel {
       unitPrice: (json['unit_price'] as num? ?? 0).toDouble(),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'product_id': productId,
+        'name': name,
+        'unit': unit,
+        'available_qty': availableQty,
+        'unit_price': unitPrice,
+      };
 }

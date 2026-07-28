@@ -20,4 +20,12 @@ class ClientModel {
         address: json['address'] as String?,
         balance: (json['balance'] as num? ?? 0).toDouble(),
       );
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'name': name,
+        'phone': phone,
+        if (address != null) 'address': address,
+        'balance': balance,
+      };
 }

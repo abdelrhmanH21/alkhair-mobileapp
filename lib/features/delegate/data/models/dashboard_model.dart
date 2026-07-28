@@ -34,4 +34,16 @@ class DashboardModel {
       currentMonth: json['current_month'] as String? ?? '',
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'monthly_target': monthlyTarget,
+        'achieved_this_month': achievedThisMonth,
+        'target_percentage': targetPercentage,
+        'commission_earned': commissionEarned,
+        'base_salary': baseSalary,
+        'penalties_total': penaltiesTotal,
+        'advances_total': advancesTotal,
+        'net_payable': netPayable,
+        'current_month': currentMonth,
+      };
 }

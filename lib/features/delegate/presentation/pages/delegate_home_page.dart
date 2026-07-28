@@ -229,6 +229,10 @@ class _HomeTabState extends State<_HomeTab> with PollingMixin<_HomeTab> {
   LoadingModel? _loading;
   String? _loadingError;
   bool _hasLoadingResult = false;
+  // True while `_loading` is last-known data from OfflineCacheService rather
+  // than a confirmed-fresh fetch — drives the calm offline banner instead of
+  // the red AppErrorView when the refresh underneath it fails.
+  bool _isCachedFallback = false;
 
   // Tracks THIS widget's own outstanding DelegateLoadingFetched() dispatches
   // by requestId, tagged as explicit vs. silent-poll — replaces the old
@@ -246,6 +250,13 @@ class _HomeTabState extends State<_HomeTab> with PollingMixin<_HomeTab> {
   @override
   void initState() {
     super.initState();
+    final cached = context.read<DelegateBloc>().getCachedLoading();
+    if (cached != null) {
+      _loading = cached;
+      _hasLoadingResult = true;
+      _isCachedFallback = true;
+      widget.onLoadingChanged(cached);
+    }
     _fetchLoading();
     startPolling();
   }
@@ -286,17 +297,23 @@ class _HomeTabState extends State<_HomeTab> with PollingMixin<_HomeTab> {
             _loading = state.loading;
             _loadingError = null;
             _hasLoadingResult = true;
+            _isCachedFallback = false;
           });
           widget.onLoadingChanged(state.loading);
         } else if (state is DelegateFailure) {
           final kind = _tracker.resolve(state.requestId);
           if (kind == null) return; // not ours
-          if (kind == _FetchKind.explicit) {
+          if (_loading != null) {
+            // Cached/last-known shipment card is still on screen — the
+            // offline banner covers a failed refresh here, never a red
+            // error view replacing real (if stale) data.
+            setState(() {});
+          } else if (kind == _FetchKind.explicit) {
             setState(() {
               _loadingError = state.message;
               _hasLoadingResult = true;
             });
-          } else if (_loading == null) {
+          } else {
             // A silent poll tick failed with no good data to protect —
             // safe to show/update the error.
             setState(() {
@@ -304,8 +321,6 @@ class _HomeTabState extends State<_HomeTab> with PollingMixin<_HomeTab> {
               _hasLoadingResult = true;
             });
           }
-          // else: silent poll failure while last-good data is still shown —
-          // keep it, retry next tick, per PollingMixin's contract.
         }
       },
       child: SingleChildScrollView(
@@ -313,6 +328,7 @@ class _HomeTabState extends State<_HomeTab> with PollingMixin<_HomeTab> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            OfflineDataBanner(show: _isCachedFallback),
             const DashboardSection(),
             const SizedBox(height: 4),
             Padding(

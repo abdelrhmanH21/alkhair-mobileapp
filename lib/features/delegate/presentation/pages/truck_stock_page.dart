@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/app_snackbar.dart';
+import '../../../../core/widgets/state_views.dart';
 import '../bloc/delegate_bloc.dart';
 import '../bloc/delegate_event.dart';
 import '../bloc/delegate_state.dart';
@@ -17,6 +18,12 @@ class TruckStockPage extends StatefulWidget {
 
 class _TruckStockPageState extends State<TruckStockPage> {
   List<TruckStockModel> _stocks = [];
+
+  // True while `_stocks` is last-known data from OfflineCacheService rather
+  // than a confirmed-fresh fetch — drives the calm offline banner instead of
+  // a red error when the refresh underneath it fails. See
+  // _SellableProductPickerSheetState's identical flag in invoice_page.dart.
+  bool _isCachedFallback = false;
 
   // This tab lives forever inside DelegateHomePage's IndexedStack, sharing
   // one DelegateBloc with every other tab — without this, ANY DelegateFailure
@@ -34,6 +41,11 @@ class _TruckStockPageState extends State<TruckStockPage> {
   @override
   void initState() {
     super.initState();
+    final cached = context.read<DelegateBloc>().getCachedTruckStock();
+    if (cached.isNotEmpty) {
+      _stocks = cached;
+      _isCachedFallback = true;
+    }
     _fetch();
   }
 
@@ -53,10 +65,20 @@ class _TruckStockPageState extends State<TruckStockPage> {
         listener: (ctx, state) {
           if (state is DelegateTruckStockLoaded) {
             if (_tracker.resolve(state.requestId) == null) return;
-            setState(() => _stocks = state.stocks);
+            setState(() {
+              _stocks = state.stocks;
+              _isCachedFallback = false;
+            });
           } else if (state is DelegateFailure) {
             if (_tracker.resolve(state.requestId) == null) return;
-            AppSnackbar.showError(ctx, state.message);
+            if (_stocks.isNotEmpty) {
+              // Cached/last-known stock is still on screen — the offline
+              // banner (driven by _isCachedFallback + live connectivity)
+              // covers this, not a red error snackbar.
+              setState(() {});
+            } else {
+              AppSnackbar.showError(ctx, state.message);
+            }
           }
         },
         builder: (_, state) {
@@ -76,42 +98,51 @@ class _TruckStockPageState extends State<TruckStockPage> {
               ),
             );
           }
-          return ListView.builder(
-            itemCount: _stocks.length,
-            itemBuilder: (_, i) {
-              final s = _stocks[i];
-              return Card(
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
-                    child: Text('${i + 1}',
-                        style: const TextStyle(
-                            color: AppTheme.primary, fontWeight: FontWeight.bold)),
-                  ),
-                  title: Text(s.productName,
-                      style: const TextStyle(fontWeight: FontWeight.w600)),
-                  subtitle: Text('الوحدة: ${s.productUnit}'),
-                  trailing: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        s.currentStockQty.toStringAsFixed(2),
-                        style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: AppTheme.primary),
-                      ),
-                      const Text('متبقي',
-                          style: TextStyle(fontSize: 10, color: AppTheme.textMuted)),
-                    ],
-                  ),
-                ),
-              );
-            },
+          return Column(
+            children: [
+              OfflineDataBanner(show: _isCachedFallback),
+              Expanded(child: _buildStockList()),
+            ],
           );
         },
       ),
+    );
+  }
+
+  Widget _buildStockList() {
+    return ListView.builder(
+      itemCount: _stocks.length,
+      itemBuilder: (_, i) {
+        final s = _stocks[i];
+        return Card(
+          child: ListTile(
+            leading: CircleAvatar(
+              backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
+              child: Text('${i + 1}',
+                  style: const TextStyle(
+                      color: AppTheme.primary, fontWeight: FontWeight.bold)),
+            ),
+            title: Text(s.productName,
+                style: const TextStyle(fontWeight: FontWeight.w600)),
+            subtitle: Text('الوحدة: ${s.productUnit}'),
+            trailing: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  s.currentStockQty.toStringAsFixed(2),
+                  style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: AppTheme.primary),
+                ),
+                const Text('متبقي',
+                    style: TextStyle(fontSize: 10, color: AppTheme.textMuted)),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

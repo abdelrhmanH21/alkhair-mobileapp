@@ -11,27 +11,127 @@ import '../models/breakdown_models.dart';
 import '../models/transaction_record_models.dart';
 import '../models/report_models.dart';
 import '../models/customer_invoice_history_model.dart';
+import '../../../../core/utils/offline_cache_service.dart';
 import '../../domain/repositories/delegate_repository.dart';
+
+/// Cache keys for the read endpoints Phase 1 offline support covers — see
+/// OfflineCacheService. A delegate only ever has one active loading at a
+/// time, so these are single fixed slots (not keyed per-loading-id): the
+/// cached snapshot is always "whatever this device last saw", which is
+/// exactly the one loading/truck-stock/etc. that matters right now.
+const _kCurrentLoading = 'current_loading';
+const _kTruckStock = 'truck_stock';
+const _kDashboard = 'delegate_dashboard';
+const _kSellableProducts = 'sellable_products';
+const _kCustomerList = 'customer_list';
 
 class DelegateRepositoryImpl implements DelegateRepository {
   final DelegateRemoteDataSource _remote;
-  DelegateRepositoryImpl(this._remote);
+  final OfflineCacheService _cache;
+  DelegateRepositoryImpl(this._remote, this._cache);
 
   @override
-  Future<LoadingModel?> getCurrentLoading() => _remote.fetchCurrentLoading();
+  Future<LoadingModel?> getCurrentLoading() async {
+    final loading = await _remote.fetchCurrentLoading();
+    if (loading != null) {
+      await _cache.set(_kCurrentLoading, loading.toJson());
+    } else {
+      // A confirmed-live "no active loading right now" (e.g. right after
+      // settlement) must drop any earlier cached loading — otherwise the
+      // NEXT time this device opens offline, it would keep showing a
+      // since-settled loading as if it were still current.
+      await _cache.clear(_kCurrentLoading);
+    }
+    return loading;
+  }
 
   @override
-  Future<DashboardModel> getDashboard() => _remote.fetchDashboard();
+  LoadingModel? getCachedLoading() {
+    final json = _cache.get(_kCurrentLoading) as Map<String, dynamic>?;
+    if (json == null) return null;
+    try {
+      return LoadingModel.fromJson(json);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Future<DashboardModel> getDashboard() async {
+    final dashboard = await _remote.fetchDashboard();
+    await _cache.set(_kDashboard, dashboard.toJson());
+    return dashboard;
+  }
+
+  @override
+  DashboardModel? getCachedDashboard() {
+    final json = _cache.get(_kDashboard) as Map<String, dynamic>?;
+    if (json == null) return null;
+    try {
+      return DashboardModel.fromJson(json);
+    } catch (_) {
+      return null;
+    }
+  }
 
   @override
   Future<LoadingModel> confirmLoading() => _remote.confirmLoading();
 
   @override
-  Future<List<TruckStockModel>> getTruckStock() => _remote.fetchTruckStock();
+  Future<List<TruckStockModel>> getTruckStock() async {
+    final stocks = await _remote.fetchTruckStock();
+    await _cache.set(_kTruckStock, stocks.map((s) => s.toJson()).toList());
+    return stocks;
+  }
 
   @override
-  Future<List<ClientModel>> searchClients(String query) =>
-      _remote.searchClients(query);
+  List<TruckStockModel> getCachedTruckStock() {
+    final list = _cache.get(_kTruckStock) as List?;
+    if (list == null) return [];
+    try {
+      return list.map((e) => TruckStockModel.fromJson(e as Map<String, dynamic>)).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  @override
+  Future<List<ClientModel>> searchClients(String query) async {
+    try {
+      final results = await _remote.searchClients(query);
+      // Only the empty-query "browse everyone" call represents the full
+      // customer list — per-keystroke query results are a subset and would
+      // corrupt the cache if written here.
+      if (query.trim().isEmpty) {
+        await _cache.set(_kCustomerList, results.map((c) => c.toJson()).toList());
+      }
+      return results;
+    } catch (_) {
+      // Offline (or the request otherwise failed): fall back to filtering
+      // the last-known full customer list client-side instead of surfacing
+      // a hard failure — a delegate mid-sale can still find an existing
+      // customer by name/phone even with no signal. Only truly out of
+      // options (nothing ever cached) does this rethrow.
+      final cached = getCachedCustomerList();
+      if (cached.isEmpty) rethrow;
+      final q = query.trim().toLowerCase();
+      if (q.isEmpty) return cached;
+      return cached
+          .where((c) => c.name.toLowerCase().contains(q) || c.phone.contains(q))
+          .toList();
+    }
+  }
+
+  @override
+  List<ClientModel> getCachedCustomerList() {
+    final list = _cache.get(_kCustomerList) as List?;
+    if (list == null) return [];
+    try {
+      return list.map((e) => ClientModel.fromJson(e as Map<String, dynamic>)).toList();
+    } catch (_) {
+      return [];
+    }
+  }
 
   @override
   Future<ClientModel> createClient({
@@ -50,8 +150,22 @@ class DelegateRepositoryImpl implements DelegateRepository {
       );
 
   @override
-  Future<List<SellableProductModel>> getSellableProducts({int? customerId}) =>
-      _remote.fetchSellableProducts(customerId: customerId);
+  Future<List<SellableProductModel>> getSellableProducts({int? customerId}) async {
+    final products = await _remote.fetchSellableProducts(customerId: customerId);
+    await _cache.set(_kSellableProducts, products.map((p) => p.toJson()).toList());
+    return products;
+  }
+
+  @override
+  List<SellableProductModel> getCachedSellableProducts() {
+    final list = _cache.get(_kSellableProducts) as List?;
+    if (list == null) return [];
+    try {
+      return list.map((e) => SellableProductModel.fromJson(e as Map<String, dynamic>)).toList();
+    } catch (_) {
+      return [];
+    }
+  }
 
   @override
   Future<List<CatalogProductModel>> getSalesCatalogProducts() =>

@@ -17,6 +17,15 @@ abstract class DelegateRepository {
   Future<List<TruckStockModel>> getTruckStock();
   Future<DashboardModel> getDashboard();
   Future<List<ClientModel>> searchClients(String query);
+
+  // ── Offline cache reads (synchronous, last-known snapshot) ───────────────
+  // Let a screen show *something* real the instant it opens, before the
+  // corresponding Future above has resolved — see OfflineCacheService.
+  LoadingModel? getCachedLoading();
+  List<TruckStockModel> getCachedTruckStock();
+  DashboardModel? getCachedDashboard();
+  List<SellableProductModel> getCachedSellableProducts();
+  List<ClientModel> getCachedCustomerList();
   Future<ClientModel> createClient({
     required String name,
     required String phone,

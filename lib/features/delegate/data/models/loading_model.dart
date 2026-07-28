@@ -28,6 +28,14 @@ class LoadingItemModel {
       quantityConfirmed: (json['quantity_confirmed'] as num? ?? 0).toDouble(),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'product_id': productId,
+        'product': {'name': productName, 'unit': productUnit},
+        'quantity_requested': quantityRequested,
+        'quantity_confirmed': quantityConfirmed,
+      };
 }
 
 class LoadingModel {
@@ -77,6 +85,17 @@ class LoadingModel {
   bool get canUpdateToInTransit => isAccepted;
   bool get canUpdateToCompleted => isInTransit;
   bool get isActiveForSales     => isAccepted || isInTransit;
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'delegate_id': delegateId,
+        'warehouse_id': warehouseId,
+        'warehouse': {'name': warehouseName},
+        'status': status,
+        if (createdByName != null) 'created_by': {'name': createdByName},
+        if (loadedAt != null) 'loaded_at': loadedAt!.toIso8601String(),
+        'items': items.map((i) => i.toJson()).toList(),
+      };
 }
 
 class TruckStockModel {
@@ -104,4 +123,11 @@ class TruckStockModel {
       currentStockQty: (json['current_stock_qty'] as num).toDouble(),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+        'id': id,
+        'product_id': productId,
+        'product': {'name': productName, 'unit': productUnit},
+        'current_stock_qty': currentStockQty,
+      };
 }

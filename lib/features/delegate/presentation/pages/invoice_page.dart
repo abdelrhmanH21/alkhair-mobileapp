@@ -6,6 +6,7 @@ import '../../../../core/network/api_client.dart';
 import '../../../../core/network/api_endpoints.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/app_snackbar.dart';
+import '../../../../core/widgets/state_views.dart';
 import '../../../app_config/presentation/bloc/app_config_bloc.dart';
 import '../../../app_config/presentation/bloc/app_config_state.dart';
 import '../bloc/delegate_bloc.dart';
@@ -71,10 +72,19 @@ class _InvoicePageState extends State<InvoicePage> {
     // Opening the search field with no query yet shows the full, browsable
     // client list instead of nothing until the delegate starts typing.
     if (_searchFocus.hasFocus && _searchCtrl.text.isEmpty) {
+      // Show the last-known full customer list instantly (before the network
+      // round trip resolves, or at all if offline — DelegateRepositoryImpl
+      // also falls back to this same cache on a failed search) instead of a
+      // spinner sitting over a still-empty dropdown.
+      final delegateBloc = context.read<DelegateBloc>();
+      final cached = delegateBloc.getCachedCustomerList();
       final event = DelegateClientSearchRequested('');
       _tracker.start(event.requestId, _InvoiceReq.search);
-      setState(() => _searchLoading = true);
-      context.read<DelegateBloc>().add(event);
+      setState(() {
+        if (cached.isNotEmpty) _searchResults = cached;
+        _searchLoading = cached.isEmpty;
+      });
+      delegateBloc.add(event);
     }
   }
 
@@ -1040,6 +1050,12 @@ class _SellableProductPickerSheetState
   // confused with either. See request_tracker.dart.
   final _tracker = RequestTracker<bool>();
 
+  // True while `_products` came from OfflineCacheService rather than a
+  // confirmed-fresh network response — drives the calm offline banner (see
+  // OfflineDataBanner), never a red error, since a stale-but-real truck-stock
+  // list is exactly what Phase 1 offline support is meant to keep showing.
+  bool _isCachedFallback = false;
+
   double get _maxOverridePct {
     final state = context.read<AppConfigBloc>().state;
     return state is AppConfigLoaded ? state.config.maxPriceOverridePct : 10;
@@ -1053,6 +1069,11 @@ class _SellableProductPickerSheetState
   @override
   void initState() {
     super.initState();
+    final cached = context.read<DelegateBloc>().getCachedSellableProducts();
+    if (cached.isNotEmpty) {
+      _products = cached;
+      _isCachedFallback = true;
+    }
     final event = DelegateSellableProductsFetched(customerId: widget.clientId);
     _tracker.start(event.requestId, true);
     context.read<DelegateBloc>().add(event);
@@ -1103,7 +1124,17 @@ class _SellableProductPickerSheetState
         listener: (ctx, state) {
           if (state is DelegateSellableProductsLoaded) {
             if (_tracker.resolve(state.requestId) == null) return;
-            setState(() => _products = state.products);
+            setState(() {
+              _products = state.products;
+              _isCachedFallback = false;
+            });
+          } else if (state is DelegateFailure) {
+            if (_tracker.resolve(state.requestId) == null) return;
+            // A cached list (if any) is already showing — nothing to do
+            // beyond letting the calm offline banner reflect that below;
+            // never surface a red error here for what's just a background
+            // refresh failing behind still-valid last-known data.
+            setState(() {});
           }
         },
         builder: (ctx, state) {
@@ -1125,6 +1156,7 @@ class _SellableProductPickerSheetState
                     ),
                   ],
                 ),
+                OfflineDataBanner(show: _isCachedFallback),
                 if (loading)
                   const Expanded(
                       child: Center(child: CircularProgressIndicator()))

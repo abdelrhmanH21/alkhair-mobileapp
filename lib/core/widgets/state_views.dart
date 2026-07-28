@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import '../di/service_locator.dart';
 import '../theme/app_theme.dart';
+import '../utils/connectivity_service.dart';
 
 /// Shared friendly error state: icon + message + retry button.
 /// [danger] controls styling — pass false for calm/neutral states that
@@ -122,4 +124,56 @@ class _AppSkeletonBoxState extends State<AppSkeletonBox>
           ),
         ),
       );
+}
+
+/// Calm (never red/danger) top-of-screen notice: "you're offline, what
+/// you're looking at might be stale" — for screens that fell back to
+/// [OfflineCacheService]'s last-known snapshot because the live refresh
+/// failed. Deliberately styled like [AppErrorView]'s `danger: false` calm
+/// state (grey icon, muted text, no alarming color) rather than the
+/// `danger: true` red — being offline with a real cached answer on screen is
+/// an expected, non-broken state, not an error.
+///
+/// Only rendered while [ConnectivityService] currently reports offline —
+/// pass [show] as false once a screen's own fetch has confirmed the
+/// currently-displayed data is fresh again, so the banner doesn't linger
+/// simply because Wi-Fi happens to be off on an otherwise-idle screen with no
+/// cached-fallback data being shown at all.
+class OfflineDataBanner extends StatelessWidget {
+  final bool show;
+  const OfflineDataBanner({super.key, this.show = true});
+
+  @override
+  Widget build(BuildContext context) {
+    if (!show) return const SizedBox.shrink();
+    return StreamBuilder<bool>(
+      stream: sl<ConnectivityService>().onStatusChanged,
+      initialData: sl<ConnectivityService>().isOnline,
+      builder: (context, snapshot) {
+        if (snapshot.data ?? true) return const SizedBox.shrink();
+        return Container(
+          width: double.infinity,
+          margin: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade100,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: Colors.grey.shade300),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.cloud_off_rounded, size: 18, color: Colors.grey.shade600),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'أنت غير متصل بالإنترنت — البيانات المعروضة قد لا تكون محدثة',
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 }

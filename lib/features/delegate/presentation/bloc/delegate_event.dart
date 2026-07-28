@@ -137,6 +137,8 @@ class DelegatePenaltiesFetched extends DelegateEvent {}
 
 class DelegateAdvancesFetched extends DelegateEvent {}
 
+class DelegateBonusesFetched extends DelegateEvent {}
+
 class DelegateCommissionBreakdownFetched extends DelegateEvent {}
 
 class DelegateExpenseSubmitted extends DelegateEvent {

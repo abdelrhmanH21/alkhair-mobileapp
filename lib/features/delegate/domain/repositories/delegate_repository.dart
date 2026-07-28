@@ -73,6 +73,7 @@ abstract class DelegateRepository {
   });
   Future<List<PenaltyModel>> getPenalties();
   Future<List<AdvanceModel>> getAdvances();
+  Future<List<BonusModel>> getBonuses();
   Future<List<CommissionDayModel>> getCommissionBreakdown();
   Future<String> submitExpense({
     required double amount,

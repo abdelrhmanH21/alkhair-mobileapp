@@ -170,6 +170,13 @@ class DelegateAdvancesLoaded extends DelegateState {
   List<Object?> get props => [advances, requestId];
 }
 
+class DelegateBonusesLoaded extends DelegateState {
+  final List<BonusModel> bonuses;
+  const DelegateBonusesLoaded(this.bonuses, {super.requestId});
+  @override
+  List<Object?> get props => [bonuses, requestId];
+}
+
 class DelegateCommissionBreakdownLoaded extends DelegateState {
   final List<CommissionDayModel> days;
   const DelegateCommissionBreakdownLoaded(this.days, {super.requestId});

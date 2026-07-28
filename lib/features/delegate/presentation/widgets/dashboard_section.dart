@@ -10,6 +10,7 @@ import '../bloc/request_tracker.dart';
 import '../../data/models/dashboard_model.dart';
 import '../pages/penalties_page.dart';
 import '../pages/advances_page.dart';
+import '../pages/bonuses_page.dart';
 import '../pages/commission_breakdown_page.dart';
 
 /// Reusable delegate-performance dashboard. Self-contained: dispatches its own
@@ -162,6 +163,14 @@ class _DashboardSectionState extends State<DashboardSection> {
                 ),
               ],
             ),
+            const SizedBox(height: 8),
+            _StatCard(
+              icon: Icons.add_circle_outline,
+              label: 'إجمالي المكافآت',
+              value: dashboard.bonusTotal,
+              color: Colors.green,
+              onTap: () => _openPage(context, const BonusesPage()),
+            ),
             const SizedBox(height: 10),
             _NetPayableCard(value: dashboard.netPayable),
           ],
@@ -217,6 +226,8 @@ class _DashboardSkeleton extends StatelessWidget {
               Expanded(child: AppSkeletonBox(height: 84)),
             ],
           ),
+          SizedBox(height: 8),
+          AppSkeletonBox(height: 84),
           SizedBox(height: 8),
           AppSkeletonBox(height: 64),
         ],

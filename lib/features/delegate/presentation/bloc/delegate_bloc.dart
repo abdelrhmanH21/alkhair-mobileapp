@@ -48,6 +48,7 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
     on<DelegateSettlementRequestSubmitted>(_onSubmitSettlementRequest);
     on<DelegatePenaltiesFetched>(_onFetchPenalties);
     on<DelegateAdvancesFetched>(_onFetchAdvances);
+    on<DelegateBonusesFetched>(_onFetchBonuses);
     on<DelegateCommissionBreakdownFetched>(_onFetchCommissionBreakdown);
     on<DelegateExpenseSubmitted>(_onSubmitExpense);
     on<DelegateCustomerCollectionSubmitted>(_onSubmitCustomerCollection);
@@ -384,6 +385,21 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
     try {
       final advances = await _repo.getAdvances();
       emit(DelegateAdvancesLoaded(advances, requestId: event.requestId));
+    } on DioException catch (e) {
+      emit(DelegateFailure(_parseError(e), requestId: event.requestId));
+    } catch (_) {
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.', requestId: event.requestId));
+    }
+  }
+
+  Future<void> _onFetchBonuses(
+    DelegateBonusesFetched event,
+    Emitter<DelegateState> emit,
+  ) async {
+    emit(DelegateLoading(requestId: event.requestId));
+    try {
+      final bonuses = await _repo.getBonuses();
+      emit(DelegateBonusesLoaded(bonuses, requestId: event.requestId));
     } on DioException catch (e) {
       emit(DelegateFailure(_parseError(e), requestId: event.requestId));
     } catch (_) {

@@ -604,6 +604,7 @@ class PayrollSummaryRowModel {
   final double commissionEarned;
   final double penaltiesTotal;
   final double advancesTotal;
+  final double bonusTotal;
   final double netPayable;
 
   const PayrollSummaryRowModel({
@@ -616,6 +617,7 @@ class PayrollSummaryRowModel {
     required this.commissionEarned,
     required this.penaltiesTotal,
     required this.advancesTotal,
+    required this.bonusTotal,
     required this.netPayable,
   });
 
@@ -632,7 +634,33 @@ class PayrollSummaryRowModel {
         commissionEarned: _asDouble(json['commission_earned']),
         penaltiesTotal: _asDouble(json['penalties_total']),
         advancesTotal: _asDouble(json['advances_total']),
+        bonusTotal: _asDouble(json['bonus_total']),
         netPayable: _asDouble(json['net_payable']),
+      );
+}
+
+/// Mirrors SalesRepController::index() rows — used by the "عمليات العمالة"
+/// worker picker, which (unlike PayrollSummaryRowModel's sales_rep-only
+/// list) must include worker_type=worker rows too, per the original
+/// "العمالة" web page's staff list covering both.
+class StaffModel {
+  final int id;
+  final String name;
+  final String workerType;
+  final String? phone;
+
+  const StaffModel({
+    required this.id,
+    required this.name,
+    required this.workerType,
+    this.phone,
+  });
+
+  factory StaffModel.fromJson(Map<String, dynamic> json) => StaffModel(
+        id: json['id'] as int,
+        name: json['name'] as String? ?? '',
+        workerType: json['worker_type'] as String? ?? 'sales_rep',
+        phone: json['phone'] as String?,
       );
 }
 

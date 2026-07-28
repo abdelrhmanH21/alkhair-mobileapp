@@ -280,6 +280,9 @@ class DelegateRepositoryImpl implements DelegateRepository {
   Future<List<AdvanceModel>> getAdvances() => _remote.fetchAdvances();
 
   @override
+  Future<List<BonusModel>> getBonuses() => _remote.fetchBonuses();
+
+  @override
   Future<List<CommissionDayModel>> getCommissionBreakdown() =>
       _remote.fetchCommissionBreakdown();
 

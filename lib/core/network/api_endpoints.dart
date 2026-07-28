@@ -27,6 +27,7 @@ class ApiEndpoints {
   static const String delegateSettlementRequest = '/delegate/settlement-request';
   static const String delegatePenalties            = '/delegate/penalties';
   static const String delegateAdvances             = '/delegate/advances';
+  static const String delegateBonuses              = '/delegate/bonuses';
   static const String delegateCommissionBreakdown  = '/delegate/commission-breakdown';
 
   // Delegate — clients
@@ -49,6 +50,7 @@ class ApiEndpoints {
   static const String categories         = '$apiRoot/categories';
   static const String labs               = '$apiRoot/labs';
   static const String rawMaterials       = '$apiRoot/raw-materials';
+  static const String salesReps          = '$apiRoot/sales-reps';
   static const String manufacturingRecipes = '$apiRoot/manufacturing-recipes';
   static const String manufacturingOrders  = '$apiRoot/manufacturing';
   static String manufacturingComplete(int id) => '$apiRoot/manufacturing/$id/complete';
@@ -81,6 +83,7 @@ class ApiEndpoints {
   static const String adminProducts     = '/admin/products';
   static const String adminWarehouses   = '/admin/warehouses';
   static const String adminPayrollSummary = '/admin/payroll-summary';
+  static const String adminStaffOperations = '/admin/staff-operations';
   static const String adminSettlementHistory = '/admin/settlement-history';
   static const String adminSale = '/admin/sale';
   static const String adminCustomerCollection = '/admin/customer-collection';

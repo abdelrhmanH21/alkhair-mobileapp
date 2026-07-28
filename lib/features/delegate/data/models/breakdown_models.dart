@@ -45,6 +45,28 @@ class AdvanceModel {
       );
 }
 
+/// Mirrors DelegateDashboardController::bonuses() rows.
+class BonusModel {
+  final int id;
+  final String date;
+  final double amount;
+  final String? reason;
+
+  const BonusModel({
+    required this.id,
+    required this.date,
+    required this.amount,
+    this.reason,
+  });
+
+  factory BonusModel.fromJson(Map<String, dynamic> json) => BonusModel(
+        id: json['id'] as int,
+        date: json['date'] as String? ?? '',
+        amount: (json['amount'] as num? ?? 0).toDouble(),
+        reason: json['reason'] as String?,
+      );
+}
+
 /// Mirrors DelegateDashboardController::commissionBreakdown() rows — one
 /// per calendar day with at least one invoice.
 class CommissionDayModel {

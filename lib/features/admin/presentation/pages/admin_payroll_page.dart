@@ -146,6 +146,7 @@ class _RepCard extends StatelessWidget {
                   _MiniStat(label: 'العمولة', value: rep.commissionEarned, color: AppTheme.secondary),
                   _MiniStat(label: 'الجزاءات', value: rep.penaltiesTotal, color: AppTheme.danger),
                   _MiniStat(label: 'السلف', value: rep.advancesTotal, color: AppTheme.accent),
+                  _MiniStat(label: 'المكافآت', value: rep.bonusTotal, color: Colors.green),
                 ],
               ),
             ],
@@ -187,7 +188,7 @@ class _RepPayrollDetailPage extends StatefulWidget {
 
 class _RepPayrollDetailPageState extends State<_RepPayrollDetailPage>
     with SingleTickerProviderStateMixin {
-  late final TabController _tabController = TabController(length: 3, vsync: this);
+  late final TabController _tabController = TabController(length: 4, vsync: this);
   bool _targetChanged = false;
 
   @override
@@ -236,6 +237,7 @@ class _RepPayrollDetailPageState extends State<_RepPayrollDetailPage>
               Tab(text: 'العمولة اليومية'),
               Tab(text: 'الجزاءات'),
               Tab(text: 'السلف'),
+              Tab(text: 'المكافآت'),
             ],
           ),
         ),
@@ -245,6 +247,7 @@ class _RepPayrollDetailPageState extends State<_RepPayrollDetailPage>
             _CommissionBreakdownTab(remote: widget.remote, repId: widget.rep.repId),
             _RepPenaltiesTab(remote: widget.remote, repId: widget.rep.repId),
             _RepAdvancesTab(remote: widget.remote, repId: widget.rep.repId),
+            _RepBonusesTab(remote: widget.remote, repId: widget.rep.repId),
           ],
         ),
       ),
@@ -416,6 +419,63 @@ class _RepAdvancesTabState extends State<_RepAdvancesTab> {
             subtitle: Text('${a.date} — ${a.type}'),
             trailing: Text(a.amount.toStringAsFixed(2),
                 style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.accent)),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _RepBonusesTab extends StatefulWidget {
+  final AdminRemoteDataSource remote;
+  final int repId;
+  const _RepBonusesTab({required this.remote, required this.repId});
+
+  @override
+  State<_RepBonusesTab> createState() => _RepBonusesTabState();
+}
+
+class _RepBonusesTabState extends State<_RepBonusesTab> {
+  List<BonusModel>? _rows;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() => _error = null);
+    try {
+      final rows = await widget.remote.fetchRepBonuses(widget.repId);
+      if (mounted) setState(() => _rows = rows);
+    } catch (_) {
+      if (mounted) setState(() => _error = 'فشل تحميل المكافآت.');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_error != null) return AppErrorView(message: _error!, onRetry: _load);
+    if (_rows == null) return const Center(child: CircularProgressIndicator());
+    if (_rows!.isEmpty) {
+      return const Center(
+          child: Text('لا توجد مكافآت هذا الشهر.', style: TextStyle(color: AppTheme.textMuted)));
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.all(12),
+      itemCount: _rows!.length,
+      itemBuilder: (_, i) {
+        final b = _rows![i];
+        return Card(
+          margin: const EdgeInsets.symmetric(vertical: 4),
+          child: ListTile(
+            leading: const Icon(Icons.add_circle_outline, color: Colors.green),
+            title: Text(b.reason?.isNotEmpty == true ? b.reason! : 'مكافأة'),
+            subtitle: Text(b.date),
+            trailing: Text(b.amount.toStringAsFixed(2),
+                style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
           ),
         );
       },

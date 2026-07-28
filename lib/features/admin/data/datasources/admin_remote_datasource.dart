@@ -63,6 +63,7 @@ abstract class AdminRemoteDataSource {
   // ── Payroll (العمالة) ─────────────────────────────────────────────────
   Future<List<PayrollSummaryRowModel>> fetchPayrollSummary({String? month});
   Future<List<PenaltyModel>> fetchRepPenalties(int repId);
+  Future<List<BonusModel>> fetchRepBonuses(int repId);
 
   // ── Settlement history (سجل التسويات) ──────────────────────────────────
   Future<SettlementRecordPageModel> fetchSettlementHistory({
@@ -169,6 +170,15 @@ abstract class AdminRemoteDataSource {
     int? treasuryId,
     int? customerId,
     required List<Map<String, dynamic>> counts,
+  });
+
+  // ── عمليات العمالة (جزاء / سلفة / مكافأة) ────────────────────────────────
+  Future<List<StaffModel>> fetchAllStaff();
+  Future<void> submitStaffOperation({
+    required int salesRepId,
+    required String operationType,
+    required double amount,
+    String? notes,
   });
 }
 
@@ -409,6 +419,16 @@ class AdminRemoteDataSourceImpl implements AdminRemoteDataSource {
     );
     final list = (res.data as Map<String, dynamic>)['data'] as List? ?? [];
     return list.map((e) => PenaltyModel.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  @override
+  Future<List<BonusModel>> fetchRepBonuses(int repId) async {
+    final res = await _client.dio.get(
+      ApiEndpoints.delegateBonuses,
+      queryParameters: {'rep_id': repId},
+    );
+    final list = (res.data as Map<String, dynamic>)['data'] as List? ?? [];
+    return list.map((e) => BonusModel.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   @override
@@ -709,5 +729,30 @@ class AdminRemoteDataSourceImpl implements AdminRemoteDataSource {
     });
     final data = res.data as Map<String, dynamic>;
     return (data['total_variance_value'] as num? ?? 0).toDouble();
+  }
+
+  // ── عمليات العمالة (جزاء / سلفة / مكافأة) ────────────────────────────────
+
+  @override
+  Future<List<StaffModel>> fetchAllStaff() async {
+    final res = await _client.dio
+        .get(ApiEndpoints.salesReps, queryParameters: {'active_only': 1});
+    final list = res.data as List? ?? [];
+    return list.map((e) => StaffModel.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  @override
+  Future<void> submitStaffOperation({
+    required int salesRepId,
+    required String operationType,
+    required double amount,
+    String? notes,
+  }) async {
+    await _client.dio.post(ApiEndpoints.adminStaffOperations, data: {
+      'sales_rep_id': salesRepId,
+      'operation_type': operationType,
+      'amount': amount,
+      if (notes != null && notes.isNotEmpty) 'notes': notes,
+    });
   }
 }

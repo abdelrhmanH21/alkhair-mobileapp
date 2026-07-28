@@ -58,6 +58,7 @@ abstract class DelegateRemoteDataSource {
   });
   Future<List<PenaltyModel>> fetchPenalties();
   Future<List<AdvanceModel>> fetchAdvances();
+  Future<List<BonusModel>> fetchBonuses();
   Future<List<CommissionDayModel>> fetchCommissionBreakdown();
   Future<String> submitExpense({
     required double amount,
@@ -283,6 +284,13 @@ class DelegateRemoteDataSourceImpl implements DelegateRemoteDataSource {
     final res = await _client.dio.get(ApiEndpoints.delegateAdvances);
     final list = res.data['data'] as List? ?? [];
     return list.map((e) => AdvanceModel.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  @override
+  Future<List<BonusModel>> fetchBonuses() async {
+    final res = await _client.dio.get(ApiEndpoints.delegateBonuses);
+    final list = res.data['data'] as List? ?? [];
+    return list.map((e) => BonusModel.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   @override

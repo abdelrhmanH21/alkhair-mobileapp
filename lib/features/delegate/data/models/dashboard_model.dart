@@ -6,6 +6,7 @@ class DashboardModel {
   final double baseSalary;
   final double penaltiesTotal;
   final double advancesTotal;
+  final double bonusTotal;
   final double netPayable;
   final String currentMonth;
 
@@ -17,6 +18,7 @@ class DashboardModel {
     required this.baseSalary,
     required this.penaltiesTotal,
     required this.advancesTotal,
+    required this.bonusTotal,
     required this.netPayable,
     required this.currentMonth,
   });
@@ -30,6 +32,7 @@ class DashboardModel {
       baseSalary: (json['base_salary'] as num? ?? 0).toDouble(),
       penaltiesTotal: (json['penalties_total'] as num? ?? 0).toDouble(),
       advancesTotal: (json['advances_total'] as num? ?? 0).toDouble(),
+      bonusTotal: (json['bonus_total'] as num? ?? 0).toDouble(),
       netPayable: (json['net_payable'] as num? ?? 0).toDouble(),
       currentMonth: json['current_month'] as String? ?? '',
     );
@@ -43,6 +46,7 @@ class DashboardModel {
         'base_salary': baseSalary,
         'penalties_total': penaltiesTotal,
         'advances_total': advancesTotal,
+        'bonus_total': bonusTotal,
         'net_payable': netPayable,
         'current_month': currentMonth,
       };

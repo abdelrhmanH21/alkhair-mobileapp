@@ -30,13 +30,14 @@ import 'admin_supplier_payment_page.dart';
 import 'admin_waste_page.dart';
 import 'admin_inventory_count_page.dart';
 import 'admin_settlement_history_page.dart';
+import 'staff_operations_page.dart';
 
 /// Admin shell: bottom nav with exactly 5 destinations —
 ///   1. الرئيسية (center, emphasized — the working-capital dashboard, unchanged)
 ///   2. التصنيع (sub-menu: بدء تشغيلة جديدة / استلام إنتاج تام)
 ///   3. التوزيع (sub-menu: توزيعة جديدة / طلبات التسليم / سجل التسويات / التقارير / العمالة)
 ///   4. العمليات (sub-menu: بيع / شراء / تعديل سعر / تحصيل / سداد لمورد /
-///      هالك / جرد / المبيعات والتحصيلات / المصروفات والخزائن)
+///      هالك / جرد / المبيعات والتحصيلات / المصروفات والخزائن / عمليات العمالة)
 ///   5. العملاء والموردين
 /// Sub-menus (2-4) all use the same showOperationSheet() bottom-sheet
 /// pattern (see widgets/operation_sheet.dart) rather than three different
@@ -292,6 +293,14 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
           subtitle: 'تسجيل ومتابعة مصروفات الشركة',
           onTap: () => Navigator.push(
               context, MaterialPageRoute(builder: (_) => const AdminExpensesPage())),
+        ),
+        OperationSheetItem(
+          icon: Icons.emoji_events_outlined,
+          color: Colors.green,
+          title: 'عمليات العمالة',
+          subtitle: 'تسجيل جزاء أو سلفة أو مكافأة لموظف',
+          onTap: () => Navigator.push(
+              context, MaterialPageRoute(builder: (_) => const StaffOperationsPage())),
         ),
       ],
     );

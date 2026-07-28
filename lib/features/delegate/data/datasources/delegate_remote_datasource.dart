@@ -37,6 +37,7 @@ abstract class DelegateRemoteDataSource {
     double discountAmount = 0,
     double? latitude,
     double? longitude,
+    String? idempotencyKey,
   });
   Future<List<DelegateInvoiceModel>> fetchInvoices();
   Future<DelegateInvoiceModel> fetchInvoice(int id);
@@ -63,12 +64,14 @@ abstract class DelegateRemoteDataSource {
     required String description,
     int? categoryId,
     String? notes,
+    String? idempotencyKey,
   });
   Future<String> submitCustomerCollection({
     required int customerId,
     required double amount,
     required String paymentMethod,
     String? notes,
+    String? idempotencyKey,
   });
   Future<List<ExpenseRecordModel>> fetchExpenseRecords();
   Future<ExpenseRecordModel> updateExpenseRecord({
@@ -186,6 +189,7 @@ class DelegateRemoteDataSourceImpl implements DelegateRemoteDataSource {
     double discountAmount = 0,
     double? latitude,
     double? longitude,
+    String? idempotencyKey,
   }) async {
     final res = await _client.dio.post(ApiEndpoints.delegateInvoice, data: {
       'client_id': clientId,
@@ -195,6 +199,7 @@ class DelegateRemoteDataSourceImpl implements DelegateRemoteDataSource {
       if (discountAmount > 0) 'discount_amount': discountAmount,
       if (latitude != null) 'latitude': latitude,
       if (longitude != null) 'longitude': longitude,
+      if (idempotencyKey != null) 'idempotency_key': idempotencyKey,
     });
     return DelegateInvoiceModel.fromJson(res.data['data'] as Map<String, dynamic>);
   }
@@ -293,12 +298,14 @@ class DelegateRemoteDataSourceImpl implements DelegateRemoteDataSource {
     required String description,
     int? categoryId,
     String? notes,
+    String? idempotencyKey,
   }) async {
     final res = await _client.dio.post(ApiEndpoints.delegateExpenses, data: {
       'amount': amount,
       'description': description,
       if (categoryId != null) 'category_id': categoryId,
       if (notes != null && notes.isNotEmpty) 'notes': notes,
+      if (idempotencyKey != null) 'idempotency_key': idempotencyKey,
     });
     return (res.data['message'] as String?) ?? 'تم تسجيل المصروف بنجاح.';
   }
@@ -309,12 +316,14 @@ class DelegateRemoteDataSourceImpl implements DelegateRemoteDataSource {
     required double amount,
     required String paymentMethod,
     String? notes,
+    String? idempotencyKey,
   }) async {
     final res = await _client.dio.post(ApiEndpoints.delegateCustomerCollections, data: {
       'customer_id': customerId,
       'amount': amount,
       'payment_method': paymentMethod,
       if (notes != null && notes.isNotEmpty) 'notes': notes,
+      if (idempotencyKey != null) 'idempotency_key': idempotencyKey,
     });
     return (res.data['message'] as String?) ?? 'تم تسجيل التحصيل بنجاح.';
   }

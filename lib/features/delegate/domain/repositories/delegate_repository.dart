@@ -26,6 +26,15 @@ abstract class DelegateRepository {
   DashboardModel? getCachedDashboard();
   List<SellableProductModel> getCachedSellableProducts();
   List<ClientModel> getCachedCustomerList();
+
+  /// Optimistically applies a per-product stock delta (negative for a sale,
+  /// positive for a 'سليم' return) directly to the cached truck-stock/
+  /// sellable-products snapshots — used when an action is queued offline
+  /// (see PendingActionQueue) so a SECOND queued sale for the same product,
+  /// entered before connectivity returns, sees the reduced stock instead of
+  /// the stale pre-deduction number. Superseded by real data the next time
+  /// either fetch succeeds (including the sync engine's post-sync refresh).
+  Future<void> applyOptimisticTruckStockDelta(Map<int, double> productIdToQtyDelta);
   Future<ClientModel> createClient({
     required String name,
     required String phone,
@@ -44,6 +53,7 @@ abstract class DelegateRepository {
     double discountAmount = 0,
     double? latitude,
     double? longitude,
+    String? idempotencyKey,
   });
   Future<List<DelegateInvoiceModel>> getInvoices();
   Future<DelegateInvoiceModel> updateInvoice({
@@ -69,12 +79,14 @@ abstract class DelegateRepository {
     required String description,
     int? categoryId,
     String? notes,
+    String? idempotencyKey,
   });
   Future<String> submitCustomerCollection({
     required int customerId,
     required double amount,
     required String paymentMethod,
     String? notes,
+    String? idempotencyKey,
   });
   Future<List<ExpenseRecordModel>> getExpenseRecords();
   Future<ExpenseRecordModel> updateExpenseRecord({

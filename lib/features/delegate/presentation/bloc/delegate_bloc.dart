@@ -25,6 +25,11 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
   List<SellableProductModel> getCachedSellableProducts() => _repo.getCachedSellableProducts();
   List<ClientModel> getCachedCustomerList() => _repo.getCachedCustomerList();
 
+  /// See DelegateRepository.applyOptimisticTruckStockDelta — used when a
+  /// sale is queued offline instead of submitted live.
+  Future<void> applyOptimisticTruckStockDelta(Map<int, double> productIdToQtyDelta) =>
+      _repo.applyOptimisticTruckStockDelta(productIdToQtyDelta);
+
   DelegateBloc(this._repo, this._gps) : super(const DelegateInitial()) {
     on<DelegateLoadingFetched>(_onFetchLoading);
     on<DelegateLoadingConfirmed>(_onConfirmLoading);

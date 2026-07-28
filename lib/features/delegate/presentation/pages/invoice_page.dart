@@ -6,6 +6,9 @@ import '../../../../core/network/api_client.dart';
 import '../../../../core/network/api_endpoints.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/app_snackbar.dart';
+import '../../../../core/utils/connectivity_service.dart';
+import '../../../../core/utils/gps_service.dart';
+import '../../../../core/utils/pending_action_queue.dart';
 import '../../../../core/widgets/state_views.dart';
 import '../../../app_config/presentation/bloc/app_config_bloc.dart';
 import '../../../app_config/presentation/bloc/app_config_state.dart';
@@ -247,6 +250,15 @@ class _InvoicePageState extends State<InvoicePage> {
       return;
     }
 
+    // Editing an existing invoice always needs a live round trip (it
+    // reverses/re-derives server-side state — see DelegateInvoiceController
+    // ::update()'s doc comment) — only a brand-new sale can be queued
+    // offline. If offline, skip the bloc/network entirely and save locally.
+    if (!_isEditing && !sl<ConnectivityService>().isOnline) {
+      _queueOfflineSale();
+      return;
+    }
+
     final DelegateEvent event = _isEditing
         ? DelegateInvoiceUpdateRequested(
             invoiceId: widget.editingInvoiceId!,
@@ -265,6 +277,84 @@ class _InvoicePageState extends State<InvoicePage> {
     _tracker.start(event.requestId, _InvoiceReq.submit);
     setState(() => _submitting = true);
     context.read<DelegateBloc>().add(event);
+  }
+
+  /// Phase 2 offline support: instead of attempting (and failing) a network
+  /// call, queue this sale locally with a client-generated idempotency key,
+  /// apply an optimistic truck-stock deduction (so a second offline sale for
+  /// the same product doesn't see stale, too-high availability), and confirm
+  /// with a visually distinct "saved locally" message — never the same
+  /// green success styling as a real confirmed submission, since the
+  /// delegate needs to know this hasn't actually reached the server yet.
+  Future<void> _queueOfflineSale() async {
+    setState(() => _submitting = true);
+
+    final coords = await sl<GpsService>().captureCoordinates();
+    final client = _selectedClient!;
+    final payload = <String, dynamic>{
+      'client_id': client.id,
+      'client_name': client.name,
+      'sales_items': _salesItems
+          .map((s) => {
+                'product_id': s.productId,
+                'product_name': s.productName,
+                'qty': s.quantity,
+                'unit_price': s.unitPrice,
+              })
+          .toList(),
+      'returned_items': _returnItems
+          .map((r) => {
+                'product_id': r.productId,
+                'product_name': r.productName,
+                'qty': r.quantity,
+                'unit_price': r.unitPrice,
+                'condition': r.condition,
+              })
+          .toList(),
+      'cash_received': _cashReceived,
+      'discount_amount': _discountAmount,
+      'latitude': coords.lat,
+      'longitude': coords.lng,
+    };
+
+    await sl<PendingActionQueue>().enqueue(PendingAction(
+      idempotencyKey: generateIdempotencyKey(),
+      type: PendingActionType.sale,
+      payload: payload,
+      createdAt: DateTime.now(),
+    ));
+
+    // Sold items reduce available stock; 'سليم' returns add back to it —
+    // same net-effect DelegateTruckStock::deductStock/addStock would apply
+    // server-side, applied locally so it's reflected immediately.
+    final delta = <int, double>{};
+    for (final s in _salesItems) {
+      delta[s.productId] = (delta[s.productId] ?? 0) - s.quantity;
+    }
+    for (final r in _returnItems) {
+      if (r.condition == 'سليم') {
+        delta[r.productId] = (delta[r.productId] ?? 0) + r.quantity;
+      }
+    }
+    if (mounted) {
+      await context.read<DelegateBloc>().applyOptimisticTruckStockDelta(delta);
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _submitting = false;
+      _selectedClient = null;
+      _salesItems.clear();
+      _returnItems.clear();
+      _cashCtrl.clear();
+      _discountCtrl.clear();
+      _searchCtrl.clear();
+      _searchResults.clear();
+    });
+    AppSnackbar.showQueued(
+      context,
+      'تم الحفظ محليًا، سيتم الإرسال عند توفر الإنترنت.',
+    );
   }
 
   void _showError(String msg) {

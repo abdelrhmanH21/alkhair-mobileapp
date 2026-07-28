@@ -168,6 +168,39 @@ class DelegateRepositoryImpl implements DelegateRepository {
   }
 
   @override
+  Future<void> applyOptimisticTruckStockDelta(Map<int, double> productIdToQtyDelta) async {
+    if (productIdToQtyDelta.isEmpty) return;
+
+    final products = getCachedSellableProducts();
+    final adjustedProducts = products.map((p) {
+      final delta = productIdToQtyDelta[p.productId];
+      if (delta == null) return p;
+      return SellableProductModel(
+        productId: p.productId,
+        name: p.name,
+        unit: p.unit,
+        availableQty: (p.availableQty + delta).clamp(0, double.infinity),
+        unitPrice: p.unitPrice,
+      );
+    }).toList();
+    await _cache.set(_kSellableProducts, adjustedProducts.map((p) => p.toJson()).toList());
+
+    final stocks = getCachedTruckStock();
+    final adjustedStocks = stocks.map((s) {
+      final delta = productIdToQtyDelta[s.productId];
+      if (delta == null) return s;
+      return TruckStockModel(
+        id: s.id,
+        productId: s.productId,
+        productName: s.productName,
+        productUnit: s.productUnit,
+        currentStockQty: (s.currentStockQty + delta).clamp(0, double.infinity),
+      );
+    }).toList();
+    await _cache.set(_kTruckStock, adjustedStocks.map((s) => s.toJson()).toList());
+  }
+
+  @override
   Future<List<CatalogProductModel>> getSalesCatalogProducts() =>
       _remote.fetchSalesCatalogProducts();
 
@@ -184,6 +217,7 @@ class DelegateRepositoryImpl implements DelegateRepository {
     double discountAmount = 0,
     double? latitude,
     double? longitude,
+    String? idempotencyKey,
   }) =>
       _remote.submitInvoice(
         clientId: clientId,
@@ -193,6 +227,7 @@ class DelegateRepositoryImpl implements DelegateRepository {
         discountAmount: discountAmount,
         latitude: latitude,
         longitude: longitude,
+        idempotencyKey: idempotencyKey,
       );
 
   @override
@@ -254,12 +289,14 @@ class DelegateRepositoryImpl implements DelegateRepository {
     required String description,
     int? categoryId,
     String? notes,
+    String? idempotencyKey,
   }) =>
       _remote.submitExpense(
         amount: amount,
         description: description,
         categoryId: categoryId,
         notes: notes,
+        idempotencyKey: idempotencyKey,
       );
 
   @override
@@ -268,12 +305,14 @@ class DelegateRepositoryImpl implements DelegateRepository {
     required double amount,
     required String paymentMethod,
     String? notes,
+    String? idempotencyKey,
   }) =>
       _remote.submitCustomerCollection(
         customerId: customerId,
         amount: amount,
         paymentMethod: paymentMethod,
         notes: notes,
+        idempotencyKey: idempotencyKey,
       );
 
   @override

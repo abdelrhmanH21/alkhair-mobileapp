@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
+import '../../../../core/di/service_locator.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/app_snackbar.dart';
+import '../../../../core/utils/connectivity_service.dart';
+import '../../../../core/utils/pending_action_queue.dart';
 import '../bloc/delegate_bloc.dart';
 import '../bloc/delegate_event.dart';
 import '../bloc/delegate_state.dart';
@@ -412,6 +415,13 @@ class _ExpenseFormSheetState extends State<_ExpenseFormSheet> {
       AppSnackbar.showError(context, 'يرجى إدخال وصف المصروف.');
       return;
     }
+
+    if (!sl<ConnectivityService>().isOnline) {
+      setState(() => _submitting = true);
+      _queueOfflineExpense(amount);
+      return;
+    }
+
     final event = DelegateExpenseSubmitted(
       amount: amount,
       description: _descCtrl.text.trim(),
@@ -420,6 +430,29 @@ class _ExpenseFormSheetState extends State<_ExpenseFormSheet> {
     _tracker.start(event.requestId, true);
     setState(() => _submitting = true);
     context.read<DelegateBloc>().add(event);
+  }
+
+  /// Phase 2 offline support — see InvoicePage._queueOfflineSale's identical
+  /// rationale. No optimistic cache adjustment needed here: unlike truck
+  /// stock, nothing about a queued expense could make a SECOND queued
+  /// expense/collection invalid while still offline. _submitting is set by
+  /// the caller (_submit) synchronously, before this async gap, so a rapid
+  /// double-tap can't enqueue the same expense twice under two different
+  /// idempotency keys.
+  Future<void> _queueOfflineExpense(double amount) async {
+    await sl<PendingActionQueue>().enqueue(PendingAction(
+      idempotencyKey: generateIdempotencyKey(),
+      type: PendingActionType.expense,
+      payload: {
+        'amount': amount,
+        'description': _descCtrl.text.trim(),
+        'notes': _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+      },
+      createdAt: DateTime.now(),
+    ));
+    if (!mounted) return;
+    Navigator.pop(context);
+    AppSnackbar.showQueued(context, 'تم الحفظ محليًا، سيتم الإرسال عند توفر الإنترنت.');
   }
 
   @override
@@ -676,6 +709,13 @@ class _CollectionFormSheetState extends State<_CollectionFormSheet> {
       AppSnackbar.showError(context, 'يرجى إدخال مبلغ صحيح.');
       return;
     }
+
+    if (!sl<ConnectivityService>().isOnline) {
+      setState(() => _submitting = true);
+      _queueOfflineCollection(amount);
+      return;
+    }
+
     final event = DelegateCustomerCollectionSubmitted(
       customerId: _selectedClient!.id,
       amount: amount,
@@ -685,6 +725,26 @@ class _CollectionFormSheetState extends State<_CollectionFormSheet> {
     _tracker.start(event.requestId, _CollectionReq.submit);
     setState(() => _submitting = true);
     context.read<DelegateBloc>().add(event);
+  }
+
+  /// See _ExpenseFormSheetState._queueOfflineExpense's identical rationale.
+  Future<void> _queueOfflineCollection(double amount) async {
+    final client = _selectedClient!;
+    await sl<PendingActionQueue>().enqueue(PendingAction(
+      idempotencyKey: generateIdempotencyKey(),
+      type: PendingActionType.collection,
+      payload: {
+        'customer_id': client.id,
+        'customer_name': client.name,
+        'amount': amount,
+        'payment_method': _paymentMethod,
+        'notes': _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+      },
+      createdAt: DateTime.now(),
+    ));
+    if (!mounted) return;
+    Navigator.pop(context);
+    AppSnackbar.showQueued(context, 'تم الحفظ محليًا، سيتم الإرسال عند توفر الإنترنت.');
   }
 
   void _openAddClientSheet() {

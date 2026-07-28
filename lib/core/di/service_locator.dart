@@ -8,6 +8,7 @@ import '../utils/bluetooth_printer.dart';
 import '../utils/push_notification_service.dart';
 import '../utils/offline_cache_service.dart';
 import '../utils/connectivity_service.dart';
+import '../utils/pending_action_queue.dart';
 
 import '../../features/app_config/data/datasources/app_config_local_datasource.dart';
 import '../../features/app_config/data/datasources/app_config_remote_datasource.dart';
@@ -23,6 +24,7 @@ import '../../features/auth/presentation/bloc/auth_bloc.dart';
 
 import '../../features/delegate/data/datasources/delegate_remote_datasource.dart';
 import '../../features/delegate/data/repositories/delegate_repository_impl.dart';
+import '../../features/delegate/data/sync/delegate_sync_engine.dart';
 import '../../features/delegate/domain/repositories/delegate_repository.dart';
 import '../../features/delegate/presentation/bloc/delegate_bloc.dart';
 
@@ -46,6 +48,8 @@ Future<void> setupServiceLocator() async {
   await connectivity.initialize();
   sl.registerLazySingleton<ConnectivityService>(() => connectivity);
 
+  sl.registerLazySingleton<PendingActionQueue>(() => PendingActionQueue(sl()));
+
   // ── AppConfig feature ────────────────────────────────────────────────────
   sl.registerLazySingleton<AppConfigLocalDataSource>(() => AppConfigLocalDataSource(prefs));
   sl.registerLazySingleton<AppConfigRemoteDataSource>(() => AppConfigRemoteDataSourceImpl(sl()));
@@ -62,6 +66,7 @@ Future<void> setupServiceLocator() async {
   sl.registerLazySingleton<DelegateRemoteDataSource>(() => DelegateRemoteDataSourceImpl(sl()));
   sl.registerLazySingleton<DelegateRepository>(() => DelegateRepositoryImpl(sl(), sl()));
   sl.registerFactory<DelegateBloc>(() => DelegateBloc(sl(), sl()));
+  sl.registerLazySingleton<DelegateSyncEngine>(() => DelegateSyncEngine(sl(), sl(), sl()));
 
   // ── Admin feature ────────────────────────────────────────────────────────
   sl.registerLazySingleton<AdminRemoteDataSource>(() => AdminRemoteDataSourceImpl(sl()));

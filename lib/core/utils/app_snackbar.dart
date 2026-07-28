@@ -20,6 +20,28 @@ class AppSnackbar {
     _show(context, message, color ?? Colors.grey.shade700);
   }
 
+  /// A queued-while-offline confirmation (Phase 2 of offline support) —
+  /// deliberately its own color/icon, distinct from both [showSuccess]
+  /// (green — confirmed server-side) and [showError] (red), so a delegate
+  /// never mistakes "saved locally, not sent yet" for a real completed
+  /// submission. Uses AppTheme.accent (warm gold), already the app's
+  /// existing "pending/attention" color elsewhere (e.g. returns).
+  static void showQueued(BuildContext context, String message) {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(SnackBar(
+      content: Row(
+        children: [
+          const Icon(Icons.cloud_upload_outlined, color: Colors.white, size: 20),
+          const SizedBox(width: 10),
+          Expanded(child: Text(message)),
+        ],
+      ),
+      backgroundColor: AppTheme.accent,
+      duration: _duration,
+    ));
+  }
+
   static void _show(BuildContext context, String message, Color backgroundColor) {
     final messenger = ScaffoldMessenger.of(context);
     messenger.hideCurrentSnackBar();

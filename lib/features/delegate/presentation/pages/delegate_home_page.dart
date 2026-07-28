@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../../../core/di/service_locator.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/app_snackbar.dart';
+import '../../../../core/utils/pending_action_queue.dart';
 import '../../../../core/utils/polling_mixin.dart';
 import '../../../../core/widgets/app_logo.dart';
 import '../../../../core/widgets/state_views.dart';
@@ -10,6 +12,7 @@ import '../../../app_config/presentation/bloc/app_config_state.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
 import '../../../auth/presentation/bloc/auth_event.dart';
 import '../../../auth/presentation/bloc/auth_state.dart';
+import '../../data/sync/delegate_sync_engine.dart';
 import '../bloc/delegate_bloc.dart';
 import '../bloc/delegate_event.dart';
 import '../bloc/delegate_state.dart';
@@ -21,6 +24,7 @@ import 'truck_stock_page.dart';
 import 'invoice_history_page.dart';
 import 'loading_page.dart';
 import 'settlement_page.dart';
+import 'sync_status_page.dart';
 import 'transactions_page.dart';
 import 'delegate_reports_page.dart';
 
@@ -35,7 +39,7 @@ class DelegateHomePage extends StatefulWidget {
   State<DelegateHomePage> createState() => _DelegateHomePageState();
 }
 
-class _DelegateHomePageState extends State<DelegateHomePage> {
+class _DelegateHomePageState extends State<DelegateHomePage> with WidgetsBindingObserver {
   int _tab = 0;
   LoadingModel? _loading;
   // SettlementPage lives inside an IndexedStack that builds every tab once
@@ -51,6 +55,30 @@ class _DelegateHomePageState extends State<DelegateHomePage> {
   // Same for معاملات: its shift expense/collection lists should reflect
   // whatever happened on OTHER tabs (e.g. settlement) since it was last seen.
   int _transactionsRefreshTick = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Phase 3.2 sync trigger #1: the delegate reopening the app (e.g. after
+    // regaining signal) is exactly when queued actions should attempt to
+    // sync, without waiting for the connectivity-restored stream event
+    // alone (which may have already fired while the app was backgrounded
+    // and gone unobserved).
+    if (state == AppLifecycleState.resumed) {
+      sl<DelegateSyncEngine>().syncNow();
+    }
+  }
 
   bool get _canSell => _loading?.isActiveForSales == true;
   bool get _hasActiveLoading => _loading != null;
@@ -141,6 +169,24 @@ class _DelegateHomePageState extends State<DelegateHomePage> {
           ],
         ),
         actions: [
+          ValueListenableBuilder<int>(
+            valueListenable: sl<PendingActionQueue>().pendingCountNotifier,
+            builder: (context, count, __) {
+              if (count == 0) return const SizedBox.shrink();
+              return IconButton(
+                tooltip: 'عمليات بانتظار المزامنة',
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const SyncStatusPage()),
+                ),
+                icon: Badge(
+                  label: Text('$count'),
+                  backgroundColor: AppTheme.accent,
+                  child: const Icon(Icons.cloud_upload_outlined),
+                ),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.logout_rounded),
             tooltip: 'تسجيل الخروج',

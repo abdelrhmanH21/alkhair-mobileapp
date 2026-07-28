@@ -3,6 +3,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'core/di/service_locator.dart';
 import 'core/utils/push_notification_service.dart';
+import 'features/delegate/data/sync/delegate_sync_engine.dart';
 import 'app.dart';
 
 // Runs in a separate isolate for background/terminated messages. The OS
@@ -21,5 +22,6 @@ void main() async {
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
   await setupServiceLocator();
   sl<PushNotificationService>().initialize();
+  sl<DelegateSyncEngine>().initialize();
   runApp(const AlKhairApp());
 }

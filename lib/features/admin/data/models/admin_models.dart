@@ -19,6 +19,7 @@ class DashboardStatsModel {
   final List<TopProductModel> topProducts;
   final double workingCapital;
   final WorkingCapitalBreakdownModel workingCapitalBreakdown;
+  final MonthComparisonModel monthComparison;
 
   const DashboardStatsModel({
     required this.todayInvoicesCount,
@@ -29,6 +30,7 @@ class DashboardStatsModel {
     required this.topProducts,
     required this.workingCapital,
     required this.workingCapitalBreakdown,
+    required this.monthComparison,
   });
 
   factory DashboardStatsModel.fromJson(Map<String, dynamic> json) =>
@@ -46,6 +48,64 @@ class DashboardStatsModel {
         workingCapital: _asDouble(json['working_capital']),
         workingCapitalBreakdown: WorkingCapitalBreakdownModel.fromJson(
             json['working_capital_breakdown'] as Map<String, dynamic>? ?? {}),
+        monthComparison: MonthComparisonModel.fromJson(
+            json['month_comparison'] as Map<String, dynamic>? ?? {}),
+      );
+}
+
+/// One MoM metric — current vs previous calendar month + % change (null
+/// when the previous month was zero, to avoid a divide-by-zero on the
+/// backend). Mirrors MonthComparisonCalculator's response shape exactly,
+/// shared by both DashboardController (web) and this mobile endpoint.
+class MonthComparisonMetricModel {
+  final double currentMonthValue;
+  final double previousMonthValue;
+  final double? percentageChange;
+
+  const MonthComparisonMetricModel({
+    required this.currentMonthValue,
+    required this.previousMonthValue,
+    required this.percentageChange,
+  });
+
+  factory MonthComparisonMetricModel.fromJson(Map<String, dynamic> json) =>
+      MonthComparisonMetricModel(
+        currentMonthValue: _asDouble(json['current_month_value']),
+        previousMonthValue: _asDouble(json['previous_month_value']),
+        percentageChange: json['percentage_change'] == null
+            ? null
+            : (json['percentage_change'] as num).toDouble(),
+      );
+
+  static const _zero = MonthComparisonMetricModel(
+      currentMonthValue: 0, previousMonthValue: 0, percentageChange: null);
+}
+
+class MonthComparisonModel {
+  final MonthComparisonMetricModel totalSales;
+  final MonthComparisonMetricModel totalExpenses;
+  final MonthComparisonMetricModel profitMargin;
+
+  const MonthComparisonModel({
+    required this.totalSales,
+    required this.totalExpenses,
+    required this.profitMargin,
+  });
+
+  factory MonthComparisonModel.fromJson(Map<String, dynamic> json) =>
+      MonthComparisonModel(
+        totalSales: json['total_sales'] == null
+            ? MonthComparisonMetricModel._zero
+            : MonthComparisonMetricModel.fromJson(
+                json['total_sales'] as Map<String, dynamic>),
+        totalExpenses: json['total_expenses'] == null
+            ? MonthComparisonMetricModel._zero
+            : MonthComparisonMetricModel.fromJson(
+                json['total_expenses'] as Map<String, dynamic>),
+        profitMargin: json['profit_margin'] == null
+            ? MonthComparisonMetricModel._zero
+            : MonthComparisonMetricModel.fromJson(
+                json['profit_margin'] as Map<String, dynamic>),
       );
 }
 

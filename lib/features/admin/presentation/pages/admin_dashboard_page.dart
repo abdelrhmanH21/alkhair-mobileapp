@@ -501,6 +501,9 @@ class _DashboardContent extends StatelessWidget {
                 total: stats.workingCapital,
                 breakdown: stats.workingCapitalBreakdown,
               ),
+              const SizedBox(height: 12),
+
+              _MonthComparisonSection(comparison: stats.monthComparison),
               const SizedBox(height: 20),
 
               // KPI grid
@@ -816,6 +819,84 @@ class _WcComponent {
   final double value;
   final Color color;
   const _WcComponent(this.label, this.value, this.color);
+}
+
+// ─── Month-over-Month Comparison Section ────────────────────────────────────
+
+/// Compact "this month vs last month" rows for sales / expenses / profit
+/// margin — mirrors the web dashboard's MonthComparisonRow (same data
+/// shape, MonthComparisonCalculator on the backend). Deliberately just a
+/// number + colored arrow-and-percentage, no chart/detail screen.
+class _MonthComparisonSection extends StatelessWidget {
+  final MonthComparisonModel comparison;
+  const _MonthComparisonSection({required this.comparison});
+
+  @override
+  Widget build(BuildContext context) => Card(
+        margin: EdgeInsets.zero,
+        color: AppTheme.cardBg,
+        surfaceTintColor: Colors.transparent,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Padding(
+                padding: EdgeInsets.only(top: 4, bottom: 2),
+                child: Text('مقارنة الشهر الحالي بالشهر السابق',
+                    style: TextStyle(fontSize: 11, color: AppTheme.textMuted)),
+              ),
+              _MonthComparisonRow(label: 'المبيعات', metric: comparison.totalSales),
+              const Divider(height: 1),
+              _MonthComparisonRow(label: 'المصروفات', metric: comparison.totalExpenses),
+              const Divider(height: 1),
+              _MonthComparisonRow(label: 'هامش الربح', metric: comparison.profitMargin),
+            ],
+          ),
+        ),
+      );
+}
+
+class _MonthComparisonRow extends StatelessWidget {
+  final String label;
+  final MonthComparisonMetricModel metric;
+  const _MonthComparisonRow({required this.label, required this.metric});
+
+  @override
+  Widget build(BuildContext context) {
+    final pct = metric.percentageChange;
+    final isUp = pct != null && pct >= 0;
+    final color = isUp ? AppTheme.primary : AppTheme.danger;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(label, style: const TextStyle(fontSize: 13)),
+          ),
+          Text(
+            metric.currentMonthValue.toStringAsFixed(0),
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(width: 8),
+          if (pct == null)
+            const Text('—', style: TextStyle(fontSize: 12, color: AppTheme.textMuted))
+          else
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(isUp ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
+                    size: 13, color: color),
+                Text('${pct.abs().toStringAsFixed(0)}%',
+                    style: TextStyle(
+                        fontSize: 12, fontWeight: FontWeight.bold, color: color)),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
 }
 
 // ─── Delegates Tab ─────────────────────────────────────────────────────────────

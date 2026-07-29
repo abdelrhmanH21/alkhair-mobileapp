@@ -5,6 +5,7 @@ import '../../../../core/di/service_locator.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/app_snackbar.dart';
 import '../../../../core/utils/bluetooth_printer.dart';
+import '../../../../core/widgets/state_views.dart';
 import '../../../app_config/data/models/app_config_model.dart';
 import '../../../app_config/presentation/bloc/app_config_bloc.dart';
 import '../../../app_config/presentation/bloc/app_config_state.dart';
@@ -23,8 +24,10 @@ import '../../data/models/admin_models.dart';
 /// recorded the sale (r.createdByName) — chosen over omitting the line
 /// entirely, since it's genuinely useful here (who processed this sale) and
 /// needs no change to the shared buildReceiptPlan().
-InvoicePrintData buildAdminSaleReceiptData(AdminSaleResultModel r, {AppConfigModel? config}) {
-  final remaining = (r.totalAmount - r.paidAmount).clamp(0, double.infinity).toDouble();
+InvoicePrintData buildAdminSaleReceiptData(AdminSaleResultModel r,
+    {AppConfigModel? config}) {
+  final remaining =
+      (r.totalAmount - r.paidAmount).clamp(0, double.infinity).toDouble();
   // customerBalanceAfterSale already includes this sale's own `remaining`
   // (AdminSaleController::store() increments Customer.balance in the same
   // transaction) — subtracting it back out recovers what the customer owed
@@ -32,7 +35,9 @@ InvoicePrintData buildAdminSaleReceiptData(AdminSaleResultModel r, {AppConfigMod
   // snapshot. Safe here because this preview always happens immediately
   // after creation, in the very same response — no time for the balance to
   // have moved for any other reason yet.
-  final priorDebt = (r.customerBalanceAfterSale - remaining).clamp(0, double.infinity).toDouble();
+  final priorDebt = (r.customerBalanceAfterSale - remaining)
+      .clamp(0, double.infinity)
+      .toDouble();
   return InvoicePrintData(
     invoiceNumber: r.invoiceNumber ?? '#${r.id}',
     clientName: r.customerName,
@@ -115,6 +120,7 @@ class _AdminSalePageState extends State<AdminSalePage> {
   int? _treasuryId;
   int? _warehouseId;
   bool _loadingRefData = true;
+  String? _error;
 
   final List<_SaleLineItem> _items = [];
   final _cashCtrl = TextEditingController();
@@ -128,7 +134,8 @@ class _AdminSalePageState extends State<AdminSalePage> {
 
   double get _total => _items.fold(0.0, (s, i) => s + i.subtotal);
   double get _cashReceived => double.tryParse(_cashCtrl.text) ?? 0;
-  double get _remainingDebt => (_total - _cashReceived).clamp(0, double.infinity);
+  double get _remainingDebt =>
+      (_total - _cashReceived).clamp(0, double.infinity);
 
   @override
   void initState() {
@@ -154,7 +161,10 @@ class _AdminSalePageState extends State<AdminSalePage> {
   }
 
   Future<void> _loadRefData() async {
-    setState(() => _loadingRefData = true);
+    setState(() {
+      _loadingRefData = true;
+      _error = null;
+    });
     try {
       final results = await Future.wait([
         _remote.fetchProducts(),
@@ -165,13 +175,18 @@ class _AdminSalePageState extends State<AdminSalePage> {
         _products = results[0] as List<SimpleProductModel>;
         _treasuries = results[1] as List<TreasuryModel>;
         _warehouses = results[2] as List<SimpleWarehouseModel>;
-        _treasuryId = _treasuries.where((t) => t.isDefault).map((t) => t.id).firstOrNull ??
+        _treasuryId = _treasuries
+                .where((t) => t.isDefault)
+                .map((t) => t.id)
+                .firstOrNull ??
             (_treasuries.isNotEmpty ? _treasuries.first.id : null);
         _loadingRefData = false;
       });
     } catch (_) {
-      setState(() => _loadingRefData = false);
-      if (mounted) AppSnackbar.showError(context, 'فشل تحميل بيانات الشاشة.');
+      setState(() {
+        _loadingRefData = false;
+        _error = 'فشل تحميل بيانات الشاشة.';
+      });
     }
   }
 
@@ -268,8 +283,8 @@ class _AdminSalePageState extends State<AdminSalePage> {
         _cashCtrl.clear();
         _notesCtrl.clear();
       });
-      AppSnackbar.showSuccess(
-          context, 'تم حفظ عملية البيع${result.invoiceNumber != null ? ' — ${result.invoiceNumber}' : ''}');
+      AppSnackbar.showSuccess(context,
+          'تم حفظ عملية البيع${result.invoiceNumber != null ? ' — ${result.invoiceNumber}' : ''}');
 
       // Same receipt-preview/print flow delegate invoices use — see
       // buildAdminSaleReceiptData's adapter above. AppConfigBloc.ensureLoaded
@@ -287,8 +302,8 @@ class _AdminSalePageState extends State<AdminSalePage> {
       );
     } on DioException catch (e) {
       setState(() => _submitting = false);
-      AppSnackbar.showError(
-          context, e.response?.data?['message'] as String? ?? 'فشل حفظ عملية البيع.');
+      AppSnackbar.showError(context,
+          e.response?.data?['message'] as String? ?? 'فشل حفظ عملية البيع.');
     } catch (_) {
       setState(() => _submitting = false);
       AppSnackbar.showError(context, 'حدث خطأ غير متوقع.');
@@ -301,134 +316,164 @@ class _AdminSalePageState extends State<AdminSalePage> {
       appBar: AppBar(title: const Text('عملية بيع')),
       body: _loadingRefData
           ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                ClientSearchField(
-                  controller: _searchCtrl,
-                  focusNode: _searchFocus,
-                  results: _searchResults,
-                  isLoading: _searchLoading,
-                  selectedClient: _selectedClient,
-                  onSearch: _search,
-                  onSelect: (c) => setState(() {
-                    _selectedClient = c;
-                    _searchCtrl.text = c.name;
-                    _searchResults.clear();
-                  }),
-                  onAddNew: _openAddClientSheet,
-                ),
-                const SizedBox(height: 16),
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(10),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Row(
+          : _error != null
+              ? AppErrorView(message: _error!, onRetry: _loadRefData)
+              : ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    ClientSearchField(
+                      controller: _searchCtrl,
+                      focusNode: _searchFocus,
+                      results: _searchResults,
+                      isLoading: _searchLoading,
+                      selectedClient: _selectedClient,
+                      onSearch: _search,
+                      onSelect: (c) => setState(() {
+                        _selectedClient = c;
+                        _searchCtrl.text = c.name;
+                        _searchResults.clear();
+                      }),
+                      onAddNew: _openAddClientSheet,
+                    ),
+                    const SizedBox(height: 16),
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(10),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            const Icon(Icons.shopping_cart_outlined,
-                                color: AppTheme.primary, size: 18),
-                            const SizedBox(width: 4),
-                            const Text('الأصناف',
-                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                            const Spacer(),
-                            IconButton(
-                              icon: const Icon(Icons.add_circle_outline, color: AppTheme.primary),
-                              onPressed: _openAddProductSheet,
+                            Row(
+                              children: [
+                                const Icon(Icons.shopping_cart_outlined,
+                                    color: AppTheme.primary, size: 18),
+                                const SizedBox(width: 4),
+                                const Text('الأصناف',
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 14)),
+                                const Spacer(),
+                                IconButton(
+                                  icon: const Icon(Icons.add_circle_outline,
+                                      color: AppTheme.primary),
+                                  onPressed: _openAddProductSheet,
+                                ),
+                              ],
                             ),
+                            if (_items.isEmpty)
+                              const Center(
+                                  child: Text('لا توجد أصناف',
+                                      style:
+                                          TextStyle(color: AppTheme.textMuted)))
+                            else
+                              ..._items.asMap().entries.map((e) => ListTile(
+                                    dense: true,
+                                    title: Text(e.value.productName,
+                                        style: const TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                            fontSize: 13)),
+                                    subtitle: Text(
+                                        '${e.value.quantity} ${e.value.unit} × ${e.value.unitPrice.toStringAsFixed(2)} = ${e.value.subtotal.toStringAsFixed(2)}',
+                                        style: const TextStyle(fontSize: 11)),
+                                    trailing: IconButton(
+                                      icon: const Icon(
+                                          Icons.remove_circle_outline,
+                                          size: 18,
+                                          color: AppTheme.danger),
+                                      onPressed: () => setState(
+                                          () => _items.removeAt(e.key)),
+                                    ),
+                                  )),
+                            const Divider(),
+                            Text('الإجمالي: ${_total.toStringAsFixed(2)}',
+                                textAlign: TextAlign.end,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    color: AppTheme.primary)),
                           ],
                         ),
-                        if (_items.isEmpty)
-                          const Center(
-                              child: Text('لا توجد أصناف', style: TextStyle(color: AppTheme.textMuted)))
-                        else
-                          ..._items.asMap().entries.map((e) => ListTile(
-                                dense: true,
-                                title: Text(e.value.productName,
-                                    style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-                                subtitle: Text(
-                                    '${e.value.quantity} ${e.value.unit} × ${e.value.unitPrice.toStringAsFixed(2)} = ${e.value.subtotal.toStringAsFixed(2)}',
-                                    style: const TextStyle(fontSize: 11)),
-                                trailing: IconButton(
-                                  icon: const Icon(Icons.remove_circle_outline,
-                                      size: 18, color: AppTheme.danger),
-                                  onPressed: () => setState(() => _items.removeAt(e.key)),
-                                ),
-                              )),
-                        const Divider(),
-                        Text('الإجمالي: ${_total.toStringAsFixed(2)}',
-                            textAlign: TextAlign.end,
-                            style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primary)),
-                      ],
+                      ),
                     ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                DropdownButtonFormField<int>(
-                  initialValue: _treasuryId,
-                  decoration: const InputDecoration(labelText: 'الخزينة'),
-                  items:
-                      _treasuries.map((t) => DropdownMenuItem(value: t.id, child: Text(t.name))).toList(),
-                  onChanged: (v) => setState(() => _treasuryId = v),
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<int>(
-                  initialValue: _warehouseId,
-                  decoration: const InputDecoration(labelText: 'المخزن (اختياري)'),
-                  items: _warehouses.map((w) => DropdownMenuItem(value: w.id, child: Text(w.name))).toList(),
-                  onChanged: (v) => setState(() => _warehouseId = v),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _cashCtrl,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(labelText: 'النقد المستلم', hintText: '0'),
-                  onChanged: (_) => setState(() {}),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _notesCtrl,
-                  decoration: const InputDecoration(labelText: 'ملاحظات (اختياري)'),
-                  maxLines: 2,
-                ),
-                if (_remainingDebt > 0) ...[
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: AppTheme.danger.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppTheme.danger.withValues(alpha: 0.4)),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<int>(
+                      initialValue: _treasuryId,
+                      decoration: const InputDecoration(labelText: 'الخزينة'),
+                      items: _treasuries
+                          .map((t) => DropdownMenuItem(
+                              value: t.id, child: Text(t.name)))
+                          .toList(),
+                      onChanged: (v) => setState(() => _treasuryId = v),
                     ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text('يُضاف للدين:',
-                            style: TextStyle(color: AppTheme.danger, fontWeight: FontWeight.bold)),
-                        Text(_remainingDebt.toStringAsFixed(2),
-                            style: const TextStyle(
-                                color: AppTheme.danger, fontSize: 16, fontWeight: FontWeight.bold)),
-                      ],
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<int>(
+                      initialValue: _warehouseId,
+                      decoration:
+                          const InputDecoration(labelText: 'المخزن (اختياري)'),
+                      items: _warehouses
+                          .map((w) => DropdownMenuItem(
+                              value: w.id, child: Text(w.name)))
+                          .toList(),
+                      onChanged: (v) => setState(() => _warehouseId = v),
                     ),
-                  ),
-                ],
-                const SizedBox(height: 20),
-                SizedBox(
-                  height: 50,
-                  child: ElevatedButton.icon(
-                    onPressed: _submitting ? null : _submit,
-                    icon: _submitting
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : const Icon(Icons.send_rounded),
-                    label: Text(_submitting ? 'جارٍ الحفظ...' : 'حفظ عملية البيع'),
-                  ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _cashCtrl,
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(
+                          labelText: 'النقد المستلم', hintText: '0'),
+                      onChanged: (_) => setState(() {}),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _notesCtrl,
+                      decoration:
+                          const InputDecoration(labelText: 'ملاحظات (اختياري)'),
+                      maxLines: 2,
+                    ),
+                    if (_remainingDebt > 0) ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: AppTheme.danger.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(
+                              color: AppTheme.danger.withValues(alpha: 0.4)),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text('يُضاف للدين:',
+                                style: TextStyle(
+                                    color: AppTheme.danger,
+                                    fontWeight: FontWeight.bold)),
+                            Text(_remainingDebt.toStringAsFixed(2),
+                                style: const TextStyle(
+                                    color: AppTheme.danger,
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      height: 50,
+                      child: ElevatedButton.icon(
+                        onPressed: _submitting ? null : _submit,
+                        icon: _submitting
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2, color: Colors.white))
+                            : const Icon(Icons.send_rounded),
+                        label: Text(
+                            _submitting ? 'جارٍ الحفظ...' : 'حفظ عملية البيع'),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
     );
   }
 }
@@ -442,7 +487,9 @@ class _ProductPickerSheet extends StatefulWidget {
   final double maxOverridePct;
   final void Function(_SaleLineItem) onAdd;
   const _ProductPickerSheet(
-      {required this.products, required this.maxOverridePct, required this.onAdd});
+      {required this.products,
+      required this.maxOverridePct,
+      required this.onAdd});
 
   @override
   State<_ProductPickerSheet> createState() => _ProductPickerSheetState();
@@ -454,8 +501,10 @@ class _ProductPickerSheetState extends State<_ProductPickerSheet> {
   final _priceCtrl = TextEditingController();
   String? _priceError;
 
-  double get _minAllowed => _selected!.salePrice * (1 - widget.maxOverridePct / 100);
-  double get _maxAllowed => _selected!.salePrice * (1 + widget.maxOverridePct / 100);
+  double get _minAllowed =>
+      _selected!.salePrice * (1 - widget.maxOverridePct / 100);
+  double get _maxAllowed =>
+      _selected!.salePrice * (1 + widget.maxOverridePct / 100);
 
   @override
   void dispose() {
@@ -471,8 +520,8 @@ class _ProductPickerSheetState extends State<_ProductPickerSheet> {
     if (qty <= 0) return;
     final price = double.tryParse(_priceCtrl.text);
     if (price == null || price < _minAllowed || price > _maxAllowed) {
-      setState(() =>
-          _priceError = 'السعر يجب أن يكون بين ${_minAllowed.toStringAsFixed(2)} و ${_maxAllowed.toStringAsFixed(2)}');
+      setState(() => _priceError =
+          'السعر يجب أن يكون بين ${_minAllowed.toStringAsFixed(2)} و ${_maxAllowed.toStringAsFixed(2)}');
       return;
     }
     widget.onAdd(_SaleLineItem(
@@ -501,9 +550,13 @@ class _ProductPickerSheetState extends State<_ProductPickerSheet> {
           children: [
             Row(
               children: [
-                const Text('اختر منتجاً', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                const Text('اختر منتجاً',
+                    style:
+                        TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
                 const Spacer(),
-                IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+                IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context)),
               ],
             ),
             Expanded(
@@ -516,10 +569,13 @@ class _ProductPickerSheetState extends State<_ProductPickerSheet> {
                   return ListTile(
                     selected: isSelected,
                     selectedTileColor: AppTheme.primary.withValues(alpha: 0.08),
-                    title: Text(p.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                    title: Text(p.name,
+                        style: const TextStyle(fontWeight: FontWeight.w600)),
                     subtitle: Text(p.unit),
                     trailing: Text(p.salePrice.toStringAsFixed(2),
-                        style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primary)),
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.primary)),
                     onTap: () => setState(() {
                       _selected = p;
                       _qtyCtrl.text = '1';
@@ -534,12 +590,14 @@ class _ProductPickerSheetState extends State<_ProductPickerSheet> {
               const Divider(),
               Row(
                 children: [
-                  const Expanded(child: Text('الكمية', style: TextStyle(fontSize: 12))),
+                  const Expanded(
+                      child: Text('الكمية', style: TextStyle(fontSize: 12))),
                   SizedBox(
                     width: 90,
                     child: TextField(
                       controller: _qtyCtrl,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
                       textAlign: TextAlign.center,
                     ),
                   ),
@@ -556,10 +614,12 @@ class _ProductPickerSheetState extends State<_ProductPickerSheet> {
                     width: 90,
                     child: TextField(
                       controller: _priceCtrl,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
                       textAlign: TextAlign.center,
                       onChanged: (_) {
-                        if (_priceError != null) setState(() => _priceError = null);
+                        if (_priceError != null)
+                          setState(() => _priceError = null);
                       },
                     ),
                   ),
@@ -567,10 +627,13 @@ class _ProductPickerSheetState extends State<_ProductPickerSheet> {
               ),
               if (_priceError != null) ...[
                 const SizedBox(height: 4),
-                Text(_priceError!, style: const TextStyle(fontSize: 11, color: AppTheme.danger)),
+                Text(_priceError!,
+                    style:
+                        const TextStyle(fontSize: 11, color: AppTheme.danger)),
               ],
               const SizedBox(height: 8),
-              ElevatedButton(onPressed: _confirmAdd, child: const Text('إضافة')),
+              ElevatedButton(
+                  onPressed: _confirmAdd, child: const Text('إضافة')),
             ],
             const SizedBox(height: 12),
           ],

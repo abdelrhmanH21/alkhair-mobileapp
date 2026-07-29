@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import '../../../../core/di/service_locator.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/app_snackbar.dart';
+import '../../../../core/widgets/state_views.dart';
 import '../../data/datasources/admin_remote_datasource.dart';
 import '../../data/models/admin_models.dart';
 
@@ -21,6 +22,7 @@ class _AdminWastePageState extends State<AdminWastePage> {
   final _remote = sl<AdminRemoteDataSource>();
 
   bool _loadingRefData = true;
+  String? _error;
   List<SimpleProductModel> _products = [];
   List<RawMaterialModel> _rawMaterials = [];
   List<SimpleWarehouseModel> _warehouses = [];
@@ -47,7 +49,10 @@ class _AdminWastePageState extends State<AdminWastePage> {
   }
 
   Future<void> _loadRefData() async {
-    setState(() => _loadingRefData = true);
+    setState(() {
+      _loadingRefData = true;
+      _error = null;
+    });
     try {
       final results = await Future.wait([
         _remote.fetchProducts(),
@@ -61,8 +66,10 @@ class _AdminWastePageState extends State<AdminWastePage> {
         _loadingRefData = false;
       });
     } catch (_) {
-      setState(() => _loadingRefData = false);
-      if (mounted) AppSnackbar.showError(context, 'فشل تحميل بيانات الشاشة.');
+      setState(() {
+        _loadingRefData = false;
+        _error = 'فشل تحميل بيانات الشاشة.';
+      });
     }
   }
 
@@ -110,7 +117,8 @@ class _AdminWastePageState extends State<AdminWastePage> {
       AppSnackbar.showSuccess(context, 'تم تسجيل الهالك وخصمه من المخزون.');
     } on DioException catch (e) {
       setState(() => _submitting = false);
-      AppSnackbar.showError(context, e.response?.data?['message'] as String? ?? 'فشل تسجيل الهالك.');
+      AppSnackbar.showError(context,
+          e.response?.data?['message'] as String? ?? 'فشل تسجيل الهالك.');
     } catch (_) {
       setState(() => _submitting = false);
       AppSnackbar.showError(context, 'حدث خطأ غير متوقع.');
@@ -123,89 +131,108 @@ class _AdminWastePageState extends State<AdminWastePage> {
       appBar: AppBar(title: const Text('تسجيل هالك')),
       body: _loadingRefData
           ? const Center(child: CircularProgressIndicator())
-          : ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                Row(
+          : _error != null
+              ? AppErrorView(message: _error!, onRetry: _loadRefData)
+              : ListView(
+                  padding: const EdgeInsets.all(16),
                   children: [
-                    Expanded(
-                      child: ChoiceChip(
-                        label: const Text('منتج تام'),
-                        selected: _itemType == 'product',
-                        onSelected: (_) => setState(() {
-                          _itemType = 'product';
-                          _rawMaterialId = null;
-                        }),
-                      ),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ChoiceChip(
+                            label: const Text('منتج تام'),
+                            selected: _itemType == 'product',
+                            onSelected: (_) => setState(() {
+                              _itemType = 'product';
+                              _rawMaterialId = null;
+                            }),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: ChoiceChip(
+                            label: const Text('مادة خام'),
+                            selected: _itemType == 'raw_material',
+                            selectedColor:
+                                AppTheme.accent.withValues(alpha: 0.3),
+                            onSelected: (_) => setState(() {
+                              _itemType = 'raw_material';
+                              _productId = null;
+                            }),
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: ChoiceChip(
-                        label: const Text('مادة خام'),
-                        selected: _itemType == 'raw_material',
-                        selectedColor: AppTheme.accent.withValues(alpha: 0.3),
-                        onSelected: (_) => setState(() {
-                          _itemType = 'raw_material';
-                          _productId = null;
-                        }),
+                    const SizedBox(height: 16),
+                    if (_itemType == 'product')
+                      DropdownButtonFormField<int>(
+                        initialValue: _productId,
+                        decoration: const InputDecoration(labelText: 'المنتج'),
+                        items: _products
+                            .map((p) => DropdownMenuItem(
+                                value: p.id, child: Text(p.name)))
+                            .toList(),
+                        onChanged: (v) => setState(() => _productId = v),
+                      )
+                    else
+                      DropdownButtonFormField<int>(
+                        initialValue: _rawMaterialId,
+                        decoration:
+                            const InputDecoration(labelText: 'المادة الخام'),
+                        items: _rawMaterials
+                            .map((m) => DropdownMenuItem(
+                                value: m.id,
+                                child: Text(
+                                    '${m.name} (متاح: ${m.currentStock.toStringAsFixed(2)})')))
+                            .toList(),
+                        onChanged: (v) => setState(() => _rawMaterialId = v),
+                      ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<int>(
+                      initialValue: _warehouseId,
+                      decoration: const InputDecoration(labelText: 'المخزن'),
+                      items: _warehouses
+                          .map((w) => DropdownMenuItem(
+                              value: w.id, child: Text(w.name)))
+                          .toList(),
+                      onChanged: (v) => setState(() => _warehouseId = v),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _qtyCtrl,
+                      keyboardType:
+                          const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(
+                          labelText: 'الكمية', hintText: '0'),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _reasonCtrl,
+                      decoration: const InputDecoration(
+                          labelText: 'السبب',
+                          hintText: 'مثال: تلف أثناء النقل'),
+                      maxLines: 2,
+                    ),
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      height: 50,
+                      child: ElevatedButton.icon(
+                        onPressed: _submitting ? null : _submit,
+                        style: ElevatedButton.styleFrom(
+                            backgroundColor: AppTheme.danger),
+                        icon: _submitting
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2, color: Colors.white))
+                            : const Icon(Icons.delete_outline),
+                        label: Text(
+                            _submitting ? 'جارٍ الحفظ...' : 'تسجيل الهالك'),
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
-                if (_itemType == 'product')
-                  DropdownButtonFormField<int>(
-                    initialValue: _productId,
-                    decoration: const InputDecoration(labelText: 'المنتج'),
-                    items: _products.map((p) => DropdownMenuItem(value: p.id, child: Text(p.name))).toList(),
-                    onChanged: (v) => setState(() => _productId = v),
-                  )
-                else
-                  DropdownButtonFormField<int>(
-                    initialValue: _rawMaterialId,
-                    decoration: const InputDecoration(labelText: 'المادة الخام'),
-                    items: _rawMaterials
-                        .map((m) => DropdownMenuItem(
-                            value: m.id, child: Text('${m.name} (متاح: ${m.currentStock.toStringAsFixed(2)})')))
-                        .toList(),
-                    onChanged: (v) => setState(() => _rawMaterialId = v),
-                  ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<int>(
-                  initialValue: _warehouseId,
-                  decoration: const InputDecoration(labelText: 'المخزن'),
-                  items: _warehouses.map((w) => DropdownMenuItem(value: w.id, child: Text(w.name))).toList(),
-                  onChanged: (v) => setState(() => _warehouseId = v),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _qtyCtrl,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(labelText: 'الكمية', hintText: '0'),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _reasonCtrl,
-                  decoration: const InputDecoration(labelText: 'السبب', hintText: 'مثال: تلف أثناء النقل'),
-                  maxLines: 2,
-                ),
-                const SizedBox(height: 20),
-                SizedBox(
-                  height: 50,
-                  child: ElevatedButton.icon(
-                    onPressed: _submitting ? null : _submit,
-                    style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger),
-                    icon: _submitting
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                        : const Icon(Icons.delete_outline),
-                    label: Text(_submitting ? 'جارٍ الحفظ...' : 'تسجيل الهالك'),
-                  ),
-                ),
-              ],
-            ),
     );
   }
 }

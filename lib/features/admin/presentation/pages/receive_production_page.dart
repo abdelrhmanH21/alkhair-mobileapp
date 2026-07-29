@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../../../core/di/service_locator.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/app_snackbar.dart';
+import '../../../../core/widgets/state_views.dart';
 import '../../data/datasources/admin_remote_datasource.dart';
 import '../../data/models/admin_models.dart';
 
@@ -43,7 +44,9 @@ class _ReceiveProductionPageState extends State<ReceiveProductionPage> {
   final _overheadVariableCtrl = TextEditingController();
 
   bool _loadingList = true;
+  String? _error;
   bool _loadingDetail = false;
+  String? _detailError;
   bool _submitting = false;
   String? _lastCompletedBatch;
 
@@ -64,7 +67,10 @@ class _ReceiveProductionPageState extends State<ReceiveProductionPage> {
   }
 
   Future<void> _loadLists() async {
-    setState(() => _loadingList = true);
+    setState(() {
+      _loadingList = true;
+      _error = null;
+    });
     try {
       final results = await Future.wait([
         _remote.fetchInProgressBatches(),
@@ -74,13 +80,16 @@ class _ReceiveProductionPageState extends State<ReceiveProductionPage> {
       setState(() {
         _inProgressBatches = results[0] as List<ProductionBatchSummaryModel>;
         _completedBatches = results[1] as List<ProductionBatchSummaryModel>;
-        _warehouses =
-            (results[2] as List<SimpleWarehouseModel>).where((w) => w.type == 'manufacturing').toList();
+        _warehouses = (results[2] as List<SimpleWarehouseModel>)
+            .where((w) => w.type == 'manufacturing')
+            .toList();
         _loadingList = false;
       });
     } catch (_) {
-      setState(() => _loadingList = false);
-      if (mounted) AppSnackbar.showError(context, 'فشل تحميل التشغيلات.');
+      setState(() {
+        _loadingList = false;
+        _error = 'فشل تحميل التشغيلات.';
+      });
     }
   }
 
@@ -89,6 +98,7 @@ class _ReceiveProductionPageState extends State<ReceiveProductionPage> {
       _selectedBatchId = id;
       _batchDetail = null;
       _loadingDetail = true;
+      _detailError = null;
     });
     try {
       final detail = await _remote.fetchBatchDetail(id);
@@ -98,8 +108,10 @@ class _ReceiveProductionPageState extends State<ReceiveProductionPage> {
         _loadingDetail = false;
       });
     } catch (_) {
-      setState(() => _loadingDetail = false);
-      if (mounted) AppSnackbar.showError(context, 'فشل تحميل بيانات التشغيلة.');
+      setState(() {
+        _loadingDetail = false;
+        _detailError = 'فشل تحميل بيانات التشغيلة.';
+      });
     }
   }
 
@@ -108,8 +120,8 @@ class _ReceiveProductionPageState extends State<ReceiveProductionPage> {
       AppSnackbar.showError(context, 'اختر تشغيلة أولاً');
       return;
     }
-    final hasOutput =
-        _outputEntries.any((e) => (double.tryParse(e.actualCtrl.text) ?? 0) > 0);
+    final hasOutput = _outputEntries
+        .any((e) => (double.tryParse(e.actualCtrl.text) ?? 0) > 0);
     if (!hasOutput) {
       AppSnackbar.showError(context, 'أدخل كمية فعلية لناتج واحد على الأقل');
       return;
@@ -132,7 +144,8 @@ class _ReceiveProductionPageState extends State<ReceiveProductionPage> {
         outputs: _outputEntries
             .map((e) => {
                   'manufacturing_order_output_id': e.output.id,
-                  'actual_quantity': e.actualCtrl.text.isEmpty ? '0' : e.actualCtrl.text,
+                  'actual_quantity':
+                      e.actualCtrl.text.isEmpty ? '0' : e.actualCtrl.text,
                   if (e.warehouseId != null) 'warehouse_id': e.warehouseId,
                 })
             .toList(),
@@ -153,8 +166,8 @@ class _ReceiveProductionPageState extends State<ReceiveProductionPage> {
       _loadLists();
     } on DioException catch (e) {
       setState(() => _submitting = false);
-      AppSnackbar.showError(
-          context, e.response?.data?['message'] as String? ?? 'فشل تسجيل الإنتاج');
+      AppSnackbar.showError(context,
+          e.response?.data?['message'] as String? ?? 'فشل تسجيل الإنتاج');
     } catch (_) {
       setState(() => _submitting = false);
       AppSnackbar.showError(context, 'حدث خطأ غير متوقع');
@@ -167,176 +180,215 @@ class _ReceiveProductionPageState extends State<ReceiveProductionPage> {
       appBar: AppBar(title: const Text('استلام إنتاج تام')),
       body: _loadingList
           ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: _loadLists,
-              child: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  if (_lastCompletedBatch != null)
-                    Container(
-                      margin: const EdgeInsets.only(bottom: 16),
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: AppTheme.secondary.withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: AppTheme.secondary.withValues(alpha: 0.3)),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.check_circle, color: AppTheme.secondary),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text('تم إغلاق التشغيلة: $_lastCompletedBatch',
-                                style: const TextStyle(fontSize: 12)),
+          : _error != null
+              ? AppErrorView(message: _error!, onRetry: _loadLists)
+              : RefreshIndicator(
+                  onRefresh: _loadLists,
+                  child: ListView(
+                    padding: const EdgeInsets.all(16),
+                    children: [
+                      if (_lastCompletedBatch != null)
+                        Container(
+                          margin: const EdgeInsets.only(bottom: 16),
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: AppTheme.secondary.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                                color:
+                                    AppTheme.secondary.withValues(alpha: 0.3)),
                           ),
-                        ],
-                      ),
-                    ),
-                  Text('١. اختيار رقم الباتشة الجارية',
-                      style: Theme.of(context).textTheme.titleMedium),
-                  const SizedBox(height: 8),
-                  if (_inProgressBatches.isEmpty)
-                    const Text('لا توجد تشغيلات جارية.', style: TextStyle(color: AppTheme.textMuted))
-                  else
-                    DropdownButtonFormField<int>(
-                      initialValue: _selectedBatchId,
-                      decoration: const InputDecoration(labelText: 'رقم الباتشة'),
-                      items: _inProgressBatches
-                          .map((b) => DropdownMenuItem(
-                              value: b.id,
-                              child: Text('${b.batchNumber ?? '#${b.id}'} — ${b.recipeName ?? '—'}')))
-                          .toList(),
-                      onChanged: (v) => v != null ? _selectBatch(v) : null,
-                    ),
-                  if (_loadingDetail)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 16),
-                      child: Center(child: CircularProgressIndicator()),
-                    ),
-                  if (_batchDetail != null) ...[
-                    const SizedBox(height: 16),
-                    Text('الخامات المصروفة في المرحلة الأولى (للاطلاع)',
-                        style: Theme.of(context).textTheme.titleMedium),
-                    const SizedBox(height: 8),
-                    ..._batchDetail!.materials.map((m) => Card(
-                          color: m.isReentry
-                              ? AppTheme.accent.withValues(alpha: 0.06)
-                              : AppTheme.cardBg,
-                          child: ListTile(
-                            dense: true,
-                            title: Text(m.materialName ?? '—', style: const TextStyle(fontSize: 13)),
-                            trailing: Text(
-                                '${m.actualQuantityUsed ?? m.quantityUsed} ${m.unit ?? ''}',
-                                style: const TextStyle(fontWeight: FontWeight.bold)),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.check_circle,
+                                  color: AppTheme.secondary),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                    'تم إغلاق التشغيلة: $_lastCompletedBatch',
+                                    style: const TextStyle(fontSize: 12)),
+                              ),
+                            ],
                           ),
-                        )),
-                    const SizedBox(height: 20),
-                    Text('٢. الكميات الفعلية المنتجة',
-                        style: Theme.of(context).textTheme.titleMedium),
-                    const SizedBox(height: 8),
-                    ..._outputEntries.map((entry) => Card(
-                          child: Padding(
-                            padding: const EdgeInsets.all(10),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: Text(entry.output.productName,
-                                          style: const TextStyle(
-                                              fontWeight: FontWeight.bold, fontSize: 13)),
-                                    ),
-                                    if (entry.output.isByproduct)
-                                      const Text('ثانوي',
-                                          style: TextStyle(fontSize: 10, color: AppTheme.accent)),
-                                  ],
-                                ),
-                                const SizedBox(height: 6),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      child: TextField(
-                                        controller: entry.actualCtrl,
-                                        keyboardType:
-                                            const TextInputType.numberWithOptions(decimal: true),
-                                        decoration: const InputDecoration(
-                                            labelText: 'الكمية الفعلية *', isDense: true),
-                                        onChanged: (_) => setState(() {}),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: DropdownButtonFormField<int>(
-                                        initialValue: entry.warehouseId,
-                                        decoration:
-                                            const InputDecoration(labelText: 'المخزن', isDense: true),
-                                        items: _warehouses
-                                            .map((w) =>
-                                                DropdownMenuItem(value: w.id, child: Text(w.name)))
-                                            .toList(),
-                                        onChanged: (v) => setState(() => entry.warehouseId = v),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                        )),
-                    const SizedBox(height: 16),
-                    ExpansionTile(
-                      title: const Text('تكاليف إضافية (اختياري)', style: TextStyle(fontSize: 13)),
-                      tilePadding: EdgeInsets.zero,
-                      childrenPadding: const EdgeInsets.only(bottom: 12),
-                      children: [
-                        TextField(
-                          controller: _overheadFixedCtrl,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          decoration: const InputDecoration(labelText: 'تكاليف ثابتة'),
                         ),
+                      Text('١. اختيار رقم الباتشة الجارية',
+                          style: Theme.of(context).textTheme.titleMedium),
+                      const SizedBox(height: 8),
+                      if (_inProgressBatches.isEmpty)
+                        const Text('لا توجد تشغيلات جارية.',
+                            style: TextStyle(color: AppTheme.textMuted))
+                      else
+                        DropdownButtonFormField<int>(
+                          initialValue: _selectedBatchId,
+                          decoration:
+                              const InputDecoration(labelText: 'رقم الباتشة'),
+                          items: _inProgressBatches
+                              .map((b) => DropdownMenuItem(
+                                  value: b.id,
+                                  child: Text(
+                                      '${b.batchNumber ?? '#${b.id}'} — ${b.recipeName ?? '—'}')))
+                              .toList(),
+                          onChanged: (v) => v != null ? _selectBatch(v) : null,
+                        ),
+                      if (_loadingDetail)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 16),
+                          child: Center(child: CircularProgressIndicator()),
+                        ),
+                      if (!_loadingDetail && _detailError != null)
+                        AppErrorView(
+                          message: _detailError!,
+                          onRetry: () => _selectBatch(_selectedBatchId!),
+                        ),
+                      if (_batchDetail != null) ...[
+                        const SizedBox(height: 16),
+                        Text('الخامات المصروفة في المرحلة الأولى (للاطلاع)',
+                            style: Theme.of(context).textTheme.titleMedium),
                         const SizedBox(height: 8),
-                        TextField(
-                          controller: _overheadVariableCtrl,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                          decoration: const InputDecoration(labelText: 'تكاليف متغيرة (لكل وحدة)'),
+                        ..._batchDetail!.materials.map((m) => Card(
+                              color: m.isReentry
+                                  ? AppTheme.accent.withValues(alpha: 0.06)
+                                  : AppTheme.cardBg,
+                              child: ListTile(
+                                dense: true,
+                                title: Text(m.materialName ?? '—',
+                                    style: const TextStyle(fontSize: 13)),
+                                trailing: Text(
+                                    '${m.actualQuantityUsed ?? m.quantityUsed} ${m.unit ?? ''}',
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold)),
+                              ),
+                            )),
+                        const SizedBox(height: 20),
+                        Text('٢. الكميات الفعلية المنتجة',
+                            style: Theme.of(context).textTheme.titleMedium),
+                        const SizedBox(height: 8),
+                        ..._outputEntries.map((entry) => Card(
+                              child: Padding(
+                                padding: const EdgeInsets.all(10),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(entry.output.productName,
+                                              style: const TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 13)),
+                                        ),
+                                        if (entry.output.isByproduct)
+                                          const Text('ثانوي',
+                                              style: TextStyle(
+                                                  fontSize: 10,
+                                                  color: AppTheme.accent)),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: TextField(
+                                            controller: entry.actualCtrl,
+                                            keyboardType: const TextInputType
+                                                .numberWithOptions(
+                                                decimal: true),
+                                            decoration: const InputDecoration(
+                                                labelText: 'الكمية الفعلية *',
+                                                isDense: true),
+                                            onChanged: (_) => setState(() {}),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: DropdownButtonFormField<int>(
+                                            initialValue: entry.warehouseId,
+                                            decoration: const InputDecoration(
+                                                labelText: 'المخزن',
+                                                isDense: true),
+                                            items: _warehouses
+                                                .map((w) => DropdownMenuItem(
+                                                    value: w.id,
+                                                    child: Text(w.name)))
+                                                .toList(),
+                                            onChanged: (v) => setState(
+                                                () => entry.warehouseId = v),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            )),
+                        const SizedBox(height: 16),
+                        ExpansionTile(
+                          title: const Text('تكاليف إضافية (اختياري)',
+                              style: TextStyle(fontSize: 13)),
+                          tilePadding: EdgeInsets.zero,
+                          childrenPadding: const EdgeInsets.only(bottom: 12),
+                          children: [
+                            TextField(
+                              controller: _overheadFixedCtrl,
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                      decimal: true),
+                              decoration: const InputDecoration(
+                                  labelText: 'تكاليف ثابتة'),
+                            ),
+                            const SizedBox(height: 8),
+                            TextField(
+                              controller: _overheadVariableCtrl,
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                      decimal: true),
+                              decoration: const InputDecoration(
+                                  labelText: 'تكاليف متغيرة (لكل وحدة)'),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        SizedBox(
+                          height: 50,
+                          child: ElevatedButton.icon(
+                            onPressed: _submitting ? null : _submit,
+                            icon: _submitting
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                        strokeWidth: 2, color: Colors.white))
+                                : const Icon(Icons.inventory_2_outlined),
+                            label: Text(_submitting
+                                ? 'جارٍ الحفظ...'
+                                : 'تسجيل الإنتاج'),
+                          ),
                         ),
                       ],
-                    ),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      height: 50,
-                      child: ElevatedButton.icon(
-                        onPressed: _submitting ? null : _submit,
-                        icon: _submitting
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                            : const Icon(Icons.inventory_2_outlined),
-                        label: Text(_submitting ? 'جارٍ الحفظ...' : 'تسجيل الإنتاج'),
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 24),
-                  Text('تشغيلات مكتملة مؤخراً', style: Theme.of(context).textTheme.titleMedium),
-                  const SizedBox(height: 8),
-                  if (_completedBatches.isEmpty)
-                    const Text('لا توجد تشغيلات مكتملة بعد.', style: TextStyle(color: AppTheme.textMuted))
-                  else
-                    ..._completedBatches.map((b) => Card(
-                          child: ListTile(
-                            leading: const Icon(Icons.check_circle_outline, color: AppTheme.secondary),
-                            title: Text(b.batchNumber ?? '#${b.id}',
-                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                            subtitle: Text(
-                                '${b.recipeName ?? '—'} • ${DateFormat('yyyy-MM-dd').format(b.createdAt)}',
-                                style: const TextStyle(fontSize: 11)),
-                          ),
-                        )),
-                ],
-              ),
-            ),
+                      const SizedBox(height: 24),
+                      Text('تشغيلات مكتملة مؤخراً',
+                          style: Theme.of(context).textTheme.titleMedium),
+                      const SizedBox(height: 8),
+                      if (_completedBatches.isEmpty)
+                        const Text('لا توجد تشغيلات مكتملة بعد.',
+                            style: TextStyle(color: AppTheme.textMuted))
+                      else
+                        ..._completedBatches.map((b) => Card(
+                              child: ListTile(
+                                leading: const Icon(Icons.check_circle_outline,
+                                    color: AppTheme.secondary),
+                                title: Text(b.batchNumber ?? '#${b.id}',
+                                    style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 13)),
+                                subtitle: Text(
+                                    '${b.recipeName ?? '—'} • ${DateFormat('yyyy-MM-dd').format(b.createdAt)}',
+                                    style: const TextStyle(fontSize: 11)),
+                              ),
+                            )),
+                    ],
+                  ),
+                ),
     );
   }
 }

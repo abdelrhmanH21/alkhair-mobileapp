@@ -55,6 +55,8 @@ class ApiEndpoints {
   static const String manufacturingOrders  = '$apiRoot/manufacturing';
   static String manufacturingComplete(int id) => '$apiRoot/manufacturing/$id/complete';
   static const String inventory = '$apiRoot/inventory';
+  static const String vaultAudits = '$apiRoot/vault-audits';
+  static const String debtAudits  = '$apiRoot/debt-audits';
 
   // Delegate — invoices
   static const String delegateInvoice  = '/delegate/invoice';

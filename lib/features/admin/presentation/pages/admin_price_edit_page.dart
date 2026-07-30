@@ -184,6 +184,9 @@ class _AdminPriceEditPageState extends State<AdminPriceEditPage>
         title: const Text('تعديل سعر'),
         bottom: TabBar(
           controller: _tabController,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white70,
+          indicatorColor: Colors.white,
           tabs: const [Tab(text: 'منتجات'), Tab(text: 'مواد خام')],
         ),
       ),

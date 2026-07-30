@@ -1161,6 +1161,94 @@ class InventoryCountItemModel {
       );
 }
 
+// ─── Vault audit ("جرد الخزائن") ────────────────────────────────────────────
+// Mirrors VaultAuditController — same POST /vault-audits the web "جرد
+// التصنيع/اللبن" page's جرد الخزائن tab uses (VaultAuditTab in JardPage.tsx).
+
+class VaultAuditModel {
+  final int id;
+  final String treasuryName;
+  final double systemBalance;
+  final double physicalBalance;
+  final double variance;
+  final String? notes;
+  final String? performerName;
+  final DateTime? createdAt;
+
+  const VaultAuditModel({
+    required this.id,
+    required this.treasuryName,
+    required this.systemBalance,
+    required this.physicalBalance,
+    required this.variance,
+    required this.notes,
+    required this.performerName,
+    required this.createdAt,
+  });
+
+  factory VaultAuditModel.fromJson(Map<String, dynamic> json) {
+    final treasury = json['treasury'] as Map<String, dynamic>?;
+    final performer = json['performer'] as Map<String, dynamic>?;
+    return VaultAuditModel(
+      id: json['id'] as int,
+      treasuryName: treasury?['name'] as String? ?? '—',
+      systemBalance: _asDouble(json['system_balance']),
+      physicalBalance: _asDouble(json['physical_balance']),
+      variance: _asDouble(json['variance']),
+      notes: json['notes'] as String?,
+      performerName: performer?['name'] as String?,
+      createdAt: DateTime.tryParse(json['created_at'] as String? ?? '')?.toLocal(),
+    );
+  }
+}
+
+// ─── Debt audit ("جرد المديونيات" / "جرد ديون الموردين") ───────────────────
+// Mirrors DebtAuditController — same POST /debt-audits the web "جرد
+// التصنيع/اللبن" page's جرد المديونيات/جرد ديون الموردين tabs use
+// (EntityAuditTab in JardPage.tsx), scoped here to client_type in
+// (customer, supplier) since the milk variants have no mobile screen.
+
+class DebtAuditModel {
+  final int id;
+  final String clientType; // 'customer' | 'supplier'
+  final String entityName;
+  final double systemBalance;
+  final double physicalBalance;
+  final double variance;
+  final String? notes;
+  final String? performerName;
+  final DateTime? createdAt;
+
+  const DebtAuditModel({
+    required this.id,
+    required this.clientType,
+    required this.entityName,
+    required this.systemBalance,
+    required this.physicalBalance,
+    required this.variance,
+    required this.notes,
+    required this.performerName,
+    required this.createdAt,
+  });
+
+  factory DebtAuditModel.fromJson(Map<String, dynamic> json) {
+    final performer = json['performer'] as Map<String, dynamic>?;
+    final clientType = json['client_type'] as String? ?? 'customer';
+    final entity = (json['customer'] ?? json['supplier']) as Map<String, dynamic>?;
+    return DebtAuditModel(
+      id: json['id'] as int,
+      clientType: clientType,
+      entityName: entity?['name'] as String? ?? '—',
+      systemBalance: _asDouble(json['system_balance']),
+      physicalBalance: _asDouble(json['physical_balance']),
+      variance: _asDouble(json['variance']),
+      notes: json['notes'] as String?,
+      performerName: performer?['name'] as String?,
+      createdAt: DateTime.tryParse(json['created_at'] as String? ?? '')?.toLocal(),
+    );
+  }
+}
+
 // ─── Settlement history ("سجل التسويات") ────────────────────────────────────
 
 /// Mirrors AdminDelegateController::settlementHistory() — a structured

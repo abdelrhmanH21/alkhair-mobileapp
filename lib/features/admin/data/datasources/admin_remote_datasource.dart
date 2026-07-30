@@ -2,6 +2,7 @@ import '../../../../core/network/api_client.dart';
 import '../../../../core/network/api_endpoints.dart';
 import '../../../delegate/data/models/breakdown_models.dart';
 import '../../../delegate/data/models/client_model.dart';
+import '../../../delegate/data/models/customer_region_model.dart';
 import '../models/admin_models.dart';
 
 abstract class AdminRemoteDataSource {
@@ -47,6 +48,37 @@ abstract class AdminRemoteDataSource {
   // ── Customers & Suppliers ──────────────────────────────────────────────
   Future<CustomerPageModel> fetchCustomers({String? search, int page = 1});
   Future<SupplierPageModel> fetchSuppliers({String? search, int page = 1});
+  Future<void> updateCustomer({
+    required int id,
+    required String name,
+    String? phone,
+    String? email,
+    String? address,
+    int? customerRegionId,
+  });
+  Future<SupplierModel> createSupplier({
+    required String name,
+    String? phone,
+    String? email,
+    String? address,
+    double? balance,
+  });
+  Future<void> updateSupplier({
+    required int id,
+    required String name,
+    String? phone,
+    String? email,
+    String? address,
+  });
+
+  // ── مناطق التوزيع (CustomerRegion) ───────────────────────────────────────
+  Future<List<CustomerRegionModel>> fetchAllCustomerRegions();
+  Future<void> createCustomerRegion(String name);
+  Future<void> updateCustomerRegion({
+    required int id,
+    String? name,
+    bool? isActive,
+  });
 
   // ── Sales & collections (المبيعات والتحصيلات) ───────────────────────────
   Future<SalesCombinedPageModel> fetchSalesCombined({
@@ -170,6 +202,23 @@ abstract class AdminRemoteDataSource {
     int? treasuryId,
     int? customerId,
     required List<Map<String, dynamic>> counts,
+  });
+
+  // ── جرد الخزائن ("جرد التصنيع"/VaultAuditController) ─────────────────────
+  Future<List<VaultAuditModel>> fetchVaultAudits({int? treasuryId});
+  Future<double> submitVaultAudit({
+    required int treasuryId,
+    required double physicalBalance,
+    String? notes,
+  });
+
+  // ── جرد المديونيات / جرد ديون الموردين (DebtAuditController) ─────────────
+  Future<List<DebtAuditModel>> fetchDebtAudits(String clientType);
+  Future<double> submitDebtAudit({
+    required String clientType,
+    required int entityId,
+    required double physicalBalance,
+    String? notes,
   });
 
   // ── عمليات العمالة (جزاء / سلفة / مكافأة) ────────────────────────────────
@@ -346,6 +395,85 @@ class AdminRemoteDataSourceImpl implements AdminRemoteDataSource {
       if (search != null && search.isNotEmpty) 'search': search,
     });
     return SupplierPageModel.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  @override
+  Future<void> updateCustomer({
+    required int id,
+    required String name,
+    String? phone,
+    String? email,
+    String? address,
+    int? customerRegionId,
+  }) async {
+    await _client.dio.put('${ApiEndpoints.customers}/$id', data: {
+      'name': name,
+      if (phone != null) 'phone': phone,
+      if (email != null) 'email': email,
+      if (address != null) 'address': address,
+      if (customerRegionId != null) 'customer_region_id': customerRegionId,
+    });
+  }
+
+  @override
+  Future<SupplierModel> createSupplier({
+    required String name,
+    String? phone,
+    String? email,
+    String? address,
+    double? balance,
+  }) async {
+    final res = await _client.dio.post(ApiEndpoints.suppliers, data: {
+      'name': name,
+      if (phone != null && phone.isNotEmpty) 'phone': phone,
+      if (email != null && email.isNotEmpty) 'email': email,
+      if (address != null && address.isNotEmpty) 'address': address,
+      if (balance != null) 'balance': balance,
+    });
+    return SupplierModel.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  @override
+  Future<void> updateSupplier({
+    required int id,
+    required String name,
+    String? phone,
+    String? email,
+    String? address,
+  }) async {
+    await _client.dio.put('${ApiEndpoints.suppliers}/$id', data: {
+      'name': name,
+      if (phone != null) 'phone': phone,
+      if (email != null) 'email': email,
+      if (address != null) 'address': address,
+    });
+  }
+
+  // ── مناطق التوزيع (CustomerRegion) ───────────────────────────────────────
+
+  @override
+  Future<List<CustomerRegionModel>> fetchAllCustomerRegions() async {
+    final res = await _client.dio
+        .get(ApiEndpoints.customerRegions, queryParameters: {'per_page': 500});
+    final list = (res.data as Map<String, dynamic>)['data'] as List? ?? [];
+    return list.map((e) => CustomerRegionModel.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  @override
+  Future<void> createCustomerRegion(String name) async {
+    await _client.dio.post(ApiEndpoints.customerRegions, data: {'name': name});
+  }
+
+  @override
+  Future<void> updateCustomerRegion({
+    required int id,
+    String? name,
+    bool? isActive,
+  }) async {
+    await _client.dio.put('${ApiEndpoints.customerRegions}/$id', data: {
+      if (name != null) 'name': name,
+      if (isActive != null) 'is_active': isActive,
+    });
   }
 
   // ── Sales & collections (المبيعات والتحصيلات) ───────────────────────────
@@ -729,6 +857,62 @@ class AdminRemoteDataSourceImpl implements AdminRemoteDataSource {
     });
     final data = res.data as Map<String, dynamic>;
     return (data['total_variance_value'] as num? ?? 0).toDouble();
+  }
+
+  // ── جرد الخزائن ───────────────────────────────────────────────────────
+
+  @override
+  Future<List<VaultAuditModel>> fetchVaultAudits({int? treasuryId}) async {
+    final res = await _client.dio.get(ApiEndpoints.vaultAudits, queryParameters: {
+      'per_page': 30,
+      if (treasuryId != null) 'treasury_id': treasuryId,
+    });
+    final list = (res.data as Map<String, dynamic>)['data'] as List? ?? [];
+    return list.map((e) => VaultAuditModel.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  @override
+  Future<double> submitVaultAudit({
+    required int treasuryId,
+    required double physicalBalance,
+    String? notes,
+  }) async {
+    final res = await _client.dio.post(ApiEndpoints.vaultAudits, data: {
+      'treasury_id': treasuryId,
+      'physical_balance': physicalBalance,
+      if (notes != null && notes.isNotEmpty) 'notes': notes,
+    });
+    final audit = (res.data as Map<String, dynamic>)['audit'] as Map<String, dynamic>;
+    return (audit['variance'] as num? ?? 0).toDouble();
+  }
+
+  // ── جرد المديونيات / جرد ديون الموردين ───────────────────────────────────
+
+  @override
+  Future<List<DebtAuditModel>> fetchDebtAudits(String clientType) async {
+    final res = await _client.dio.get(ApiEndpoints.debtAudits, queryParameters: {
+      'client_type': clientType,
+      'per_page': 30,
+    });
+    final list = (res.data as Map<String, dynamic>)['data'] as List? ?? [];
+    return list.map((e) => DebtAuditModel.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  @override
+  Future<double> submitDebtAudit({
+    required String clientType,
+    required int entityId,
+    required double physicalBalance,
+    String? notes,
+  }) async {
+    final idField = clientType == 'supplier' ? 'supplier_id' : 'customer_id';
+    final res = await _client.dio.post(ApiEndpoints.debtAudits, data: {
+      'client_type': clientType,
+      idField: entityId,
+      'physical_balance': physicalBalance,
+      if (notes != null && notes.isNotEmpty) 'notes': notes,
+    });
+    return ((res.data as Map<String, dynamic>)['variance'] as num? ?? 0).toDouble();
   }
 
   // ── عمليات العمالة (جزاء / سلفة / مكافأة) ────────────────────────────────

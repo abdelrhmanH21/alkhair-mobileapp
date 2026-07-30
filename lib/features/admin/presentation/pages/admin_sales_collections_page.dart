@@ -71,6 +71,9 @@ class _AdminSalesCollectionsPageState extends State<AdminSalesCollectionsPage>
         title: const Text('المبيعات والتحصيلات'),
         bottom: TabBar(
           controller: _tabController,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white70,
+          indicatorColor: Colors.white,
           tabs: const [
             Tab(text: 'المبيعات'),
             Tab(text: 'السداد والتحصيلات'),

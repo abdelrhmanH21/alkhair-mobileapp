@@ -141,6 +141,9 @@ class _DelegateReportsPageState extends State<DelegateReportsPage>
         title: const Text('التقارير'),
         bottom: TabBar(
           controller: _tabController,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white70,
+          indicatorColor: Colors.white,
           tabs: const [
             Tab(text: 'تقرير المناطق'),
             Tab(text: 'تقرير الأصناف'),

@@ -233,6 +233,9 @@ class _RepPayrollDetailPageState extends State<_RepPayrollDetailPage>
           bottom: TabBar(
             controller: _tabController,
             isScrollable: true,
+            labelColor: Colors.white,
+            unselectedLabelColor: Colors.white70,
+            indicatorColor: Colors.white,
             tabs: const [
               Tab(text: 'العمولة اليومية'),
               Tab(text: 'الجزاءات'),

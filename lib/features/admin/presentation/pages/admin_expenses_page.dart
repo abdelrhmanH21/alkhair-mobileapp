@@ -39,6 +39,9 @@ class _AdminExpensesPageState extends State<AdminExpensesPage>
         title: const Text('المصروفات والخزائن'),
         bottom: TabBar(
           controller: _tabController,
+          labelColor: Colors.white,
+          unselectedLabelColor: Colors.white70,
+          indicatorColor: Colors.white,
           tabs: const [
             Tab(text: 'المصروفات'),
             Tab(text: 'الخزائن'),

@@ -504,6 +504,9 @@ class _DashboardContent extends StatelessWidget {
               const SizedBox(height: 12),
 
               _MonthComparisonSection(comparison: stats.monthComparison),
+              const SizedBox(height: 12),
+
+              const _IndicatorTrendSection(),
               const SizedBox(height: 20),
 
               // KPI grid
@@ -893,6 +896,310 @@ class _MonthComparisonRow extends StatelessWidget {
                         fontSize: 12, fontWeight: FontWeight.bold, color: color)),
               ],
             ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Switchable Indicator Trend Section ─────────────────────────────────────
+
+class _IndicatorConfig {
+  final String label;
+  final String shortLabel;
+  final Color color;
+  final IconData icon;
+  const _IndicatorConfig(this.label, this.shortLabel, this.color, this.icon);
+}
+
+const Map<String, _IndicatorConfig> _kIndicatorConfigs = {
+  'capital': _IndicatorConfig(
+      'مؤشر رأس المال', 'رأس المال', AppTheme.primary, Icons.account_balance_wallet_rounded),
+  'expenses': _IndicatorConfig(
+      'مؤشر المصروفات', 'المصروفات', AppTheme.danger, Icons.arrow_downward_rounded),
+  'debts': _IndicatorConfig(
+      'مؤشر المديونيات', 'المديونيات', Colors.amber, Icons.receipt_long_rounded),
+  'revenue': _IndicatorConfig(
+      'الإيرادات اليومية', 'الإيرادات', AppTheme.secondary, Icons.trending_up_rounded),
+};
+
+const Map<String, String> _kPeriodLabels = {'week': 'أسبوع', 'month': 'شهر', 'quarter': 'ربع سنة'};
+
+/// Switchable trend-chart widget on the home tab — one of 4 indicators
+/// (رأس المال / المصروفات / المديونيات / الإيرادات اليومية) over a
+/// selectable period. Fetches directly via AdminRemoteDataSource rather
+/// than through AdminBloc's dashboard event/state — this page's dashboard
+/// content is already built from AdminDashboardLoaded, and this widget's
+/// own indicator/period selection is local UI state that doesn't belong in
+/// the shared dashboard state shape (same "independent fetch" convention
+/// already used for the three admin pages reached from this dashboard).
+class _IndicatorTrendSection extends StatefulWidget {
+  const _IndicatorTrendSection();
+
+  @override
+  State<_IndicatorTrendSection> createState() => _IndicatorTrendSectionState();
+}
+
+class _IndicatorTrendSectionState extends State<_IndicatorTrendSection> {
+  String _type = 'capital';
+  String _period = 'month';
+  IndicatorTrendModel? _data;
+  bool _loading = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetch();
+  }
+
+  Future<void> _fetch() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final result =
+          await sl<AdminRemoteDataSource>().fetchIndicatorTrend(type: _type, period: _period);
+      if (!mounted) return;
+      setState(() {
+        _data = result;
+        _loading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _error = 'تعذر تحميل بيانات المؤشر.';
+        _loading = false;
+      });
+    }
+  }
+
+  void _selectType(String type) {
+    if (type == _type) return;
+    setState(() => _type = type);
+    _fetch();
+  }
+
+  void _selectPeriod(String period) {
+    if (period == _period) return;
+    setState(() => _period = period);
+    _fetch();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cfg = _kIndicatorConfigs[_type]!;
+
+    return Card(
+      margin: EdgeInsets.zero,
+      color: AppTheme.cardBg,
+      surfaceTintColor: Colors.transparent,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text('المؤشرات الزمنية',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+            const SizedBox(height: 8),
+
+            // Period selector — mirrors DelegateReportsPage's ChoiceChip row.
+            Row(
+              children: _kPeriodLabels.entries
+                  .map((e) => Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 2),
+                          child: ChoiceChip(
+                            label: Text(e.value),
+                            selected: _period == e.key,
+                            onSelected: (_) => _selectPeriod(e.key),
+                          ),
+                        ),
+                      ))
+                  .toList(),
+            ),
+            const SizedBox(height: 8),
+
+            // Indicator selector
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: _kIndicatorConfigs.entries.map((e) {
+                final active = _type == e.key;
+                return ChoiceChip(
+                  label: Text(e.value.shortLabel, style: const TextStyle(fontSize: 12)),
+                  avatar: Icon(e.value.icon,
+                      size: 14, color: active ? Colors.white : e.value.color),
+                  selected: active,
+                  selectedColor: e.value.color,
+                  labelStyle: TextStyle(color: active ? Colors.white : null),
+                  onSelected: (_) => _selectType(e.key),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 12),
+
+            if (_loading && _data == null)
+              const SizedBox(
+                  height: 160, child: Center(child: CircularProgressIndicator()))
+            else if (_error != null && _data == null)
+              SizedBox(
+                height: 160,
+                child: Center(
+                  child: Text(_error!, style: const TextStyle(color: AppTheme.danger)),
+                ),
+              )
+            else if (_data != null) ...[
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(_data!.isSnapshotBased ? 'القيمة الحالية' : 'آخر يوم',
+                            style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
+                        Text(_data!.currentValue.toStringAsFixed(0),
+                            style: TextStyle(
+                                fontSize: 22, fontWeight: FontWeight.bold, color: cfg.color)),
+                      ],
+                    ),
+                  ),
+                  if (_data!.periodTotal != null)
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        const Text('إجمالي الفترة',
+                            style: TextStyle(fontSize: 11, color: AppTheme.textMuted)),
+                        Text(_data!.periodTotal!.toStringAsFixed(0),
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+                      ],
+                    ),
+                ],
+              ),
+              const SizedBox(height: 10),
+
+              if (_data!.isSnapshotBased)
+                Container(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: Colors.amber.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.amber.withValues(alpha: 0.3)),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.info_outline_rounded, size: 14, color: Colors.amber),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          _data!.historicalDataSince != null
+                              ? 'البيانات التاريخية لهذا المؤشر متاحة اعتبارًا من ${_data!.historicalDataSince}.'
+                              : 'سيبدأ تسجيل البيانات التاريخية لهذا المؤشر بدءًا من اليوم.',
+                          style: const TextStyle(fontSize: 10.5, color: Colors.amber),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+              if (_data!.data.isEmpty)
+                const SizedBox(
+                  height: 140,
+                  child: Center(
+                    child: Text('لا توجد بيانات لعرضها في هذه الفترة',
+                        style: TextStyle(color: AppTheme.textMuted, fontSize: 12)),
+                  ),
+                )
+              else
+                SizedBox(
+                  height: 160,
+                  child: _IndicatorLineChart(points: _data!.data, color: cfg.color),
+                ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _IndicatorLineChart extends StatelessWidget {
+  final List<IndicatorTrendPointModel> points;
+  final Color color;
+  const _IndicatorLineChart({required this.points, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    final spots = [
+      for (var i = 0; i < points.length; i++) FlSpot(i.toDouble(), points[i].value),
+    ];
+    final maxY = points.map((p) => p.value).fold<double>(0, (a, b) => a > b ? a : b);
+    final labelStep = (points.length / 5).ceil().clamp(1, points.length);
+
+    return LineChart(
+      LineChartData(
+        gridData: FlGridData(
+          show: true,
+          drawVerticalLine: false,
+          horizontalInterval: maxY > 0 ? maxY / 4 : 1,
+          getDrawingHorizontalLine: (_) => FlLine(color: Colors.grey.shade200, strokeWidth: 1),
+        ),
+        titlesData: FlTitlesData(
+          topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+          leftTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 38,
+              getTitlesWidget: (value, meta) => Text(
+                value >= 1000 ? '${(value / 1000).toStringAsFixed(0)}k' : value.toStringAsFixed(0),
+                style: const TextStyle(fontSize: 9, color: AppTheme.textMuted),
+              ),
+            ),
+          ),
+          bottomTitles: AxisTitles(
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 22,
+              interval: labelStep.toDouble(),
+              getTitlesWidget: (value, meta) {
+                final i = value.round();
+                if (i < 0 || i >= points.length) return const SizedBox.shrink();
+                return Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(points[i].label,
+                      style: const TextStyle(fontSize: 9, color: AppTheme.textMuted)),
+                );
+              },
+            ),
+          ),
+        ),
+        borderData: FlBorderData(show: false),
+        minY: 0,
+        maxY: maxY > 0 ? maxY * 1.15 : 1,
+        lineTouchData: LineTouchData(
+          touchTooltipData: LineTouchTooltipData(
+            getTooltipItems: (spots) => spots.map((s) {
+              final p = points[s.x.toInt()];
+              return LineTooltipItem(
+                '${p.label}\n${p.value.toStringAsFixed(0)}',
+                const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+              );
+            }).toList(),
+          ),
+        ),
+        lineBarsData: [
+          LineChartBarData(
+            spots: spots,
+            isCurved: true,
+            color: color,
+            barWidth: 2.5,
+            dotData: const FlDotData(show: false),
+            belowBarData: BarAreaData(show: true, color: color.withValues(alpha: 0.12)),
+          ),
         ],
       ),
     );

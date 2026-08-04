@@ -79,6 +79,7 @@ class ApiEndpoints {
   // Admin
   static const String adminDelegates    = '/admin/delegates';
   static const String adminDashboard    = '/admin/dashboard';
+  static const String adminIndicatorTrend = '/admin/indicator-trend';
   static const String adminShiftSummary = '/admin/delegate/shift-summary';
   static const String adminSettle       = '/admin/settle-delegate';
   static const String adminLoadings     = '/admin/loadings';

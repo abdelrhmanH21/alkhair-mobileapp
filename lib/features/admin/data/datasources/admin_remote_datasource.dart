@@ -7,6 +7,7 @@ import '../models/admin_models.dart';
 
 abstract class AdminRemoteDataSource {
   Future<DashboardStatsModel> fetchDashboard();
+  Future<IndicatorTrendModel> fetchIndicatorTrend({required String type, required String period});
   Future<List<DelegateModel>> fetchDelegates();
   Future<ShiftSummaryModel> fetchShiftSummary(int delegateId);
   Future<Map<String, dynamic>> settleDelegate({
@@ -239,6 +240,15 @@ class AdminRemoteDataSourceImpl implements AdminRemoteDataSource {
   Future<DashboardStatsModel> fetchDashboard() async {
     final res = await _client.dio.get(ApiEndpoints.adminDashboard);
     return DashboardStatsModel.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  @override
+  Future<IndicatorTrendModel> fetchIndicatorTrend({required String type, required String period}) async {
+    final res = await _client.dio.get(
+      ApiEndpoints.adminIndicatorTrend,
+      queryParameters: {'type': type, 'period': period},
+    );
+    return IndicatorTrendModel.fromJson(res.data as Map<String, dynamic>);
   }
 
   @override

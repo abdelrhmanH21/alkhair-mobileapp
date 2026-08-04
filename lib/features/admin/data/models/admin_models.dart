@@ -1340,3 +1340,49 @@ class SettlementRecordPageModel {
         lastPage: (json['last_page'] as num? ?? 1).toInt(),
       );
 }
+
+// ── Indicator trend (switchable dashboard trend-chart widget) ──────────────
+
+class IndicatorTrendPointModel {
+  final String date;
+  final String label;
+  final double value;
+  const IndicatorTrendPointModel({required this.date, required this.label, required this.value});
+
+  factory IndicatorTrendPointModel.fromJson(Map<String, dynamic> json) => IndicatorTrendPointModel(
+        date: json['date'] as String? ?? '',
+        label: json['label'] as String? ?? '',
+        value: _asDouble(json['value']),
+      );
+}
+
+/// Response of GET /admin/indicator-trend — see IndicatorTrendCalculator on
+/// the backend (shared with the web dashboard's identical endpoint).
+/// isSnapshotBased indicators (رأس المال/المديونيات) only have real
+/// historical points from `historicalDataSince` onward — no ledger exists
+/// for either metric before that, see the migration's docblock.
+class IndicatorTrendModel {
+  final bool isSnapshotBased;
+  final String? historicalDataSince;
+  final List<IndicatorTrendPointModel> data;
+  final double currentValue;
+  final double? periodTotal;
+
+  const IndicatorTrendModel({
+    required this.isSnapshotBased,
+    required this.historicalDataSince,
+    required this.data,
+    required this.currentValue,
+    required this.periodTotal,
+  });
+
+  factory IndicatorTrendModel.fromJson(Map<String, dynamic> json) => IndicatorTrendModel(
+        isSnapshotBased: json['is_snapshot_based'] as bool? ?? false,
+        historicalDataSince: json['historical_data_since'] as String?,
+        data: (json['data'] as List? ?? [])
+            .map((e) => IndicatorTrendPointModel.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        currentValue: _asDouble(json['current_value']),
+        periodTotal: json['period_total'] == null ? null : _asDouble(json['period_total']),
+      );
+}

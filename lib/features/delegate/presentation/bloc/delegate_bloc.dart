@@ -233,6 +233,13 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
                 'qty': r.quantity,
                 'unit_price': r.unitPrice,
                 'status': r.condition,
+                'refund_method': r.refundMethod,
+                if (r.replacementProductId != null)
+                  'replacement_product_id': r.replacementProductId,
+                if (r.replacementQuantity != null)
+                  'replacement_quantity': r.replacementQuantity,
+                if (r.replacementUnitPrice != null)
+                  'replacement_unit_price': r.replacementUnitPrice,
               })
           .toList();
 
@@ -273,6 +280,13 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
                 'qty': r.quantity,
                 'unit_price': r.unitPrice,
                 'status': r.condition,
+                'refund_method': r.refundMethod,
+                if (r.replacementProductId != null)
+                  'replacement_product_id': r.replacementProductId,
+                if (r.replacementQuantity != null)
+                  'replacement_quantity': r.replacementQuantity,
+                if (r.replacementUnitPrice != null)
+                  'replacement_unit_price': r.replacementUnitPrice,
               })
           .toList();
 

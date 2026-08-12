@@ -23,7 +23,20 @@ class InvoiceReturnItem {
   double quantity;
   final double unitPrice;
   String condition; // 'سليم' | 'تالف'
+  // How the customer was compensated for this return — 'cash' (reduces
+  // cash owed, same as always) or 'in_kind_replacement' (a different
+  // truck-stock product handed over instead; see replacement* fields
+  // below and DelegateInvoiceController::store()'s net_total formula).
+  String refundMethod;
+  int? replacementProductId;
+  String? replacementProductName;
+  double? replacementQuantity;
+  double? replacementUnitPrice;
   double get subtotal => quantity * unitPrice;
+  double? get replacementSubtotal =>
+      (replacementQuantity != null && replacementUnitPrice != null)
+          ? replacementQuantity! * replacementUnitPrice!
+          : null;
 
   InvoiceReturnItem({
     required this.productId,
@@ -31,8 +44,36 @@ class InvoiceReturnItem {
     this.quantity = 1,
     this.unitPrice = 0,
     this.condition = 'سليم',
+    this.refundMethod = 'cash',
+    this.replacementProductId,
+    this.replacementProductName,
+    this.replacementQuantity,
+    this.replacementUnitPrice,
   });
 }
+
+/// Pure net-total formula for a delegate invoice — mirrors
+/// DelegateInvoiceController::store()'s server-side computation exactly
+/// (`grossSales - discount - totalReturns + replacementItemsTotal`) so the
+/// totals card shown before submit always matches what the server will
+/// actually persist.
+///
+/// [totalReturns] is the full value of EVERY return regardless of
+/// refund_method (unchanged meaning — "value of goods that came back").
+/// [replacementItemsTotal] is only the sum of in-kind-replacement returns'
+/// replacement-product value, ADDED back on top: a cash-refund return's
+/// value already reduces net total via totalReturns as always; an
+/// in-kind-replacement return's own value does too, but is deliberately
+/// offset back out here by the replacement product's own value, since no
+/// cash left the till for that swap — net effect of an in-kind swap =
+/// replacement value − returned value (zero when they're equal).
+double computeInvoiceNetTotal({
+  required double grossSales,
+  required double discountAmount,
+  required double totalReturns,
+  required double replacementItemsTotal,
+}) =>
+    grossSales - discountAmount - totalReturns + replacementItemsTotal;
 
 class DelegateInvoiceModel {
   final int id;

@@ -129,11 +129,15 @@ class ReceiptQrElement extends ReceiptElement {
 /// Builds the ordered content plan for [d]'s receipt — every line, in the
 /// same order and under the same conditions a physical thermal receipt would
 /// print them (logo, header, invoice#/date, customer+phone, delegate name,
-/// items table, sales/discount/returns totals, إجمالي المديونية/الصافي
-/// المستحق/المدفوع/المتبقي, feedback QR code, footer). Trailing paper-feed
-/// blank lines and the cut command are print-mechanics only, not content,
-/// so they're added by
-/// [BluetoothPrinterService._buildTicket] directly rather than here.
+/// items table, sales/discount/returns/replacement totals, إجمالي المديونية/
+/// الصافي المستحق/المدفوع/المتبقي, feedback QR code, footer). A return whose
+/// refund_method is in_kind_replacement additionally prints its replacement
+/// item as a linked "← بدل: ..." line right under it (see the returns loop
+/// below), and its value surfaces as its own "بدل عيني: +..." totals line
+/// distinct from the plain "المرتجعات: -..." deduction line every return
+/// (cash or in-kind) still contributes to. Trailing paper-feed blank lines
+/// and the cut command are print-mechanics only, not content, so they're
+/// added by [BluetoothPrinterService._buildTicket] directly rather than here.
 List<ReceiptElement> buildReceiptPlan(InvoicePrintData d) {
   final elements = <ReceiptElement>[];
   void addLine(String text, {bool bold = false, ReceiptAlign align = ReceiptAlign.left}) =>
@@ -208,6 +212,15 @@ List<ReceiptElement> buildReceiptPlan(InvoicePrintData d) {
           addLine(nameLines[i]);
         }
       }
+      // An in-kind-replacement return hands the customer a different
+      // product instead of cash — printed as a linked pair right under the
+      // returned line so it reads as one swap, distinct from a plain
+      // cash-refunded return (which ends here with nothing further).
+      if (ret.refundMethod == 'in_kind_replacement' && ret.replacementProductName != null) {
+        addLine('  ← بدل: ${ret.replacementProductName} '
+            '(${(ret.replacementQuantity ?? 0).toStringAsFixed(2)} ${ret.replacementUnit ?? ''}) '
+            '= ${(ret.replacementSubtotal ?? 0).toStringAsFixed(2)}');
+      }
     }
   }
 
@@ -223,9 +236,21 @@ List<ReceiptElement> buildReceiptPlan(InvoicePrintData d) {
         bold: true, align: ReceiptAlign.right);
   }
 
-  // 9. Returns — only when this invoice includes returns
+  // 9. Returns — only when this invoice includes returns. Value of ALL
+  // returns regardless of refund_method — still "goods that came back".
   if (d.totalReturns > 0) {
     addLine('المرتجعات: -${d.totalReturns.toStringAsFixed(2)} ج.م',
+        bold: true, align: ReceiptAlign.right);
+  }
+
+  // 9b. In-kind-replacement additions — only when this invoice has any.
+  // A return with refund_method=in_kind_replacement never reduces cash
+  // owed on its own (see #9 above, which still counts its value); instead
+  // the replacement product's own value is added here — together #9 and
+  // this line explain net_total exactly (net effect of a swap = this line
+  // minus that return's own share of #9).
+  if (d.replacementItemsTotal > 0) {
+    addLine('بدل عيني: +${d.replacementItemsTotal.toStringAsFixed(2)} ج.م',
         bold: true, align: ReceiptAlign.right);
   }
 
@@ -915,6 +940,10 @@ class InvoicePrintData {
   final double grossSales;
   final double discountAmount;
   final double totalReturns;
+  // Sum of in-kind-replacement returns' replacement-product value — see
+  // DelegateInvoiceController::store()'s net_total formula. 0 when every
+  // return (if any) is a plain cash refund, matching prior receipts exactly.
+  final double replacementItemsTotal;
   final double netTotal;
   final double cashReceived;
   final double balanceAddedToDebt;
@@ -945,6 +974,7 @@ class InvoicePrintData {
     required this.grossSales,
     this.discountAmount = 0,
     required this.totalReturns,
+    this.replacementItemsTotal = 0,
     required this.netTotal,
     required this.cashReceived,
     required this.balanceAddedToDebt,
@@ -978,12 +1008,21 @@ class InvoicePrintData {
     PrintLineItem toLineItem(dynamic e) {
       final m = e as Map<String, dynamic>;
       final p = m['product'] as Map<String, dynamic>? ?? {};
+      // Only present on a return whose refund_method is
+      // in_kind_replacement (see DelegateInvoiceReturn::replacementProduct).
+      final replacementProduct = m['replacement_product'] as Map<String, dynamic>?;
       return PrintLineItem(
         productName: p['name'] as String? ?? '',
         unit: p['unit'] as String? ?? '',
         quantity: (m['quantity'] as num).toDouble(),
         unitPrice: (m['unit_price'] as num).toDouble(),
         subtotal: (m['subtotal'] as num).toDouble(),
+        refundMethod: m['refund_method'] as String? ?? 'cash',
+        replacementProductName: replacementProduct?['name'] as String?,
+        replacementUnit: replacementProduct?['unit'] as String?,
+        replacementQuantity: (m['replacement_quantity'] as num?)?.toDouble(),
+        replacementUnitPrice: (m['replacement_unit_price'] as num?)?.toDouble(),
+        replacementSubtotal: (m['replacement_subtotal'] as num?)?.toDouble(),
       );
     }
 
@@ -999,6 +1038,7 @@ class InvoicePrintData {
       grossSales: (invoiceData['gross_sales_total'] as num? ?? 0).toDouble(),
       discountAmount: (invoiceData['discount_amount'] as num? ?? 0).toDouble(),
       totalReturns: (invoiceData['total_returns'] as num? ?? 0).toDouble(),
+      replacementItemsTotal: (invoiceData['replacement_items_total'] as num? ?? 0).toDouble(),
       netTotal: (invoiceData['net_total'] as num? ?? 0).toDouble(),
       cashReceived: (invoiceData['cash_received'] as num? ?? 0).toDouble(),
       balanceAddedToDebt: (invoiceData['balance_added_to_debt'] as num? ?? 0).toDouble(),
@@ -1019,11 +1059,27 @@ class PrintLineItem {
   final double quantity;
   final double unitPrice;
   final double subtotal;
+  // Only meaningful for a RETURN line — 'cash' (default) or
+  // 'in_kind_replacement'. Drives whether buildReceiptPlan prints this
+  // return as a plain deduction line (as always) or a linked
+  // "مرتجع: X ← بدل: Y" pair with the fields below.
+  final String refundMethod;
+  final String? replacementProductName;
+  final String? replacementUnit;
+  final double? replacementQuantity;
+  final double? replacementUnitPrice;
+  final double? replacementSubtotal;
   const PrintLineItem({
     required this.productName,
     this.unit = '',
     required this.quantity,
     required this.unitPrice,
     required this.subtotal,
+    this.refundMethod = 'cash',
+    this.replacementProductName,
+    this.replacementUnit,
+    this.replacementQuantity,
+    this.replacementUnitPrice,
+    this.replacementSubtotal,
   });
 }

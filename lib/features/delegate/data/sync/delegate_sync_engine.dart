@@ -160,6 +160,13 @@ class DelegateSyncEngine {
               'qty': e['qty'],
               'unit_price': e['unit_price'],
               'status': e['condition'],
+              'refund_method': e['refund_method'] ?? 'cash',
+              if (e['replacement_product_id'] != null)
+                'replacement_product_id': e['replacement_product_id'],
+              if (e['replacement_quantity'] != null)
+                'replacement_quantity': e['replacement_quantity'],
+              if (e['replacement_unit_price'] != null)
+                'replacement_unit_price': e['replacement_unit_price'],
             })
         .toList();
 

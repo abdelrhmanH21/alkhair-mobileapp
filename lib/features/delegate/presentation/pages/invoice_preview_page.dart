@@ -192,10 +192,47 @@ class _ItemsSection extends StatelessWidget {
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: AppTheme.danger)),
           ),
           _ItemsTable(items: data.returnedItems, isReturns: true),
+          // Linked "← بدل" line for every in-kind-replacement return, right
+          // under the table — mirrors buildReceiptPlan()'s own placement of
+          // this pairing so the printed ticket and this preview read
+          // identically. A plain cash-refunded return shows nothing further.
+          for (final ret in data.returnedItems)
+            if (ret.refundMethod == 'in_kind_replacement' && ret.replacementProductName != null)
+              _ReplacementPairLine(ret: ret),
         ],
       ],
     );
   }
+}
+
+/// One in-kind-replacement return's paired replacement line — "بدل: Y
+/// ×qty = subtotal" — distinct from the plain returns table row above it,
+/// which still shows what was physically returned.
+class _ReplacementPairLine extends StatelessWidget {
+  final PrintLineItem ret;
+  const _ReplacementPairLine({required this.ret});
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(top: 2, bottom: 4, right: 6),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            Flexible(
+              child: Text(
+                'بدل: ${ret.replacementProductName} '
+                '×${(ret.replacementQuantity ?? 0).toStringAsFixed(2)} '
+                '= ${(ret.replacementSubtotal ?? 0).toStringAsFixed(2)}',
+                textAlign: TextAlign.right,
+                style: const TextStyle(
+                    fontSize: 11.5, fontWeight: FontWeight.w600, color: AppTheme.primary),
+              ),
+            ),
+            const SizedBox(width: 4),
+            const Icon(Icons.subdirectory_arrow_left, size: 13, color: AppTheme.primary),
+          ],
+        ),
+      );
 }
 
 /// A real, right-aligned RTL table — الصنف | الوحدة | الكمية | السعر |

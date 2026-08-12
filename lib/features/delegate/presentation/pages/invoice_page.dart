@@ -210,6 +210,13 @@ class _InvoicePageState extends State<InvoicePage> {
 
   double get _totalReturns => _returnItems.fold(0.0, (s, i) => s + i.subtotal);
 
+  // Only in-kind-replacement returns contribute — see computeInvoiceNetTotal's
+  // doc comment for why this is added back on top rather than folded into
+  // _totalReturns' existing meaning.
+  double get _replacementItemsTotal => _returnItems
+      .where((r) => r.refundMethod == 'in_kind_replacement')
+      .fold(0.0, (s, r) => s + (r.replacementSubtotal ?? 0));
+
   double get _discountAmount => double.tryParse(_discountCtrl.text) ?? 0;
 
   double get _maxOverridePct {
@@ -223,7 +230,12 @@ class _InvoicePageState extends State<InvoicePage> {
       ? 'الخصم يتجاوز الحد المسموح (${_maxOverridePct.toStringAsFixed(0)}% = ${_maxDiscount.toStringAsFixed(2)})'
       : null;
 
-  double get _netTotal => _grossSales - _discountAmount - _totalReturns;
+  double get _netTotal => computeInvoiceNetTotal(
+        grossSales: _grossSales,
+        discountAmount: _discountAmount,
+        totalReturns: _totalReturns,
+        replacementItemsTotal: _replacementItemsTotal,
+      );
 
   double get _cashReceived => double.tryParse(_cashCtrl.text) ?? 0;
 
@@ -309,6 +321,15 @@ class _InvoicePageState extends State<InvoicePage> {
                 'qty': r.quantity,
                 'unit_price': r.unitPrice,
                 'condition': r.condition,
+                'refund_method': r.refundMethod,
+                if (r.replacementProductId != null)
+                  'replacement_product_id': r.replacementProductId,
+                if (r.replacementProductName != null)
+                  'replacement_product_name': r.replacementProductName,
+                if (r.replacementQuantity != null)
+                  'replacement_quantity': r.replacementQuantity,
+                if (r.replacementUnitPrice != null)
+                  'replacement_unit_price': r.replacementUnitPrice,
               })
           .toList(),
       'cash_received': _cashReceived,
@@ -324,9 +345,11 @@ class _InvoicePageState extends State<InvoicePage> {
       createdAt: DateTime.now(),
     ));
 
-    // Sold items reduce available stock; 'سليم' returns add back to it —
-    // same net-effect DelegateTruckStock::deductStock/addStock would apply
-    // server-side, applied locally so it's reflected immediately.
+    // Sold items reduce available stock; 'سليم' returns add back to it; an
+    // in-kind-replacement return's replacement product reduces stock the
+    // same way a sale does — same net-effect DelegateTruckStock::deductStock/
+    // addStock would apply server-side, applied locally so it's reflected
+    // immediately.
     final delta = <int, double>{};
     for (final s in _salesItems) {
       delta[s.productId] = (delta[s.productId] ?? 0) - s.quantity;
@@ -334,6 +357,10 @@ class _InvoicePageState extends State<InvoicePage> {
     for (final r in _returnItems) {
       if (r.condition == 'سليم') {
         delta[r.productId] = (delta[r.productId] ?? 0) + r.quantity;
+      }
+      if (r.refundMethod == 'in_kind_replacement' && r.replacementProductId != null) {
+        delta[r.replacementProductId!] =
+            (delta[r.replacementProductId!] ?? 0) - (r.replacementQuantity ?? 0);
       }
     }
     if (mounted) {
@@ -568,6 +595,7 @@ class _InvoicePageState extends State<InvoicePage> {
                 Expanded(
                   child: _ReturnsSection(
                     items: _returnItems,
+                    clientId: _selectedClient?.id,
                     onChange: () => setState(() {}),
                   ),
                 ),
@@ -579,6 +607,7 @@ class _InvoicePageState extends State<InvoicePage> {
             _TotalsCard(
               grossSales: _grossSales,
               totalReturns: _totalReturns,
+              replacementItemsTotal: _replacementItemsTotal,
               discountCtrl: _discountCtrl,
               discountError: _discountError,
               netTotal: _netTotal,
@@ -804,8 +833,14 @@ class _SaleItemRow extends StatelessWidget {
 
 class _ReturnsSection extends StatelessWidget {
   final List<InvoiceReturnItem> items;
+  // Threaded through to the replacement-product picker (reuses the exact
+  // same _SellableProductPickerSheet the sales side uses) so an in-kind
+  // replacement's price resolves against the same customer's price level
+  // as everything else on this invoice.
+  final int? clientId;
   final VoidCallback onChange;
-  const _ReturnsSection({required this.items, required this.onChange});
+  const _ReturnsSection(
+      {required this.items, required this.clientId, required this.onChange});
 
   void _addItem(BuildContext context) {
     showModalBottomSheet(
@@ -815,10 +850,13 @@ class _ReturnsSection extends StatelessWidget {
           borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (_) => BlocProvider.value(
         value: context.read<DelegateBloc>(),
-        child: _ReturnProductPickerSheet(onAdd: (item) {
-          items.add(item);
-          onChange();
-        }),
+        child: _ReturnProductPickerSheet(
+          clientId: clientId,
+          onAdd: (item) {
+            items.add(item);
+            onChange();
+          },
+        ),
       ),
     );
   }
@@ -960,6 +998,24 @@ class _ReturnItemRowState extends State<_ReturnItemRow> {
                 ),
               ],
             ),
+            // Refund method — set once when this return was added (see
+            // _ReturnProductPickerSheet); shown read-only here since editing
+            // it after the fact would also require re-picking the
+            // replacement product.
+            Padding(
+              padding: const EdgeInsets.only(top: 3),
+              child: Text(
+                widget.item.refundMethod == 'in_kind_replacement'
+                    ? 'بدل عيني: ${widget.item.replacementProductName ?? ''} '
+                        '×${(widget.item.replacementQuantity ?? 0).toStringAsFixed(2)} '
+                        '= ${(widget.item.replacementSubtotal ?? 0).toStringAsFixed(2)}'
+                    : 'الاسترجاع: كاش',
+                style: const TextStyle(
+                    fontSize: 10.5,
+                    fontStyle: FontStyle.italic,
+                    color: AppTheme.textMuted),
+              ),
+            ),
           ],
         ),
       );
@@ -970,6 +1026,10 @@ class _ReturnItemRowState extends State<_ReturnItemRow> {
 class _TotalsCard extends StatelessWidget {
   final double grossSales;
   final double totalReturns;
+  // Sum of in-kind-replacement returns' replacement-product value — see
+  // computeInvoiceNetTotal's doc comment. 0 when every return (if any) is
+  // a plain cash refund, matching today's behavior exactly.
+  final double replacementItemsTotal;
   final TextEditingController discountCtrl;
   final String? discountError;
   final double netTotal;
@@ -981,6 +1041,7 @@ class _TotalsCard extends StatelessWidget {
   const _TotalsCard({
     required this.grossSales,
     required this.totalReturns,
+    required this.replacementItemsTotal,
     required this.discountCtrl,
     required this.discountError,
     required this.netTotal,
@@ -998,6 +1059,8 @@ class _TotalsCard extends StatelessWidget {
             children: [
               _TotalRow('إجمالي المبيعات', grossSales, AppTheme.primary),
               _TotalRow('إجمالي المرتجعات', -totalReturns, AppTheme.accent),
+              if (replacementItemsTotal > 0)
+                _TotalRow('بدل عيني (إضافة)', replacementItemsTotal, AppTheme.primary),
               const SizedBox(height: 6),
               Row(
                 children: [
@@ -1367,8 +1430,11 @@ class _SellableProductPickerSheetState
 // re-resolves the authoritative price on submit (never trusts client input).
 
 class _ReturnProductPickerSheet extends StatefulWidget {
+  // Needed to open the replacement-product picker (_SellableProductPickerSheet)
+  // with the correct customer price level when "بدل عيني" is chosen.
+  final int? clientId;
   final void Function(InvoiceReturnItem) onAdd;
-  const _ReturnProductPickerSheet({required this.onAdd});
+  const _ReturnProductPickerSheet({required this.clientId, required this.onAdd});
 
   @override
   State<_ReturnProductPickerSheet> createState() =>
@@ -1380,6 +1446,14 @@ class _ReturnProductPickerSheetState extends State<_ReturnProductPickerSheet> {
   CatalogProductModel? _selected;
   final _qtyCtrl = TextEditingController(text: '1');
   String _condition = 'سليم';
+
+  // ── Refund method ("طريقة الاسترجاع") ───────────────────────────────────
+  String _refundMethod = 'cash';
+  int? _replacementProductId;
+  String? _replacementProductName;
+  double? _replacementQuantity;
+  double? _replacementUnitPrice;
+  String? _refundError;
 
   // See _SellableProductPickerSheetState's identical comment.
   final _tracker = RequestTracker<bool>();
@@ -1398,17 +1472,60 @@ class _ReturnProductPickerSheetState extends State<_ReturnProductPickerSheet> {
     super.dispose();
   }
 
+  void _resetReplacement() {
+    _replacementProductId = null;
+    _replacementProductName = null;
+    _replacementQuantity = null;
+    _replacementUnitPrice = null;
+  }
+
+  /// Opens the SAME truck-stock picker the sales side uses
+  /// (_SellableProductPickerSheet) so a "بدل عيني" replacement is priced
+  /// and stock-capped identically to any other item handed off this truck.
+  Future<void> _pickReplacement() async {
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => BlocProvider.value(
+        value: context.read<DelegateBloc>(),
+        child: _SellableProductPickerSheet(
+          clientId: widget.clientId,
+          onAdd: (item) => setState(() {
+            _replacementProductId = item.productId;
+            _replacementProductName = item.productName;
+            _replacementQuantity = item.quantity;
+            _replacementUnitPrice = item.unitPrice;
+            _refundError = null;
+          }),
+        ),
+      ),
+    );
+  }
+
   void _confirmAdd() {
     final product = _selected;
     if (product == null) return;
     final qty = double.tryParse(_qtyCtrl.text) ?? 0;
     if (qty <= 0) return;
+
+    if (_refundMethod == 'in_kind_replacement' && _replacementProductId == null) {
+      setState(() => _refundError = 'يجب اختيار منتج البديل والكمية.');
+      return;
+    }
+
     widget.onAdd(InvoiceReturnItem(
       productId: product.id,
       productName: product.name,
       quantity: qty,
       unitPrice: product.salePrice,
       condition: _condition,
+      refundMethod: _refundMethod,
+      replacementProductId: _replacementProductId,
+      replacementProductName: _replacementProductName,
+      replacementQuantity: _replacementQuantity,
+      replacementUnitPrice: _replacementUnitPrice,
     ));
     Navigator.pop(context);
   }
@@ -1523,6 +1640,76 @@ class _ReturnProductPickerSheetState extends State<_ReturnProductPickerSheet> {
                       ),
                     ],
                   ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      const Text('طريقة الاسترجاع: '),
+                      ChoiceChip(
+                        label: const Text('كاش'),
+                        selected: _refundMethod == 'cash',
+                        onSelected: (_) => setState(() {
+                          _refundMethod = 'cash';
+                          _resetReplacement();
+                          _refundError = null;
+                        }),
+                      ),
+                      const SizedBox(width: 8),
+                      ChoiceChip(
+                        label: const Text('بدل عيني'),
+                        selected: _refundMethod == 'in_kind_replacement',
+                        selectedColor: AppTheme.primary.withValues(alpha: 0.3),
+                        onSelected: (_) {
+                          setState(() {
+                            _refundMethod = 'in_kind_replacement';
+                            _refundError = null;
+                          });
+                          _pickReplacement();
+                        },
+                      ),
+                    ],
+                  ),
+                  if (_refundMethod == 'in_kind_replacement') ...[
+                    const SizedBox(height: 6),
+                    if (_replacementProductId == null)
+                      OutlinedButton.icon(
+                        onPressed: _pickReplacement,
+                        icon: const Icon(Icons.swap_horiz, size: 16),
+                        label: const Text('اختر منتج البديل'),
+                      )
+                    else
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primary.withValues(alpha: 0.07),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'بدل: $_replacementProductName '
+                                '×${_replacementQuantity!.toStringAsFixed(2)} '
+                                '= ${(_replacementQuantity! * _replacementUnitPrice!).toStringAsFixed(2)}',
+                                style: const TextStyle(
+                                    fontSize: 12, fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: _pickReplacement,
+                              child: const Text('تغيير',
+                                  style: TextStyle(fontSize: 12)),
+                            ),
+                          ],
+                        ),
+                      ),
+                    if (_refundError != null) ...[
+                      const SizedBox(height: 4),
+                      Text(_refundError!,
+                          style: const TextStyle(
+                              fontSize: 11, color: AppTheme.danger)),
+                    ],
+                  ],
                   const SizedBox(height: 8),
                   ElevatedButton(
                     onPressed: _confirmAdd,

@@ -5,6 +5,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'core/di/service_locator.dart';
 import 'core/theme/app_theme.dart';
 import 'core/utils/app_snackbar.dart';
+import 'core/widgets/dismiss_keyboard_on_tap.dart';
 
 import 'features/app_config/presentation/bloc/app_config_bloc.dart';
 import 'features/app_config/presentation/bloc/app_config_event.dart';
@@ -71,9 +72,15 @@ class AlKhairApp extends StatelessWidget {
             GlobalWidgetsLocalizations.delegate,
             GlobalCupertinoLocalizations.delegate,
           ],
-          builder: (ctx, child) => Directionality(
-            textDirection: TextDirection.rtl,
-            child: child ?? const SizedBox.shrink(),
+          // DismissKeyboardOnTap wraps the whole Navigator here (once, at
+          // the root) instead of being repeated per-Scaffold — see its own
+          // doc comment for why that's enough to also reach bottom sheets
+          // and dialogs without swallowing taps meant for fields/buttons.
+          builder: (ctx, child) => DismissKeyboardOnTap(
+            child: Directionality(
+              textDirection: TextDirection.rtl,
+              child: child ?? const SizedBox.shrink(),
+            ),
           ),
           home: const _RootNavigator(),
         ),

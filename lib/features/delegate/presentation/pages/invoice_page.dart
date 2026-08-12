@@ -607,7 +607,10 @@ class _InvoicePageState extends State<InvoicePage> {
                     textStyle: const TextStyle(fontSize: 17)),
               ),
             ),
-            const SizedBox(height: 24),
+            // Keyed purely so widget tests can target guaranteed-blank form
+            // space (below the submit button) for the tap-to-dismiss-
+            // keyboard gesture without guessing screen coordinates.
+            const SizedBox(height: 24, key: Key('invoiceFormBottomSpacer')),
           ],
         ),
       ),
@@ -1003,6 +1006,7 @@ class _TotalsCard extends StatelessWidget {
                   const SizedBox(width: 10),
                   Expanded(
                     child: TextField(
+                      key: const Key('invoiceDiscountField'),
                       controller: discountCtrl,
                       keyboardType:
                           const TextInputType.numberWithOptions(decimal: true),

@@ -88,6 +88,7 @@ class ApiEndpoints {
   static const String adminPayrollSummary = '/admin/payroll-summary';
   static const String adminStaffOperations = '/admin/staff-operations';
   static const String adminSettlementHistory = '/admin/settlement-history';
+  static String adminDailySummary(int settlementId) => '/admin/settlement/$settlementId/daily-summary';
   static const String adminSale = '/admin/sale';
   static const String adminCustomerCollection = '/admin/customer-collection';
   static String adminProductPrice(int id) => '/admin/products/$id/price';

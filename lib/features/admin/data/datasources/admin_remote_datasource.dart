@@ -105,6 +105,7 @@ abstract class AdminRemoteDataSource {
     String? dateTo,
     int page = 1,
   });
+  Future<DailySummaryModel> fetchDailySummary(int settlementId);
   Future<List<AdvanceModel>> fetchRepAdvances(int repId);
   Future<List<CommissionDayModel>> fetchRepCommissionBreakdown(int repId);
   Future<void> setRepTarget({
@@ -533,6 +534,12 @@ class AdminRemoteDataSourceImpl implements AdminRemoteDataSource {
       if (dateTo != null) 'date_to': dateTo,
     });
     return SettlementRecordPageModel.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  @override
+  Future<DailySummaryModel> fetchDailySummary(int settlementId) async {
+    final res = await _client.dio.get(ApiEndpoints.adminDailySummary(settlementId));
+    return DailySummaryModel.fromJson(res.data as Map<String, dynamic>);
   }
 
   // ── Payroll (العمالة) ─────────────────────────────────────────────────

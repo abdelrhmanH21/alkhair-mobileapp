@@ -5,6 +5,7 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/state_views.dart';
 import '../../data/datasources/admin_remote_datasource.dart';
 import '../../data/models/admin_models.dart';
+import 'daily_summary_page.dart';
 
 /// "سجل التسويات" — structured history of completed delegate-shift
 /// settlements (DelegateSettlementRecord, written by
@@ -240,9 +241,27 @@ class _SettlementCard extends StatelessWidget {
                         style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
                   ],
                 ),
-                Text(
-                  DateFormat('yyyy-MM-dd HH:mm').format(record.settledAt),
-                  style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      DateFormat('yyyy-MM-dd HH:mm').format(record.settledAt),
+                      style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => DailySummaryPage(settlementId: record.id),
+                        ),
+                      ),
+                      icon: const Icon(Icons.summarize_outlined, size: 20, color: AppTheme.primary),
+                      tooltip: 'ملخص اليوم',
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                  ],
                 ),
               ],
             ),

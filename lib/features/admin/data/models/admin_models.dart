@@ -1386,3 +1386,233 @@ class IndicatorTrendModel {
         periodTotal: json['period_total'] == null ? null : _asDouble(json['period_total']),
       );
 }
+
+// ─── Daily summary ("ملخص اليوم" / يومية مبيعات) ──────────────────────────
+
+/// Mirrors AdminDelegateController::dailySummary() — see that endpoint's
+/// doc comment for what's reused (settlement figures, invoice-level sums)
+/// vs newly derived (the per-product منصرف/مباع/رصيد السيارة breakdown).
+class DailySummaryProductModel {
+  final int productId;
+  final String name;
+  final String unit;
+  final double issuedQty;
+  final double soldQty;
+  final double unitPrice;
+  final double cashTotal;
+  final double remainingTruckStock;
+
+  const DailySummaryProductModel({
+    required this.productId,
+    required this.name,
+    required this.unit,
+    required this.issuedQty,
+    required this.soldQty,
+    required this.unitPrice,
+    required this.cashTotal,
+    required this.remainingTruckStock,
+  });
+
+  factory DailySummaryProductModel.fromJson(Map<String, dynamic> json) => DailySummaryProductModel(
+        productId: json['product_id'] as int,
+        name: json['name'] as String? ?? '',
+        unit: json['unit'] as String? ?? '',
+        issuedQty: _asDouble(json['issued_qty']),
+        soldQty: _asDouble(json['sold_qty']),
+        unitPrice: _asDouble(json['unit_price']),
+        cashTotal: _asDouble(json['cash_total']),
+        remainingTruckStock: _asDouble(json['remaining_truck_stock']),
+      );
+}
+
+class DailySummaryCollectionModel {
+  final String customer;
+  final double amount;
+  const DailySummaryCollectionModel({required this.customer, required this.amount});
+  factory DailySummaryCollectionModel.fromJson(Map<String, dynamic> json) =>
+      DailySummaryCollectionModel(
+        customer: json['customer'] as String? ?? 'غير معروف',
+        amount: _asDouble(json['amount']),
+      );
+}
+
+class DailySummaryDebtInvoiceModel {
+  final String customer;
+  final double amount;
+  final String invoiceNumber;
+  const DailySummaryDebtInvoiceModel({
+    required this.customer,
+    required this.amount,
+    required this.invoiceNumber,
+  });
+  factory DailySummaryDebtInvoiceModel.fromJson(Map<String, dynamic> json) =>
+      DailySummaryDebtInvoiceModel(
+        customer: json['customer'] as String? ?? 'غير معروف',
+        amount: _asDouble(json['amount']),
+        invoiceNumber: json['invoice_number'] as String? ?? '',
+      );
+}
+
+class DailySummaryReplacementModel {
+  final String productName;
+  final String unit;
+  final double quantity;
+  final double unitPrice;
+  final double value;
+  const DailySummaryReplacementModel({
+    required this.productName,
+    required this.unit,
+    required this.quantity,
+    required this.unitPrice,
+    required this.value,
+  });
+  factory DailySummaryReplacementModel.fromJson(Map<String, dynamic> json) =>
+      DailySummaryReplacementModel(
+        productName: json['product_name'] as String? ?? '',
+        unit: json['unit'] as String? ?? '',
+        quantity: _asDouble(json['quantity']),
+        unitPrice: _asDouble(json['unit_price']),
+        value: _asDouble(json['value']),
+      );
+}
+
+class DailySummaryReturnModel {
+  final String customer;
+  final String product;
+  final String unit;
+  final double quantity;
+  final double value;
+  final String condition;
+  // 'cash' or 'in_kind_replacement' — see DelegateInvoiceReturn.refund_method.
+  final String refundMethod;
+  final DailySummaryReplacementModel? replacement;
+
+  const DailySummaryReturnModel({
+    required this.customer,
+    required this.product,
+    required this.unit,
+    required this.quantity,
+    required this.value,
+    required this.condition,
+    required this.refundMethod,
+    required this.replacement,
+  });
+
+  factory DailySummaryReturnModel.fromJson(Map<String, dynamic> json) => DailySummaryReturnModel(
+        customer: json['customer'] as String? ?? 'غير معروف',
+        product: json['product'] as String? ?? '',
+        unit: json['unit'] as String? ?? '',
+        quantity: _asDouble(json['quantity']),
+        value: _asDouble(json['value']),
+        condition: json['condition'] as String? ?? '',
+        refundMethod: json['refund_method'] as String? ?? 'cash',
+        replacement: json['replacement'] != null
+            ? DailySummaryReplacementModel.fromJson(json['replacement'] as Map<String, dynamic>)
+            : null,
+      );
+}
+
+class DailySummaryExpenseModel {
+  final String description;
+  final double amount;
+  const DailySummaryExpenseModel({required this.description, required this.amount});
+  factory DailySummaryExpenseModel.fromJson(Map<String, dynamic> json) => DailySummaryExpenseModel(
+        description: json['description'] as String? ?? '',
+        amount: _asDouble(json['amount']),
+      );
+}
+
+class DailySummaryCashRowModel {
+  final double? grossSales;
+  final double? totalCollections;
+  final double? totalExpenses;
+  final double totalReturns;
+  final double totalDebtAdded;
+  final double expectedCash;
+  final double walletAmount;
+  final double cashVariance;
+
+  const DailySummaryCashRowModel({
+    required this.grossSales,
+    required this.totalCollections,
+    required this.totalExpenses,
+    required this.totalReturns,
+    required this.totalDebtAdded,
+    required this.expectedCash,
+    required this.walletAmount,
+    required this.cashVariance,
+  });
+
+  factory DailySummaryCashRowModel.fromJson(Map<String, dynamic> json) => DailySummaryCashRowModel(
+        grossSales: json['gross_sales'] == null ? null : _asDouble(json['gross_sales']),
+        totalCollections:
+            json['total_collections'] == null ? null : _asDouble(json['total_collections']),
+        totalExpenses: json['total_expenses'] == null ? null : _asDouble(json['total_expenses']),
+        totalReturns: _asDouble(json['total_returns']),
+        totalDebtAdded: _asDouble(json['total_debt_added']),
+        expectedCash: _asDouble(json['expected_cash']),
+        walletAmount: _asDouble(json['wallet_amount']),
+        cashVariance: _asDouble(json['cash_variance']),
+      );
+}
+
+class DailySummaryModel {
+  final int settlementId;
+  final int loadingId;
+  final String delegateName;
+  final DateTime settledAt;
+  final DateTime? loadedAt;
+  final bool isBackfilled;
+  final DailySummaryCashRowModel summary;
+  final List<DailySummaryProductModel> products;
+  final List<DailySummaryCollectionModel> collections;
+  final List<DailySummaryDebtInvoiceModel> debtInvoices;
+  final List<DailySummaryReturnModel> returns;
+  final List<DailySummaryExpenseModel> expenses;
+
+  const DailySummaryModel({
+    required this.settlementId,
+    required this.loadingId,
+    required this.delegateName,
+    required this.settledAt,
+    required this.loadedAt,
+    required this.isBackfilled,
+    required this.summary,
+    required this.products,
+    required this.collections,
+    required this.debtInvoices,
+    required this.returns,
+    required this.expenses,
+  });
+
+  factory DailySummaryModel.fromJson(Map<String, dynamic> json) {
+    final settlement = json['settlement'] as Map<String, dynamic>;
+    final delegate = settlement['delegate'] as Map<String, dynamic>?;
+    return DailySummaryModel(
+      settlementId: settlement['id'] as int,
+      loadingId: settlement['loading_id'] as int,
+      delegateName: delegate?['name'] as String? ?? 'غير معروف',
+      settledAt: parseServerDateTime(settlement['settled_at'] as String?),
+      loadedAt: settlement['loaded_at'] != null
+          ? parseServerDateTime(settlement['loaded_at'] as String?)
+          : null,
+      isBackfilled: settlement['is_backfilled'] as bool? ?? false,
+      summary: DailySummaryCashRowModel.fromJson(json['summary'] as Map<String, dynamic>),
+      products: (json['products'] as List? ?? [])
+          .map((e) => DailySummaryProductModel.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      collections: (json['collections'] as List? ?? [])
+          .map((e) => DailySummaryCollectionModel.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      debtInvoices: (json['debt_invoices'] as List? ?? [])
+          .map((e) => DailySummaryDebtInvoiceModel.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      returns: (json['returns'] as List? ?? [])
+          .map((e) => DailySummaryReturnModel.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      expenses: (json['expenses'] as List? ?? [])
+          .map((e) => DailySummaryExpenseModel.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+}

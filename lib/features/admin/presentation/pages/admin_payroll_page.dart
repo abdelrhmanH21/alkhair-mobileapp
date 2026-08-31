@@ -190,11 +190,63 @@ class _RepPayrollDetailPageState extends State<_RepPayrollDetailPage>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController = TabController(length: 4, vsync: this);
   bool _targetChanged = false;
+  bool _deleting = false;
 
   @override
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  // "حذف نهائي" — hard-deletes this rep and cascades every referencing
+  // table (مبيعات، رواتب، سلف، جزاءات، مكافآت، أهداف...). Only allowed for
+  // a rep with no linked User account — mirrors SalesRepsPage.tsx's web
+  // behavior and is re-enforced server-side by
+  // SalesRepController::forceDestroy().
+  Future<void> _forceDelete() async {
+    if (widget.rep.hasLinkedUser) {
+      AppSnackbar.showError(
+        context,
+        'هذا المندوب مرتبط بحساب مستخدم — احذف أو عدّل الحساب من إدارة النظام أولاً.',
+      );
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('حذف نهائي'),
+        content: Text(
+          'سيتم حذف "${widget.rep.repName}" وكل بياناته المرتبطة '
+          '(المبيعات، الرواتب، الجزاءات...) نهائيًا. هل أنت متأكد؟',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('حذف نهائي'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() => _deleting = true);
+    try {
+      await widget.remote.forceDeleteRep(widget.rep.repId);
+      if (!mounted) return;
+      Navigator.pop(context, true);
+    } on DioException catch (e) {
+      if (!mounted) return;
+      setState(() => _deleting = false);
+      AppSnackbar.showError(
+          context, e.response?.data?['message'] as String? ?? 'فشل الحذف النهائي.');
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _deleting = false);
+      AppSnackbar.showError(context, 'حدث خطأ غير متوقع.');
+    }
   }
 
   Future<void> _openEditTarget() async {
@@ -228,6 +280,16 @@ class _RepPayrollDetailPageState extends State<_RepPayrollDetailPage>
               icon: const Icon(Icons.flag_outlined),
               tooltip: 'تعديل الهدف',
               onPressed: _openEditTarget,
+            ),
+            IconButton(
+              icon: _deleting
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Icon(Icons.delete_forever_outlined),
+              tooltip: 'حذف نهائي',
+              onPressed: _deleting ? null : _forceDelete,
             ),
           ],
           bottom: TabBar(

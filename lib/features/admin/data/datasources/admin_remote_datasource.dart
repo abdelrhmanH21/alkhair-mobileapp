@@ -95,6 +95,10 @@ abstract class AdminRemoteDataSource {
 
   // ── Payroll (العمالة) ─────────────────────────────────────────────────
   Future<List<PayrollSummaryRowModel>> fetchPayrollSummary({String? month});
+  // "حذف نهائي" — hard-deletes a SalesRep with no linked User and cascades
+  // every referencing table. Throws a DioException (422) if the rep DOES
+  // have a linked user; the caller surfaces the server's Arabic message.
+  Future<void> forceDeleteRep(int repId);
   Future<List<PenaltyModel>> fetchRepPenalties(int repId);
   Future<List<BonusModel>> fetchRepBonuses(int repId);
 
@@ -554,6 +558,11 @@ class AdminRemoteDataSourceImpl implements AdminRemoteDataSource {
     return list
         .map((e) => PayrollSummaryRowModel.fromJson(e as Map<String, dynamic>))
         .toList();
+  }
+
+  @override
+  Future<void> forceDeleteRep(int repId) async {
+    await _client.dio.delete(ApiEndpoints.salesRepForceDelete(repId));
   }
 
   @override

@@ -666,6 +666,9 @@ class PayrollSummaryRowModel {
   final double advancesTotal;
   final double bonusTotal;
   final double netPayable;
+  // Whether users.sales_rep_id points at this rep — drives the "حذف نهائي"
+  // action on the rep detail page. See SalesRepController::forceDestroy().
+  final bool hasLinkedUser;
 
   const PayrollSummaryRowModel({
     required this.repId,
@@ -679,6 +682,7 @@ class PayrollSummaryRowModel {
     required this.advancesTotal,
     required this.bonusTotal,
     required this.netPayable,
+    required this.hasLinkedUser,
   });
 
   factory PayrollSummaryRowModel.fromJson(Map<String, dynamic> json) =>
@@ -696,6 +700,7 @@ class PayrollSummaryRowModel {
         advancesTotal: _asDouble(json['advances_total']),
         bonusTotal: _asDouble(json['bonus_total']),
         netPayable: _asDouble(json['net_payable']),
+        hasLinkedUser: json['has_linked_user'] as bool? ?? false,
       );
 }
 

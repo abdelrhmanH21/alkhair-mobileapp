@@ -51,6 +51,7 @@ class ApiEndpoints {
   static const String labs               = '$apiRoot/labs';
   static const String rawMaterials       = '$apiRoot/raw-materials';
   static const String salesReps          = '$apiRoot/sales-reps';
+  static String salesRepForceDelete(int id) => '$salesReps/$id/force';
   static const String manufacturingRecipes = '$apiRoot/manufacturing-recipes';
   static const String manufacturingOrders  = '$apiRoot/manufacturing';
   static String manufacturingComplete(int id) => '$apiRoot/manufacturing/$id/complete';

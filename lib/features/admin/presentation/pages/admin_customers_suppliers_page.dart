@@ -11,6 +11,7 @@ import '../../../delegate/presentation/pages/customer_invoice_history_page.dart'
 import '../../../delegate/presentation/widgets/add_client_sheet.dart';
 import '../../data/datasources/admin_remote_datasource.dart';
 import '../../data/models/admin_models.dart';
+import 'customer_statement_page.dart';
 import 'supplier_statement_page.dart';
 
 /// العملاء / الموردون / مناطق التوزيع — three standalone list+detail
@@ -278,6 +279,20 @@ class _CustomersTabState extends State<_CustomersTab> {
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       color: c.balance > 0 ? AppTheme.danger : AppTheme.secondary,
+                    ),
+                  ),
+                  // "كشف حساب" — the مورد×عميل combined-statement entry
+                  // point. Kept as a separate action alongside the tap
+                  // target below (سجل الفواتير) rather than replacing it,
+                  // since both are genuinely useful and distinct.
+                  IconButton(
+                    icon: const Icon(Icons.receipt_long_outlined, size: 18, color: AppTheme.textMuted),
+                    tooltip: 'كشف حساب',
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => CustomerStatementPage(customerId: c.id, customerName: c.name),
+                      ),
                     ),
                   ),
                   IconButton(

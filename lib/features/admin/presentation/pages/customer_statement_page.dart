@@ -4,25 +4,30 @@ import '../../../../core/widgets/state_views.dart';
 import '../../data/datasources/admin_remote_datasource.dart';
 import '../widgets/combined_statement_widgets.dart';
 
-/// كشف حساب مورد — reachable by tapping a supplier row in
-/// AdminCustomersSuppliersPage's الموردون tab. Hits the same
-/// GET /reports/supplier-statement endpoint the web SupplierStatementPage/
-/// CustomerStatementPage use (ReportController::supplierStatement()) — when
-/// the supplier is مورد×عميل-linked, the response's `combined` block is
-/// rendered via CombinedStatementSection (shared with CustomerStatementPage
-/// so both entry points render an identical merged ledger). No merge logic
-/// is duplicated here — the backend computes everything, this page just
-/// displays it.
-class SupplierStatementPage extends StatefulWidget {
-  final int supplierId;
-  final String supplierName;
-  const SupplierStatementPage({super.key, required this.supplierId, required this.supplierName});
+/// كشف حساب تفصيلي — the customer-side counterpart of SupplierStatementPage,
+/// reachable from AdminCustomersSuppliersPage's العملاء tab. Hits
+/// GET /reports/customer-statement (ReportController::customerStatement()) —
+/// when this customer is مورد×عميل-linked (from the supplier side), the
+/// response's `combined` block renders via CombinedStatementSection, the
+/// exact same shared widget SupplierStatementPage uses, so both entry
+/// points for the same linked pair render an identical merged ledger.
+///
+/// This was the actual root cause of the "combined view only reachable
+/// from the supplier side" bug on mobile: the customers tab's row only
+/// ever navigated to CustomerInvoiceHistoryPage (invoice history, unaware
+/// of مورد×عميل entirely) — there was no mobile screen that called
+/// customer-statement at all. Added as a new icon action alongside that
+/// existing tap-to-view-history behavior, not a replacement for it.
+class CustomerStatementPage extends StatefulWidget {
+  final int customerId;
+  final String customerName;
+  const CustomerStatementPage({super.key, required this.customerId, required this.customerName});
 
   @override
-  State<SupplierStatementPage> createState() => _SupplierStatementPageState();
+  State<CustomerStatementPage> createState() => _CustomerStatementPageState();
 }
 
-class _SupplierStatementPageState extends State<SupplierStatementPage> {
+class _CustomerStatementPageState extends State<CustomerStatementPage> {
   final _remote = sl<AdminRemoteDataSource>();
   Map<String, dynamic>? _data;
   bool _loading = true;
@@ -40,7 +45,7 @@ class _SupplierStatementPageState extends State<SupplierStatementPage> {
       _error = null;
     });
     try {
-      final data = await _remote.fetchSupplierStatement(widget.supplierId);
+      final data = await _remote.fetchCustomerStatement(widget.customerId);
       if (!mounted) return;
       setState(() {
         _data = data;
@@ -58,7 +63,7 @@ class _SupplierStatementPageState extends State<SupplierStatementPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('كشف حساب — ${widget.supplierName}')),
+      appBar: AppBar(title: Text('كشف حساب — ${widget.customerName}')),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
@@ -79,9 +84,9 @@ class _SupplierStatementPageState extends State<SupplierStatementPage> {
         padding: const EdgeInsets.all(14),
         children: [
           StatementBalanceCard(
-            label: 'الرصيد المستحق للمورد',
+            label: 'المديونية الحالية',
             value: asNum(summary['current_balance']),
-            positiveIsBad: true, // owed BY us TO the supplier
+            positiveIsBad: true, // owed BY the customer TO us
           ),
           const SizedBox(height: 12),
 

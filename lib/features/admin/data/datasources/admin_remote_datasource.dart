@@ -77,12 +77,14 @@ abstract class AdminRemoteDataSource {
     int? linkedCustomerId,
   });
 
-  // "مورد×عميل" combined statement — raw JSON passthrough (same endpoint
+  // "مورد×عميل" combined statement — raw JSON passthrough (same endpoints
   // the web SupplierStatementPage/CustomerStatementPage use,
-  // ReportController::supplierStatement()) since the transaction rows have
-  // two genuinely different shapes (customer vs. supplier ledger) that
-  // aren't worth two parallel typed models for a single detail screen.
+  // ReportController::supplierStatement()/customerStatement()) since the
+  // transaction rows have two genuinely different shapes (customer vs.
+  // supplier ledger) that aren't worth two parallel typed models for a
+  // pair of detail screens.
   Future<Map<String, dynamic>> fetchSupplierStatement(int supplierId);
+  Future<Map<String, dynamic>> fetchCustomerStatement(int customerId);
 
   // ── مناطق التوزيع (CustomerRegion) ───────────────────────────────────────
   Future<List<CustomerRegionModel>> fetchAllCustomerRegions();
@@ -484,6 +486,15 @@ class AdminRemoteDataSourceImpl implements AdminRemoteDataSource {
     final res = await _client.dio.get(
       ApiEndpoints.supplierStatement,
       queryParameters: {'supplier_id': supplierId},
+    );
+    return res.data as Map<String, dynamic>;
+  }
+
+  @override
+  Future<Map<String, dynamic>> fetchCustomerStatement(int customerId) async {
+    final res = await _client.dio.get(
+      ApiEndpoints.customerStatement,
+      queryParameters: {'customer_id': customerId},
     );
     return res.data as Map<String, dynamic>;
   }

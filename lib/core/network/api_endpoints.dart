@@ -69,6 +69,7 @@ class ApiEndpoints {
   // Delegate — transactions (معاملات)
   static const String delegateExpenses            = '/delegate/expenses';
   static const String delegateCustomerCollections = '/delegate/customer-collections';
+  static const String delegateNotes = '/delegate/notes';
   static String delegateExpense(int id) => '/delegate/expenses/$id';
   static String delegateCustomerCollection(int id) => '/delegate/customer-collections/$id';
 

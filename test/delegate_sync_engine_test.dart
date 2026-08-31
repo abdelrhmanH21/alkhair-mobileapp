@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -59,6 +60,7 @@ class _FakeDelegateRepository implements DelegateRepository {
   Future<String> submitExpense({
     required double amount,
     required String description,
+    required File photo,
     int? categoryId,
     String? notes,
     String? idempotencyKey,

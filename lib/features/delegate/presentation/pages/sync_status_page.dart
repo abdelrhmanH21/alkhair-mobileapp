@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -6,6 +8,7 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/app_snackbar.dart';
 import '../../../../core/utils/connectivity_service.dart';
 import '../../../../core/utils/pending_action_queue.dart';
+import '../../../../core/utils/pending_photo_storage.dart';
 import '../../data/sync/delegate_sync_engine.dart';
 
 /// Phase 4.1: tapping the pending-actions badge (delegate_home_page.dart)
@@ -71,6 +74,11 @@ class _SyncStatusPageState extends State<SyncStatusPage> {
       ),
     );
     if (confirmed == true) {
+      // A discarded expense's persisted photo (see PendingPhotoStorage) is
+      // never going anywhere else now — clean it up rather than leaving it
+      // orphaned forever.
+      final photoPath = action.payload['photo_local_path'] as String?;
+      if (photoPath != null) unawaited(PendingPhotoStorage.delete(photoPath));
       await sl<PendingActionQueue>().remove(action.idempotencyKey);
       _refresh();
     }

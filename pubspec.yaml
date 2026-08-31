@@ -65,6 +65,15 @@ dependencies:
   fl_chart: ^0.69.0
   qr_flutter: ^4.1.0
 
+  # Camera/gallery photo picking — mandatory proof-of-expense photo and the
+  # عمليات tab's optional تسجيل ملاحظة attachment.
+  image_picker: ^1.1.2
+  # Persistent app-local storage for a picked photo queued offline (Pending
+  # ActionQueue's JSON payload can only hold a file PATH, not raw bytes —
+  # see PendingActionQueue's doc comment) so it survives an app restart
+  # before the delegate is back online.
+  path_provider: ^2.1.4
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

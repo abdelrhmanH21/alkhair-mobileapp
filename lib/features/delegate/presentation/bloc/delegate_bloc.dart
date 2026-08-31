@@ -51,6 +51,7 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
     on<DelegateBonusesFetched>(_onFetchBonuses);
     on<DelegateCommissionBreakdownFetched>(_onFetchCommissionBreakdown);
     on<DelegateExpenseSubmitted>(_onSubmitExpense);
+    on<DelegateNoteSubmitted>(_onSubmitNote);
     on<DelegateCustomerCollectionSubmitted>(_onSubmitCustomerCollection);
     on<DelegateExpenseRecordsFetched>(_onFetchExpenseRecords);
     on<DelegateExpenseRecordUpdateRequested>(_onUpdateExpenseRecord);
@@ -445,10 +446,26 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
       final message = await _repo.submitExpense(
         amount: event.amount,
         description: event.description,
+        photo: event.photo,
         categoryId: event.categoryId,
         notes: event.notes,
       );
       emit(DelegateExpenseSubmittedState(message, requestId: event.requestId));
+    } on DioException catch (e) {
+      emit(DelegateFailure(_parseError(e), requestId: event.requestId));
+    } catch (_) {
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.', requestId: event.requestId));
+    }
+  }
+
+  Future<void> _onSubmitNote(
+    DelegateNoteSubmitted event,
+    Emitter<DelegateState> emit,
+  ) async {
+    emit(DelegateLoading(requestId: event.requestId));
+    try {
+      final message = await _repo.submitNote(message: event.message, photo: event.photo);
+      emit(DelegateNoteSubmittedState(message, requestId: event.requestId));
     } on DioException catch (e) {
       emit(DelegateFailure(_parseError(e), requestId: event.requestId));
     } catch (_) {

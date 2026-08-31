@@ -1,3 +1,4 @@
+import 'dart:io';
 import '../datasources/delegate_remote_datasource.dart';
 import '../models/loading_model.dart';
 import '../models/client_model.dart';
@@ -290,6 +291,7 @@ class DelegateRepositoryImpl implements DelegateRepository {
   Future<String> submitExpense({
     required double amount,
     required String description,
+    required File photo,
     int? categoryId,
     String? notes,
     String? idempotencyKey,
@@ -297,10 +299,19 @@ class DelegateRepositoryImpl implements DelegateRepository {
       _remote.submitExpense(
         amount: amount,
         description: description,
+        photo: photo,
         categoryId: categoryId,
         notes: notes,
         idempotencyKey: idempotencyKey,
       );
+
+  @override
+  Future<String> submitNote({
+    required String message,
+    File? photo,
+    String? idempotencyKey,
+  }) =>
+      _remote.submitNote(message: message, photo: photo, idempotencyKey: idempotencyKey);
 
   @override
   Future<String> submitCustomerCollection({

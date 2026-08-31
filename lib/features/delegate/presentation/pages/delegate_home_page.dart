@@ -228,7 +228,7 @@ class _DelegateHomePageState extends State<DelegateHomePage> with WidgetsBinding
           const NavigationDestination(
             icon: Icon(Icons.swap_horiz_outlined),
             selectedIcon: Icon(Icons.swap_horiz),
-            label: 'معاملات',
+            label: 'عمليات',
           ),
         ],
       ),

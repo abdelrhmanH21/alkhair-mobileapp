@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'package:dio/dio.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/network/api_endpoints.dart';
 import '../models/loading_model.dart';
@@ -63,8 +65,20 @@ abstract class DelegateRemoteDataSource {
   Future<String> submitExpense({
     required double amount,
     required String description,
+    required File photo,
     int? categoryId,
     String? notes,
+    String? idempotencyKey,
+  });
+  /// "تسجيل ملاحظة" (عمليات tab) — creates a Complaint row via the
+  /// authenticated DelegateNoteController::store(), tagged source=delegate.
+  /// Deliberately NOT offline-queued (unlike sale/expense/collection) — a
+  /// feedback note has no financial/inventory stakes that make retry-safe
+  /// offline queueing worth the added complexity; if offline, the caller
+  /// surfaces a clear "requires internet" message instead.
+  Future<String> submitNote({
+    required String message,
+    File? photo,
     String? idempotencyKey,
   });
   Future<String> submitCustomerCollection({
@@ -304,18 +318,37 @@ class DelegateRemoteDataSourceImpl implements DelegateRemoteDataSource {
   Future<String> submitExpense({
     required double amount,
     required String description,
+    required File photo,
     int? categoryId,
     String? notes,
     String? idempotencyKey,
   }) async {
-    final res = await _client.dio.post(ApiEndpoints.delegateExpenses, data: {
+    final formData = FormData.fromMap({
       'amount': amount,
       'description': description,
       if (categoryId != null) 'category_id': categoryId,
       if (notes != null && notes.isNotEmpty) 'notes': notes,
       if (idempotencyKey != null) 'idempotency_key': idempotencyKey,
+      'photo': await MultipartFile.fromFile(photo.path, filename: photo.path.split('/').last),
     });
+    final res = await _client.dio.post(ApiEndpoints.delegateExpenses, data: formData);
     return (res.data['message'] as String?) ?? 'تم تسجيل المصروف بنجاح.';
+  }
+
+  @override
+  Future<String> submitNote({
+    required String message,
+    File? photo,
+    String? idempotencyKey,
+  }) async {
+    final formData = FormData.fromMap({
+      'message': message,
+      if (idempotencyKey != null) 'idempotency_key': idempotencyKey,
+      if (photo != null)
+        'photo': await MultipartFile.fromFile(photo.path, filename: photo.path.split('/').last),
+    });
+    final res = await _client.dio.post(ApiEndpoints.delegateNotes, data: formData);
+    return (res.data['message'] as String?) ?? 'تم إرسال الملاحظة بنجاح.';
   }
 
   @override

@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
 import '../../../../core/utils/connectivity_service.dart';
 import '../../../../core/utils/pending_action_queue.dart';
+import '../../../../core/utils/pending_photo_storage.dart';
 import '../../domain/repositories/delegate_repository.dart';
 
 /// Phase 3 offline-sync engine: submits queued delegate actions (sales,
@@ -189,13 +191,20 @@ class DelegateSyncEngine {
 
   Future<void> _syncExpense(PendingAction action) async {
     final p = action.payload;
+    final photoPath = p['photo_local_path'] as String;
     await _repo.submitExpense(
       amount: (p['amount'] as num).toDouble(),
       description: p['description'] as String,
+      photo: File(photoPath),
       categoryId: p['category_id'] as int?,
       notes: p['notes'] as String?,
       idempotencyKey: action.idempotencyKey,
     );
+    // Server has its own copy now — the locally-persisted photo (see
+    // PendingPhotoStorage) is no longer needed. Best-effort: a failed
+    // cleanup just leaves harmless clutter, never worth failing the sync
+    // (already marked 'synced' by the caller) over.
+    unawaited(PendingPhotoStorage.delete(photoPath));
   }
 
   Future<void> _syncCollection(PendingAction action) async {

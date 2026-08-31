@@ -16,6 +16,9 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="30"/>
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation"/>
+    <!-- Mandatory proof-of-expense photo (تسجيل مصروف) + optional تسجيل
+         ملاحظة attachment — image_picker's camera source. -->
+    <uses-permission android:name="android.permission.CAMERA"/>
     <application
         android:label="Alkhair Dairies"
         android:name="${applicationName}"

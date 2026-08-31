@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
@@ -6,6 +7,7 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/app_snackbar.dart';
 import '../../../../core/utils/connectivity_service.dart';
 import '../../../../core/utils/pending_action_queue.dart';
+import '../../../../core/utils/pending_photo_storage.dart';
 import '../bloc/delegate_bloc.dart';
 import '../bloc/delegate_event.dart';
 import '../bloc/delegate_state.dart';
@@ -14,13 +16,20 @@ import '../../data/models/client_model.dart';
 import '../../data/models/transaction_record_models.dart';
 import '../widgets/client_search_field.dart';
 import '../widgets/add_client_sheet.dart';
+import '../widgets/photo_attachment_field.dart';
 
-/// معاملات tab: two lightweight route-side actions that don't belong to the
-/// invoice flow — recording a real expense (fuel, tolls, ...) and collecting
-/// an old debt payment from a customer with no invoice involved — plus the
-/// current shift's own history of both, editable while the loading is still
-/// active. Everything here is gated behind an active loading, same as
-/// selling/settlement.
+/// عمليات tab (renamed from معاملات — display text only, route/file names
+/// unchanged): three lightweight route-side actions that don't belong to
+/// the invoice flow — recording a real expense (fuel, tolls, ...),
+/// collecting an old debt payment from a customer with no invoice
+/// involved, and تسجيل ملاحظة (a free-form note/complaint, submitted into
+/// the same Complaint table the public /complain form uses — see
+/// DelegateNoteController) — plus the current shift's own history of the
+/// first two, editable while the loading is still active. The expense and
+/// collection actions are gated behind an active loading, same as
+/// selling/settlement; تسجيل ملاحظة is NOT loading-gated (a delegate should
+/// be able to report something even between shifts) and is not offline-
+/// queued (see DelegateRepository.submitNote's doc comment).
 class TransactionsPage extends StatefulWidget {
   final bool hasActiveLoading;
   /// Bumped by DelegateHomePage each time this tab is (re)selected, so the
@@ -66,6 +75,19 @@ class _TransactionsPageState extends State<TransactionsPage> {
       builder: (_) => BlocProvider.value(
         value: context.read<DelegateBloc>(),
         child: const _ExpenseFormSheet(),
+      ),
+    );
+  }
+
+  void _openNoteSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => BlocProvider.value(
+        value: context.read<DelegateBloc>(),
+        child: const _NoteFormSheet(),
       ),
     );
   }
@@ -168,7 +190,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('معاملات')),
+      appBar: AppBar(title: const Text('عمليات')),
       body: BlocListener<DelegateBloc, DelegateState>(
         listener: (ctx, state) {
           if (state is DelegateExpenseRecordsLoaded) {
@@ -230,6 +252,15 @@ class _TransactionsPageState extends State<TransactionsPage> {
               subtitle: 'تحصيل دفعة من دين عميل بدون فاتورة',
               enabled: widget.hasActiveLoading,
               onTap: () => _openCollectionSheet(context),
+            ),
+            const SizedBox(height: 12),
+            _ActionCard(
+              icon: Icons.edit_note_outlined,
+              color: AppTheme.accent,
+              title: 'تسجيل ملاحظة',
+              subtitle: 'شكوى أو ملاحظة تُرسَل لإدارة النظام',
+              enabled: true,
+              onTap: () => _openNoteSheet(context),
             ),
             const SizedBox(height: 24),
             Text('مصروفات الوردية', style: Theme.of(context).textTheme.titleMedium),
@@ -387,6 +418,11 @@ class _ExpenseFormSheetState extends State<_ExpenseFormSheet> {
   final _descCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
   bool _submitting = false;
+  File? _photo;
+  // Only shown once the delegate has actually tried to submit without a
+  // photo — showing a red border/error before any interaction would be
+  // needlessly alarming for a freshly-opened, empty form.
+  bool _photoErrorShown = false;
 
   // Tracks this sheet's own outstanding submit dispatch by requestId. This
   // sheet stays mounted (and its BlocListener stays subscribed to the
@@ -415,6 +451,11 @@ class _ExpenseFormSheetState extends State<_ExpenseFormSheet> {
       AppSnackbar.showError(context, 'يرجى إدخال وصف المصروف.');
       return;
     }
+    if (_photo == null) {
+      setState(() => _photoErrorShown = true);
+      AppSnackbar.showError(context, 'يجب إرفاق صورة إثبات المصروف');
+      return;
+    }
 
     if (!sl<ConnectivityService>().isOnline) {
       setState(() => _submitting = true);
@@ -425,6 +466,7 @@ class _ExpenseFormSheetState extends State<_ExpenseFormSheet> {
     final event = DelegateExpenseSubmitted(
       amount: amount,
       description: _descCtrl.text.trim(),
+      photo: _photo!,
       notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
     );
     _tracker.start(event.requestId, true);
@@ -440,13 +482,19 @@ class _ExpenseFormSheetState extends State<_ExpenseFormSheet> {
   /// double-tap can't enqueue the same expense twice under two different
   /// idempotency keys.
   Future<void> _queueOfflineExpense(double amount) async {
+    final idempotencyKey = generateIdempotencyKey();
+    // Copies the picked photo out of image_picker's own transient path
+    // into a persistent app-local one that survives an app restart while
+    // still queued — see PendingPhotoStorage's doc comment.
+    final photoPath = await PendingPhotoStorage.persist(_photo!, idempotencyKey);
     await sl<PendingActionQueue>().enqueue(PendingAction(
-      idempotencyKey: generateIdempotencyKey(),
+      idempotencyKey: idempotencyKey,
       type: PendingActionType.expense,
       payload: {
         'amount': amount,
         'description': _descCtrl.text.trim(),
         'notes': _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+        'photo_local_path': photoPath,
       },
       createdAt: DateTime.now(),
     ));
@@ -512,6 +560,16 @@ class _ExpenseFormSheetState extends State<_ExpenseFormSheet> {
                 prefixIcon: Icon(Icons.notes_outlined),
               ),
               maxLines: 2,
+            ),
+            const SizedBox(height: 12),
+            PhotoAttachmentField(
+              photo: _photo,
+              required: true,
+              showRequiredError: _photoErrorShown,
+              onChanged: (f) => setState(() {
+                _photo = f;
+                if (f != null) _photoErrorShown = false;
+              }),
             ),
             const SizedBox(height: 20),
             ElevatedButton.icon(
@@ -982,6 +1040,112 @@ class _CollectionEditSheetState extends State<_CollectionEditSheet> {
                     )
                   : const Icon(Icons.check_circle_outline),
               label: Text(_submitting ? 'جاري الحفظ...' : 'حفظ التعديل'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─── تسجيل ملاحظة ─────────────────────────────────────────────────────────────
+
+class _NoteFormSheet extends StatefulWidget {
+  const _NoteFormSheet();
+
+  @override
+  State<_NoteFormSheet> createState() => _NoteFormSheetState();
+}
+
+class _NoteFormSheetState extends State<_NoteFormSheet> {
+  final _messageCtrl = TextEditingController();
+  File? _photo;
+  bool _submitting = false;
+
+  // See _ExpenseFormSheetState's identical comment.
+  final _tracker = RequestTracker<bool>();
+
+  @override
+  void dispose() {
+    _messageCtrl.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    if (_messageCtrl.text.trim().isEmpty) {
+      AppSnackbar.showError(context, 'يرجى كتابة الملاحظة.');
+      return;
+    }
+    // Deliberately not offline-queued — see DelegateRepository.submitNote's
+    // doc comment for the rationale (no financial/inventory stakes that
+    // justify the added complexity, unlike sale/expense/collection).
+    if (!sl<ConnectivityService>().isOnline) {
+      AppSnackbar.showError(context, 'يتطلب إرسال الملاحظة اتصالاً بالإنترنت.');
+      return;
+    }
+
+    final event = DelegateNoteSubmitted(message: _messageCtrl.text.trim(), photo: _photo);
+    _tracker.start(event.requestId, true);
+    setState(() => _submitting = true);
+    context.read<DelegateBloc>().add(event);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 20,
+        right: 20,
+        top: 20,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+      ),
+      child: BlocListener<DelegateBloc, DelegateState>(
+        listener: (ctx, state) {
+          if (state is DelegateNoteSubmittedState) {
+            if (_tracker.resolve(state.requestId) == null) return;
+            _submitting = false;
+            Navigator.pop(ctx);
+            AppSnackbar.showSuccess(ctx, state.message);
+          } else if (state is DelegateFailure) {
+            if (_tracker.resolve(state.requestId) == null) return;
+            setState(() => _submitting = false);
+            AppSnackbar.showError(ctx, state.message);
+          }
+        },
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('تسجيل ملاحظة', style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 4),
+            const Text('تُرسَل مباشرةً إلى إدارة النظام — نفس شاشة الشكاوى والمقترحات.',
+                style: TextStyle(fontSize: 12, color: AppTheme.textMuted)),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _messageCtrl,
+              decoration: const InputDecoration(
+                labelText: 'نص الملاحظة',
+                hintText: 'اكتب ملاحظتك أو شكواك هنا...',
+                prefixIcon: Icon(Icons.edit_note_outlined),
+              ),
+              maxLines: 4,
+            ),
+            const SizedBox(height: 12),
+            PhotoAttachmentField(
+              photo: _photo,
+              onChanged: (f) => setState(() => _photo = f),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              onPressed: _submitting ? null : _submit,
+              icon: _submitting
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    )
+                  : const Icon(Icons.send_outlined),
+              label: Text(_submitting ? 'جاري الإرسال...' : 'إرسال الملاحظة'),
             ),
           ],
         ),

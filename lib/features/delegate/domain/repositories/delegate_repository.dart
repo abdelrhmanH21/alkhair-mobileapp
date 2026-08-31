@@ -1,3 +1,4 @@
+import 'dart:io';
 import '../../data/models/loading_model.dart';
 import '../../data/models/client_model.dart';
 import '../../data/models/invoice_model.dart';
@@ -78,8 +79,14 @@ abstract class DelegateRepository {
   Future<String> submitExpense({
     required double amount,
     required String description,
+    required File photo,
     int? categoryId,
     String? notes,
+    String? idempotencyKey,
+  });
+  Future<String> submitNote({
+    required String message,
+    File? photo,
     String? idempotencyKey,
   });
   Future<String> submitCustomerCollection({

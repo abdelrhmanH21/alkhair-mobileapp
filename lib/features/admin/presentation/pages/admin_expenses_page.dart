@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:dio/dio.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/di/service_locator.dart';
@@ -231,41 +232,121 @@ class _ExpensesTabState extends State<_ExpensesTab> {
             margin: const EdgeInsets.symmetric(vertical: 4),
             child: Padding(
               padding: const EdgeInsets.all(14),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(e.description,
-                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                      ),
-                      Text(e.amount.toStringAsFixed(2),
-                          style: const TextStyle(
-                              fontWeight: FontWeight.bold, color: AppTheme.danger, fontSize: 15)),
-                    ],
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(e.description,
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                            ),
+                            Text(e.amount.toStringAsFixed(2),
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold, color: AppTheme.danger, fontSize: 15)),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            _Chip(text: e.categoryName ?? 'بدون تصنيف'),
+                            const SizedBox(width: 6),
+                            _Chip(text: e.treasuryName),
+                            const SizedBox(width: 6),
+                            _Chip(
+                              text: e.isDelegateSourced ? 'مندوب' : 'عام',
+                              color: e.isDelegateSourced ? AppTheme.accent : AppTheme.secondary,
+                            ),
+                            const Spacer(),
+                            Text(DateFormat('yyyy-MM-dd').format(e.expenseDate),
+                                style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      _Chip(text: e.categoryName ?? 'بدون تصنيف'),
-                      const SizedBox(width: 6),
-                      _Chip(text: e.treasuryName),
-                      const SizedBox(width: 6),
-                      _Chip(
-                        text: e.isDelegateSourced ? 'مندوب' : 'عام',
-                        color: e.isDelegateSourced ? AppTheme.accent : AppTheme.secondary,
-                      ),
-                      const Spacer(),
-                      Text(DateFormat('yyyy-MM-dd').format(e.expenseDate),
-                          style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
-                    ],
-                  ),
+                  if (e.photoUrl != null) ...[
+                    const SizedBox(width: 10),
+                    _ExpensePhotoThumbnail(url: e.photoUrl!),
+                  ],
                 ],
               ),
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+/// Small tappable proof-of-expense thumbnail — opens a full-size viewer.
+class _ExpensePhotoThumbnail extends StatelessWidget {
+  final String url;
+  const _ExpensePhotoThumbnail({required this.url});
+
+  void _openFullSize(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (_) => Dialog(
+        backgroundColor: Colors.black,
+        insetPadding: const EdgeInsets.all(12),
+        child: Stack(
+          alignment: Alignment.topLeft,
+          children: [
+            InteractiveViewer(
+              child: CachedNetworkImage(
+                imageUrl: url,
+                fit: BoxFit.contain,
+                placeholder: (_, __) => const SizedBox(
+                  height: 200,
+                  child: Center(child: CircularProgressIndicator(color: Colors.white)),
+                ),
+                errorWidget: (_, __, ___) =>
+                    const Icon(Icons.broken_image_outlined, color: Colors.white54, size: 48),
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.close, color: Colors.white),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: () => _openFullSize(context),
+      borderRadius: BorderRadius.circular(8),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: CachedNetworkImage(
+          imageUrl: url,
+          width: 52,
+          height: 52,
+          fit: BoxFit.cover,
+          placeholder: (_, __) => Container(
+            width: 52,
+            height: 52,
+            color: Colors.grey.shade200,
+            child: const Center(
+              child: SizedBox(
+                  width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+            ),
+          ),
+          errorWidget: (_, __, ___) => Container(
+            width: 52,
+            height: 52,
+            color: Colors.grey.shade200,
+            child: const Icon(Icons.broken_image_outlined, size: 20, color: AppTheme.textMuted),
+          ),
+        ),
       ),
     );
   }

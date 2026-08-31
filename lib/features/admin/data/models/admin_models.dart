@@ -396,6 +396,10 @@ class ExpenseModel {
   // SaleController::combined() uses for sales, just a single unified table
   // here instead of a UNION since Expense already carries the nullable FK.
   final bool isDelegateSourced;
+  // Proof-of-expense photo — only ever set for delegate-submitted expenses
+  // (DelegateExpenseController::store() requires it); admin-recorded
+  // expenses from this same list have no photo, same as before.
+  final String? photoUrl;
 
   const ExpenseModel({
     required this.id,
@@ -407,6 +411,7 @@ class ExpenseModel {
     required this.notes,
     required this.createdByName,
     required this.isDelegateSourced,
+    required this.photoUrl,
   });
 
   factory ExpenseModel.fromJson(Map<String, dynamic> json) {
@@ -423,6 +428,7 @@ class ExpenseModel {
       notes: json['notes'] as String?,
       createdByName: createdBy?['name'] as String? ?? '',
       isDelegateSourced: json['delegate_loading_id'] != null,
+      photoUrl: json['photo_url'] as String?,
     );
   }
 }

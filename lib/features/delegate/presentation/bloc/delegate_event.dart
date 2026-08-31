@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:equatable/equatable.dart';
 import '../../data/models/invoice_model.dart';
 
@@ -144,16 +145,26 @@ class DelegateCommissionBreakdownFetched extends DelegateEvent {}
 class DelegateExpenseSubmitted extends DelegateEvent {
   final double amount;
   final String description;
+  final File photo;
   final int? categoryId;
   final String? notes;
   DelegateExpenseSubmitted({
     required this.amount,
     required this.description,
+    required this.photo,
     this.categoryId,
     this.notes,
   });
   @override
-  List<Object?> get props => [amount, description, categoryId, notes];
+  List<Object?> get props => [amount, description, photo.path, categoryId, notes];
+}
+
+class DelegateNoteSubmitted extends DelegateEvent {
+  final String message;
+  final File? photo;
+  DelegateNoteSubmitted({required this.message, this.photo});
+  @override
+  List<Object?> get props => [message, photo?.path];
 }
 
 class DelegateCustomerCollectionSubmitted extends DelegateEvent {

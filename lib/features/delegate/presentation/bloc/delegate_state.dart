@@ -198,6 +198,13 @@ class DelegateExpenseSubmittedState extends DelegateState {
   List<Object?> get props => [message, requestId];
 }
 
+class DelegateNoteSubmittedState extends DelegateState {
+  final String message;
+  const DelegateNoteSubmittedState(this.message, {super.requestId});
+  @override
+  List<Object?> get props => [message, requestId];
+}
+
 class DelegateCustomerCollectionSubmittedState extends DelegateState {
   final String message;
   const DelegateCustomerCollectionSubmittedState(this.message, {super.requestId});

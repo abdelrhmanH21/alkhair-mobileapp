@@ -5,11 +5,13 @@ import '../../../../core/di/service_locator.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/app_snackbar.dart';
 import '../../../../core/widgets/state_views.dart';
+import '../../../delegate/data/models/client_model.dart';
 import '../../../delegate/data/models/customer_region_model.dart';
 import '../../../delegate/presentation/pages/customer_invoice_history_page.dart';
 import '../../../delegate/presentation/widgets/add_client_sheet.dart';
 import '../../data/datasources/admin_remote_datasource.dart';
 import '../../data/models/admin_models.dart';
+import 'supplier_statement_page.dart';
 
 /// العملاء / الموردون / مناطق التوزيع — three standalone list+detail
 /// sections with full CRUD, each reusing the exact same backend
@@ -590,7 +592,23 @@ class _SuppliersTabState extends State<_SuppliersTab> {
                 backgroundColor: AppTheme.secondary.withValues(alpha: 0.1),
                 child: const Icon(Icons.local_shipping_outlined, color: AppTheme.secondary),
               ),
-              title: Text(s.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+              title: Row(
+                children: [
+                  Flexible(child: Text(s.name, style: const TextStyle(fontWeight: FontWeight.bold))),
+                  if (s.linkedCustomerId != null) ...[
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.deepPurple.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: const Text('مورد×عميل',
+                          style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.deepPurple)),
+                    ),
+                  ],
+                ],
+              ),
               subtitle: s.phone != null && s.phone!.isNotEmpty
                   ? Text(s.phone!, style: const TextStyle(fontSize: 12))
                   : null,
@@ -609,6 +627,12 @@ class _SuppliersTabState extends State<_SuppliersTab> {
                     onPressed: () => _openEdit(s),
                   ),
                 ],
+              ),
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => SupplierStatementPage(supplierId: s.id, supplierName: s.name),
+                ),
               ),
             ),
           );
@@ -636,6 +660,11 @@ class _SupplierFormSheetState extends State<_SupplierFormSheet> {
       TextEditingController(text: widget.supplier == null ? '' : widget.supplier!.balance.toStringAsFixed(2));
   bool _saving = false;
 
+  // ── مورد×عميل link state (edit mode only) ──────────────────────────────
+  late bool _linkEnabled = widget.supplier?.linkedCustomerId != null;
+  late int? _linkedCustomerId = widget.supplier?.linkedCustomerId;
+  late String? _linkedCustomerName = widget.supplier?.linkedCustomerName;
+
   bool get _isEdit => widget.supplier != null;
 
   @override
@@ -655,6 +684,8 @@ class _SupplierFormSheetState extends State<_SupplierFormSheet> {
           id: widget.supplier!.id,
           name: _nameCtrl.text.trim(),
           phone: _phoneCtrl.text.trim(),
+          updateLinkedCustomer: true,
+          linkedCustomerId: _linkEnabled ? _linkedCustomerId : null,
         );
       } else {
         await widget.remote.createSupplier(
@@ -674,6 +705,109 @@ class _SupplierFormSheetState extends State<_SupplierFormSheet> {
       setState(() => _saving = false);
       AppSnackbar.showError(context, 'حدث خطأ غير متوقع.');
     }
+  }
+
+  /// Search-and-pick sheet for an existing customer, reusing the same
+  /// DelegateClientController::search() endpoint the delegate/admin
+  /// "إضافة عميل" flows already use (AdminRemoteDataSource.searchCustomers).
+  Future<void> _openCustomerPicker() async {
+    final picked = await showModalBottomSheet<ClientModel>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => _CustomerPickerSheet(remote: widget.remote),
+    );
+    if (picked != null) {
+      setState(() {
+        _linkedCustomerId = picked.id;
+        _linkedCustomerName = picked.name;
+      });
+    }
+  }
+
+  /// Create-a-new-customer-and-link flow — reuses the existing
+  /// AddClientSheet (same one the delegate/admin "إضافة عميل" flows use)
+  /// rather than duplicating a customer-creation form here.
+  Future<void> _openAddClient() async {
+    final created = await showModalBottomSheet<ClientModel>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => AddClientSheet(onClientAdded: (c) => Navigator.of(context).pop(c)),
+    );
+    if (created != null) {
+      setState(() {
+        _linkedCustomerId = created.id;
+        _linkedCustomerName = created.name;
+      });
+    }
+  }
+
+  Widget _buildLinkSection() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.deepPurple.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.deepPurple.withValues(alpha: 0.15)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Checkbox(
+                value: _linkEnabled,
+                onChanged: (v) => setState(() {
+                  _linkEnabled = v ?? false;
+                  if (!_linkEnabled) {
+                    _linkedCustomerId = null;
+                    _linkedCustomerName = null;
+                  }
+                }),
+              ),
+              const Expanded(
+                child: Text('هذا المورد هو أيضاً عميل (مورد×عميل)',
+                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.deepPurple)),
+              ),
+            ],
+          ),
+          if (_linkEnabled)
+            Padding(
+              padding: const EdgeInsets.only(right: 12, bottom: 4),
+              child: _linkedCustomerId != null
+                  ? Row(
+                      children: [
+                        Expanded(
+                          child: Text('مرتبط بالعميل: ${_linkedCustomerName ?? '#$_linkedCustomerId'}',
+                              style: const TextStyle(fontSize: 12)),
+                        ),
+                        TextButton(
+                          onPressed: () => setState(() {
+                            _linkedCustomerId = null;
+                            _linkedCustomerName = null;
+                          }),
+                          child: const Text('تغيير', style: TextStyle(fontSize: 12)),
+                        ),
+                      ],
+                    )
+                  : Wrap(
+                      spacing: 8,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: _openCustomerPicker,
+                          icon: const Icon(Icons.search, size: 15),
+                          label: const Text('اختر عميلاً', style: TextStyle(fontSize: 12)),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: _openAddClient,
+                          icon: const Icon(Icons.person_add_alt_outlined, size: 15),
+                          label: const Text('عميل جديد', style: TextStyle(fontSize: 12)),
+                        ),
+                      ],
+                    ),
+            ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -723,6 +857,10 @@ class _SupplierFormSheetState extends State<_SupplierFormSheet> {
                     labelText: 'رصيد افتتاحي مستحق', prefixIcon: Icon(Icons.account_balance_wallet_outlined)),
               ),
             ],
+            if (_isEdit) ...[
+              const SizedBox(height: 12),
+              _buildLinkSection(),
+            ],
             const SizedBox(height: 16),
             SizedBox(
               height: 48,
@@ -738,6 +876,108 @@ class _SupplierFormSheetState extends State<_SupplierFormSheet> {
               ),
             ),
             const SizedBox(height: 16),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Debounced search-and-pick sheet for the مورد×عميل customer link,
+/// reusing AdminRemoteDataSource.searchCustomers (DelegateClientController::
+/// search()) — the same lookup ClientSearchField already uses elsewhere.
+class _CustomerPickerSheet extends StatefulWidget {
+  final AdminRemoteDataSource remote;
+  const _CustomerPickerSheet({required this.remote});
+
+  @override
+  State<_CustomerPickerSheet> createState() => _CustomerPickerSheetState();
+}
+
+class _CustomerPickerSheetState extends State<_CustomerPickerSheet> {
+  final _searchCtrl = TextEditingController();
+  Timer? _debounce;
+  List<ClientModel> _results = [];
+  bool _loading = false;
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  void _onChanged(String q) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 350), () => _search(q));
+  }
+
+  Future<void> _search(String q) async {
+    if (q.trim().isEmpty) {
+      setState(() => _results = []);
+      return;
+    }
+    setState(() => _loading = true);
+    try {
+      final results = await widget.remote.searchCustomers(q.trim());
+      if (!mounted) return;
+      setState(() {
+        _results = results;
+        _loading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+        left: 16,
+        right: 16,
+        top: 16,
+      ),
+      child: SizedBox(
+        height: MediaQuery.of(context).size.height * 0.6,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                const Text('اختر عميلاً', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                const Spacer(),
+                IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.of(context).pop()),
+              ],
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _searchCtrl,
+              onChanged: _onChanged,
+              decoration: const InputDecoration(hintText: 'ابحث بالاسم أو الهاتف...', prefixIcon: Icon(Icons.search)),
+            ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _results.isEmpty
+                      ? const Center(
+                          child: Text('اكتب للبحث عن عميل', style: TextStyle(color: AppTheme.textMuted)))
+                      : ListView.builder(
+                          itemCount: _results.length,
+                          itemBuilder: (_, i) {
+                            final c = _results[i];
+                            return ListTile(
+                              leading: const CircleAvatar(child: Icon(Icons.person_outline)),
+                              title: Text(c.name),
+                              subtitle: Text(c.phone),
+                              onTap: () => Navigator.of(context).pop(c),
+                            );
+                          },
+                        ),
+            ),
           ],
         ),
       ),

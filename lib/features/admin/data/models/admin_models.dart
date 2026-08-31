@@ -499,20 +499,31 @@ class SupplierModel {
   final String name;
   final String? phone;
   final double balance;
+  // "مورد×عميل" — the linked Customer id/name, if this supplier has been
+  // marked as also being a customer (Supplier::linkedCustomer()).
+  final int? linkedCustomerId;
+  final String? linkedCustomerName;
 
   const SupplierModel({
     required this.id,
     required this.name,
     required this.phone,
     required this.balance,
+    this.linkedCustomerId,
+    this.linkedCustomerName,
   });
 
-  factory SupplierModel.fromJson(Map<String, dynamic> json) => SupplierModel(
-        id: json['id'] as int,
-        name: json['name'] as String? ?? '',
-        phone: json['phone'] as String?,
-        balance: _asDouble(json['balance']),
-      );
+  factory SupplierModel.fromJson(Map<String, dynamic> json) {
+    final linkedCustomer = json['linked_customer'] as Map<String, dynamic>?;
+    return SupplierModel(
+      id: json['id'] as int,
+      name: json['name'] as String? ?? '',
+      phone: json['phone'] as String?,
+      balance: _asDouble(json['balance']),
+      linkedCustomerId: json['linked_customer_id'] as int?,
+      linkedCustomerName: linkedCustomer?['name'] as String?,
+    );
+  }
 }
 
 class SupplierPageModel {

@@ -70,7 +70,19 @@ abstract class AdminRemoteDataSource {
     String? phone,
     String? email,
     String? address,
+    // Only sent when the caller explicitly wants to change the مورد×عميل
+    // link — omitting it (updateLinkedCustomer: false, the default) leaves
+    // the supplier's existing link untouched. Pass null with true to unlink.
+    bool updateLinkedCustomer = false,
+    int? linkedCustomerId,
   });
+
+  // "مورد×عميل" combined statement — raw JSON passthrough (same endpoint
+  // the web SupplierStatementPage/CustomerStatementPage use,
+  // ReportController::supplierStatement()) since the transaction rows have
+  // two genuinely different shapes (customer vs. supplier ledger) that
+  // aren't worth two parallel typed models for a single detail screen.
+  Future<Map<String, dynamic>> fetchSupplierStatement(int supplierId);
 
   // ── مناطق التوزيع (CustomerRegion) ───────────────────────────────────────
   Future<List<CustomerRegionModel>> fetchAllCustomerRegions();
@@ -455,13 +467,25 @@ class AdminRemoteDataSourceImpl implements AdminRemoteDataSource {
     String? phone,
     String? email,
     String? address,
+    bool updateLinkedCustomer = false,
+    int? linkedCustomerId,
   }) async {
     await _client.dio.put('${ApiEndpoints.suppliers}/$id', data: {
       'name': name,
       if (phone != null) 'phone': phone,
       if (email != null) 'email': email,
       if (address != null) 'address': address,
+      if (updateLinkedCustomer) 'linked_customer_id': linkedCustomerId,
     });
+  }
+
+  @override
+  Future<Map<String, dynamic>> fetchSupplierStatement(int supplierId) async {
+    final res = await _client.dio.get(
+      ApiEndpoints.supplierStatement,
+      queryParameters: {'supplier_id': supplierId},
+    );
+    return res.data as Map<String, dynamic>;
   }
 
   // ── مناطق التوزيع (CustomerRegion) ───────────────────────────────────────

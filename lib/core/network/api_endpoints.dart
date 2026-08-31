@@ -44,6 +44,7 @@ class ApiEndpoints {
   static const String expenseItems    = '$apiRoot/expense-items';
   static const String customers       = '$apiRoot/customers';
   static const String suppliers       = '$apiRoot/suppliers';
+  static const String supplierStatement = '$apiRoot/reports/supplier-statement';
   static const String salesCombined      = '$apiRoot/sales/combined';
   static const String paymentCollections = '$apiRoot/payment-collections';
   static const String targets            = '$apiRoot/targets';

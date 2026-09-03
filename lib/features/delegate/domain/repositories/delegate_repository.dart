@@ -15,6 +15,7 @@ import '../../data/models/customer_invoice_history_model.dart';
 abstract class DelegateRepository {
   Future<LoadingModel?> getCurrentLoading();
   Future<LoadingModel> confirmLoading();
+  Future<void> confirmLoadingAddition(int additionId);
   Future<List<TruckStockModel>> getTruckStock();
   Future<DashboardModel> getDashboard();
   Future<List<ClientModel>> searchClients(String query);

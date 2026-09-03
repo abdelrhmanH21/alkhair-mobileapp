@@ -127,9 +127,9 @@ class _AdminSalePageState extends State<AdminSalePage> {
   final _notesCtrl = TextEditingController();
   bool _submitting = false;
 
-  double get _maxOverridePct {
+  double get _maxDiscountPct {
     final state = context.read<AppConfigBloc>().state;
-    return state is AppConfigLoaded ? state.config.maxPriceOverridePct : 10;
+    return state is AppConfigLoaded ? state.config.maxPriceDiscountPct : 20;
   }
 
   double get _total => _items.fold(0.0, (s, i) => s + i.subtotal);
@@ -212,7 +212,7 @@ class _AdminSalePageState extends State<AdminSalePage> {
           borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (_) => _ProductPickerSheet(
         products: _products,
-        maxOverridePct: _maxOverridePct,
+        maxDiscountPct: _maxDiscountPct,
         onAdd: (item) => setState(() => _items.add(item)),
       ),
     );
@@ -484,11 +484,11 @@ extension _FirstOrNull<T> on Iterable<T> {
 
 class _ProductPickerSheet extends StatefulWidget {
   final List<SimpleProductModel> products;
-  final double maxOverridePct;
+  final double maxDiscountPct;
   final void Function(_SaleLineItem) onAdd;
   const _ProductPickerSheet(
       {required this.products,
-      required this.maxOverridePct,
+      required this.maxDiscountPct,
       required this.onAdd});
 
   @override
@@ -501,10 +501,10 @@ class _ProductPickerSheetState extends State<_ProductPickerSheet> {
   final _priceCtrl = TextEditingController();
   String? _priceError;
 
+  // Discount is capped below the catalog price; a markup above it has no
+  // upper bound — mirrors DelegateInvoiceController::resolveBoundedPrice().
   double get _minAllowed =>
-      _selected!.salePrice * (1 - widget.maxOverridePct / 100);
-  double get _maxAllowed =>
-      _selected!.salePrice * (1 + widget.maxOverridePct / 100);
+      _selected!.salePrice * (1 - widget.maxDiscountPct / 100);
 
   @override
   void dispose() {
@@ -519,9 +519,9 @@ class _ProductPickerSheetState extends State<_ProductPickerSheet> {
     final qty = double.tryParse(_qtyCtrl.text) ?? 0;
     if (qty <= 0) return;
     final price = double.tryParse(_priceCtrl.text);
-    if (price == null || price < _minAllowed || price > _maxAllowed) {
+    if (price == null || price < _minAllowed) {
       setState(() => _priceError =
-          'السعر يجب أن يكون بين ${_minAllowed.toStringAsFixed(2)} و ${_maxAllowed.toStringAsFixed(2)}');
+          'الحد الأدنى: ${_minAllowed.toStringAsFixed(2)} (خصم حتى ${widget.maxDiscountPct.toStringAsFixed(0)}%) — لا يوجد حد أقصى للزيادة');
       return;
     }
     widget.onAdd(_SaleLineItem(
@@ -608,7 +608,7 @@ class _ProductPickerSheetState extends State<_ProductPickerSheet> {
                 children: [
                   Expanded(
                       child: Text(
-                          'السعر (بين ${_minAllowed.toStringAsFixed(2)} و ${_maxAllowed.toStringAsFixed(2)})',
+                          'السعر (الحد الأدنى: ${_minAllowed.toStringAsFixed(2)} — لا يوجد حد أقصى)',
                           style: const TextStyle(fontSize: 12))),
                   SizedBox(
                     width: 90,

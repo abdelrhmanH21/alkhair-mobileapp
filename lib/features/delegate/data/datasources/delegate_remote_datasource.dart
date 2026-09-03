@@ -18,6 +18,7 @@ import '../models/customer_invoice_history_model.dart';
 abstract class DelegateRemoteDataSource {
   Future<LoadingModel?> fetchCurrentLoading();
   Future<LoadingModel> confirmLoading();
+  Future<void> confirmLoadingAddition(int additionId);
   Future<List<TruckStockModel>> fetchTruckStock();
   Future<DashboardModel> fetchDashboard();
   Future<List<ClientModel>> searchClients(String query);
@@ -122,6 +123,11 @@ class DelegateRemoteDataSourceImpl implements DelegateRemoteDataSource {
   Future<LoadingModel> confirmLoading() async {
     final res = await _client.dio.post(ApiEndpoints.delegateLoadingConfirm);
     return LoadingModel.fromJson(res.data['data'] as Map<String, dynamic>);
+  }
+
+  @override
+  Future<void> confirmLoadingAddition(int additionId) async {
+    await _client.dio.post(ApiEndpoints.delegateLoadingAdditionConfirm(additionId));
   }
 
   @override

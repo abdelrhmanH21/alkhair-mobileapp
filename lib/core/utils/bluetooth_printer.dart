@@ -163,10 +163,13 @@ List<ReceiptElement> buildReceiptPlan(InvoicePrintData d) {
   addLine('التاريخ: ${DateFormat('yyyy/MM/dd – HH:mm').format(d.issuedAt)}');
   separator();
 
-  // 4. Customer name + phone (respecting "إظهار رقم الهاتف")
+  // 4. Customer name + region (customer-facing receipt shows region, not
+  // phone — the phone number stays admin-only elsewhere in the app).
+  // Omitted entirely when the customer has no region set, matching the
+  // conditional-omission convention used for discount/returns/debt lines.
   addLine('العميل : ${d.clientName}');
-  if (d.showPhone && d.clientPhone.isNotEmpty) {
-    addLine('الهاتف : ${d.clientPhone}');
+  if (d.clientRegion != null && d.clientRegion!.isNotEmpty) {
+    addLine('المنطقة : ${d.clientRegion}');
   }
 
   // 5. Delegate (representative) name
@@ -933,6 +936,11 @@ class InvoicePrintData {
   final String clientName;
   final String clientPhone;
   final bool showPhone;
+  // Customer's region name (Customer.customer_region_id/region()), shown on
+  // the customer-facing receipt in place of the phone number. Null/empty
+  // when the customer has no region set — the receipt line is then omitted
+  // entirely, never rendered as an empty "المنطقة: —".
+  final String? clientRegion;
   final String delegateName;
   final DateTime issuedAt;
   final List<PrintLineItem> salesItems;
@@ -967,6 +975,7 @@ class InvoicePrintData {
     required this.clientName,
     required this.clientPhone,
     this.showPhone = true,
+    this.clientRegion,
     required this.delegateName,
     required this.issuedAt,
     required this.salesItems,
@@ -1031,6 +1040,7 @@ class InvoicePrintData {
       clientName: customer['name'] as String? ?? '',
       clientPhone: customer['phone'] as String? ?? '',
       showPhone: showPhone,
+      clientRegion: (customer['region'] as Map<String, dynamic>?)?['name'] as String?,
       delegateName: delegate['name'] as String? ?? 'مندوب',
       issuedAt: parseServerDateTime(invoiceData['created_at'] as String?),
       salesItems: items.map(toLineItem).toList(),

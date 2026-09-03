@@ -129,6 +129,12 @@ class _LoadingPageState extends State<LoadingPage> with PollingMixin<LoadingPage
             AppSnackbar.showSuccess(ctx, label);
           }
 
+          if (state is DelegateLoadingAdditionConfirmedState) {
+            if (_tracker.resolve(state.requestId) == null) return;
+            setState(() => _currentLoading = state.loading ?? _currentLoading);
+            AppSnackbar.showSuccess(ctx, 'تم تأكيد استلام المنتجات الإضافية، وتمت إضافتها لمخزون الشاحنة.');
+          }
+
           if (state is DelegateFailure) {
             final kind = _tracker.resolve(state.requestId);
             if (kind == null) {
@@ -254,6 +260,20 @@ class _LoadingPageState extends State<LoadingPage> with PollingMixin<LoadingPage
                 const Padding(
                   padding: EdgeInsets.fromLTRB(12, 8, 12, 0),
                   child: OfflineDataBanner(show: true),
+                ),
+              // Mid-shift top-ups (Part 5) awaiting this delegate's own
+              // confirmation — surfaced above the normal loading content so
+              // it's impossible to miss, regardless of which status view
+              // (_LoadingView/_InTransitView/_CompletedView) is showing.
+              for (final addition in loading.pendingAdditions)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+                  child: _PendingAdditionCard(
+                    addition: addition,
+                    isBusy: isBusy,
+                    onConfirm: () => _runAction(
+                        () => DelegateLoadingAdditionConfirmed(addition.id)),
+                  ),
                 ),
               Expanded(child: content),
             ],
@@ -532,6 +552,66 @@ class _CompletedView extends StatelessWidget {
             ),
           ),
         ],
+      );
+}
+
+// ─── Pending loading-addition prompt (Part 5) ───────────────────────────────
+
+class _PendingAdditionCard extends StatelessWidget {
+  final LoadingAdditionModel addition;
+  final bool isBusy;
+  final VoidCallback onConfirm;
+  const _PendingAdditionCard({
+    required this.addition,
+    required this.isBusy,
+    required this.onConfirm,
+  });
+
+  @override
+  Widget build(BuildContext context) => Card(
+        color: AppTheme.accent.withValues(alpha: 0.1),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(10),
+          side: BorderSide(color: AppTheme.accent.withValues(alpha: 0.4)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Row(
+                children: [
+                  Icon(Icons.add_shopping_cart_rounded, color: AppTheme.accent, size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'تمت إضافة منتجات جديدة للشحنة — يرجى المراجعة والتأكيد',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              ...addition.items.map((i) => Padding(
+                    padding: const EdgeInsets.only(bottom: 2),
+                    child: Text(
+                      '${i.productName} — ${i.quantity} ${i.productUnit}',
+                      style: const TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                    ),
+                  )),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: isBusy ? null : onConfirm,
+                  style: ElevatedButton.styleFrom(backgroundColor: AppTheme.accent),
+                  icon: const Icon(Icons.check_circle_outline, size: 18),
+                  label: const Text('تأكيد الاستلام'),
+                ),
+              ),
+            ],
+          ),
+        ),
       );
 }
 

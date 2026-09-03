@@ -53,6 +53,19 @@ class DelegateLoadingConfirmedState extends DelegateState {
   List<Object?> get props => [loading, requestId];
 }
 
+/// Result of confirming a pending mid-shift loading addition (Part 5) —
+/// carries the refreshed current loading (its pendingAdditions list will no
+/// longer include the one just confirmed, and its truck-stock-backing items
+/// now reflect the credited stock). Nullable defensively, though in
+/// practice the loading should still exist right after confirming an
+/// addition against it.
+class DelegateLoadingAdditionConfirmedState extends DelegateState {
+  final LoadingModel? loading;
+  const DelegateLoadingAdditionConfirmedState(this.loading, {super.requestId});
+  @override
+  List<Object?> get props => [loading, requestId];
+}
+
 class DelegateTruckStockLoaded extends DelegateState {
   final List<TruckStockModel> stocks;
   const DelegateTruckStockLoaded(this.stocks, {super.requestId});

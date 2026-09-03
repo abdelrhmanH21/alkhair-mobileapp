@@ -219,15 +219,15 @@ class _InvoicePageState extends State<InvoicePage> {
 
   double get _discountAmount => double.tryParse(_discountCtrl.text) ?? 0;
 
-  double get _maxOverridePct {
+  double get _maxDiscountPct {
     final state = context.read<AppConfigBloc>().state;
-    return state is AppConfigLoaded ? state.config.maxPriceOverridePct : 10;
+    return state is AppConfigLoaded ? state.config.maxPriceDiscountPct : 20;
   }
 
-  double get _maxDiscount => _grossSales * (_maxOverridePct / 100);
+  double get _maxDiscount => _grossSales * (_maxDiscountPct / 100);
 
   String? get _discountError => _discountAmount > _maxDiscount
-      ? 'الخصم يتجاوز الحد المسموح (${_maxOverridePct.toStringAsFixed(0)}% = ${_maxDiscount.toStringAsFixed(2)})'
+      ? 'الخصم يتجاوز الحد المسموح (${_maxDiscountPct.toStringAsFixed(0)}% = ${_maxDiscount.toStringAsFixed(2)})'
       : null;
 
   double get _netTotal => computeInvoiceNetTotal(
@@ -1213,15 +1213,15 @@ class _SellableProductPickerSheetState
   // list is exactly what Phase 1 offline support is meant to keep showing.
   bool _isCachedFallback = false;
 
-  double get _maxOverridePct {
+  double get _maxDiscountPct {
     final state = context.read<AppConfigBloc>().state;
-    return state is AppConfigLoaded ? state.config.maxPriceOverridePct : 10;
+    return state is AppConfigLoaded ? state.config.maxPriceDiscountPct : 20;
   }
 
+  // Discount is capped below the resolved price; a markup above it has no
+  // upper bound — mirrors DelegateInvoiceController::resolveBoundedPrice().
   double get _minAllowedPrice =>
-      (_selected!.unitPrice * (1 - _maxOverridePct / 100));
-  double get _maxAllowedPrice =>
-      (_selected!.unitPrice * (1 + _maxOverridePct / 100));
+      (_selected!.unitPrice * (1 - _maxDiscountPct / 100));
 
   @override
   void initState() {
@@ -1252,9 +1252,9 @@ class _SellableProductPickerSheetState
     if (qty <= 0) return;
 
     final price = double.tryParse(_priceCtrl.text);
-    if (price == null || price < _minAllowedPrice || price > _maxAllowedPrice) {
+    if (price == null || price < _minAllowedPrice) {
       setState(() => _priceError =
-          'السعر يجب أن يكون بين ${_minAllowedPrice.toStringAsFixed(2)} و ${_maxAllowedPrice.toStringAsFixed(2)}');
+          'الحد الأدنى: ${_minAllowedPrice.toStringAsFixed(2)} (خصم حتى ${_maxDiscountPct.toStringAsFixed(0)}%) — لا يوجد حد أقصى للزيادة');
       return;
     }
 
@@ -1381,7 +1381,7 @@ class _SellableProductPickerSheetState
                     children: [
                       Expanded(
                         child: Text(
-                            'السعر (بين ${_minAllowedPrice.toStringAsFixed(2)} و ${_maxAllowedPrice.toStringAsFixed(2)})',
+                            'السعر (الحد الأدنى: ${_minAllowedPrice.toStringAsFixed(2)} — لا يوجد حد أقصى)',
                             style: const TextStyle(fontSize: 12)),
                       ),
                       SizedBox(

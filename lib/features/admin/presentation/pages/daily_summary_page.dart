@@ -88,7 +88,8 @@ class _DailySummaryPageState extends State<DailySummaryPage> {
                 ])
             .toList(),
         cashRows: [
-          ['المبيعات', d.summary.grossSales != null ? money.format(d.summary.grossSales) : 'غير معروف'],
+          ['إجمالي المبيعات (فاتورة)', money.format(d.summary.grossSalesTotal)],
+          ['المبيعات (نقدي محصل)', d.summary.grossSales != null ? money.format(d.summary.grossSales) : 'غير معروف'],
           ['التحصيلات', d.summary.totalCollections != null ? money.format(d.summary.totalCollections) : 'غير معروف'],
           ['المصروفات', d.summary.totalExpenses != null ? money.format(d.summary.totalExpenses) : 'غير معروف'],
           ['المرتجعات', money.format(d.summary.totalReturns)],
@@ -96,6 +97,8 @@ class _DailySummaryPageState extends State<DailySummaryPage> {
           ['الكاش', money.format(d.summary.expectedCash)],
           ['المحفظة', money.format(d.summary.walletAmount)],
           ['الفرق', money.format(d.summary.cashVariance)],
+          ['إجمالي المبيعات بسعر الكتالوج', money.format(d.summary.catalogSalesTotal)],
+          ['إجمالي الفروقات', money.format(d.summary.totalVariances)],
         ],
         collectionsHeaders: const ['العميل', 'المبلغ'],
         collectionsRows: d.collections.map((c) => [c.customer, money.format(c.amount)]).toList(),
@@ -115,6 +118,17 @@ class _DailySummaryPageState extends State<DailySummaryPage> {
             .toList(),
         expensesHeaders: const ['البيان', 'المبلغ'],
         expensesRows: d.expenses.map((e) => [e.description, money.format(e.amount)]).toList(),
+        variancesHeaders: const ['العميل', 'الصنف', 'الكمية', 'سعر الكتالوج', 'السعر المحصل', 'الفرق'],
+        variancesRows: d.variances
+            .map((v) => [
+                  v.customer,
+                  v.product,
+                  v.quantity.toStringAsFixed(2),
+                  money.format(v.catalogPrice),
+                  money.format(v.chargedPrice),
+                  money.format(v.variance),
+                ])
+            .toList(),
       );
       await ReportExporter.exportDailySummaryPdf(export, companyName: _companyName, logoUrl: _logoUrl);
     } catch (_) {
@@ -204,6 +218,22 @@ class _DailySummaryPageState extends State<DailySummaryPage> {
             headers: const ['البيان', 'المبلغ'],
             rows: d.expenses.map((e) => [e.description, e.amount.toStringAsFixed(2)]).toList(),
           ),
+
+          const SizedBox(height: 16),
+          const _SectionHeader('الفروقات'),
+          _SimpleDetailTable(
+            headers: const ['العميل', 'الصنف', 'الكمية', 'سعر الكتالوج', 'السعر المحصل', 'الفرق'],
+            rows: d.variances
+                .map((v) => [
+                      v.customer,
+                      v.product,
+                      v.quantity.toStringAsFixed(2),
+                      v.catalogPrice.toStringAsFixed(2),
+                      v.chargedPrice.toStringAsFixed(2),
+                      v.variance.toStringAsFixed(2),
+                    ])
+                .toList(),
+          ),
           const SizedBox(height: 24),
         ],
       ),
@@ -233,8 +263,15 @@ class _CashSummaryCard extends StatelessWidget {
             ? AppTheme.secondary
             : AppTheme.danger;
 
+    final variancesColor = summary.totalVariances == 0
+        ? AppTheme.textMuted
+        : summary.totalVariances > 0
+            ? AppTheme.secondary
+            : AppTheme.danger;
+
     final rows = <(String, String, Color)>[
-      ('المبيعات', summary.grossSales?.toStringAsFixed(2) ?? 'غير معروف', AppTheme.primary),
+      ('إجمالي المبيعات (فاتورة)', summary.grossSalesTotal.toStringAsFixed(2), AppTheme.primary),
+      ('المبيعات (نقدي محصل)', summary.grossSales?.toStringAsFixed(2) ?? 'غير معروف', AppTheme.primary),
       ('التحصيلات', summary.totalCollections?.toStringAsFixed(2) ?? 'غير معروف', AppTheme.primary),
       ('المصروفات', summary.totalExpenses?.toStringAsFixed(2) ?? 'غير معروف', AppTheme.danger),
       ('المرتجعات', summary.totalReturns.toStringAsFixed(2), AppTheme.danger),
@@ -242,6 +279,11 @@ class _CashSummaryCard extends StatelessWidget {
       ('الكاش', summary.expectedCash.toStringAsFixed(2), AppTheme.secondary),
       ('المحفظة', summary.walletAmount.toStringAsFixed(2), AppTheme.accent),
       ('الفرق', summary.cashVariance.toStringAsFixed(2), varianceColor),
+      // Reference-only pair: catalogSalesTotal/totalVariances never feed
+      // into expectedCash's own formula — see AdminDelegateController
+      // ::dailySummary()'s doc comment.
+      ('إجمالي المبيعات بسعر الكتالوج', summary.catalogSalesTotal.toStringAsFixed(2), AppTheme.textMuted),
+      ('إجمالي الفروقات', summary.totalVariances.toStringAsFixed(2), variancesColor),
     ];
 
     return Card(

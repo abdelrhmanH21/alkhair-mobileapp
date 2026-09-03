@@ -176,6 +176,10 @@ class DelegateModel {
   final bool hasActiveShift;
   final String? loadingStatus;
   final bool hasPendingSettlementRequest;
+  // Needed by "إضافة منتجات لتحميلة نشطة" (Part 5), which addresses a
+  // loading directly by id — unlike settleDelegate()/shiftSummary(), which
+  // only ever need delegate_id and resolve the active loading server-side.
+  final int? activeLoadingId;
 
   const DelegateModel({
     required this.id,
@@ -185,6 +189,7 @@ class DelegateModel {
     required this.hasActiveShift,
     this.loadingStatus,
     this.hasPendingSettlementRequest = false,
+    this.activeLoadingId,
   });
 
   factory DelegateModel.fromJson(Map<String, dynamic> json) => DelegateModel(
@@ -196,6 +201,7 @@ class DelegateModel {
         loadingStatus: json['loading_status'] as String?,
         hasPendingSettlementRequest:
             json['has_pending_settlement_request'] as bool? ?? false,
+        activeLoadingId: json['active_loading_id'] as int?,
       );
 
   /// A pending settlement request takes priority over the raw loading status
@@ -1553,6 +1559,17 @@ class DailySummaryCashRowModel {
   final double expectedCash;
   final double walletAmount;
   final double cashVariance;
+  // "إجمالي المبيعات بسعر الكتالوج" — sum(quantity × catalog price),
+  // ignoring what was actually charged. Reference-only, for comparison
+  // against grossSalesTotal; never used in expectedCash's own formula.
+  final double catalogSalesTotal;
+  // "إجمالي الفروقات" — grossSalesTotal - catalogSalesTotal, i.e. the
+  // reconciling line between the two (positive = delegate collected extra
+  // cash overall this shift; negative = less). Purely informational.
+  final double totalVariances;
+  // "إجمالي المبيعات (فاتورة)" — sum of this shift's invoices'
+  // gross_sales_total, independent of grossSales (cash actually collected).
+  final double grossSalesTotal;
 
   const DailySummaryCashRowModel({
     required this.grossSales,
@@ -1563,6 +1580,9 @@ class DailySummaryCashRowModel {
     required this.expectedCash,
     required this.walletAmount,
     required this.cashVariance,
+    required this.catalogSalesTotal,
+    required this.totalVariances,
+    required this.grossSalesTotal,
   });
 
   factory DailySummaryCashRowModel.fromJson(Map<String, dynamic> json) => DailySummaryCashRowModel(
@@ -1575,6 +1595,45 @@ class DailySummaryCashRowModel {
         expectedCash: _asDouble(json['expected_cash']),
         walletAmount: _asDouble(json['wallet_amount']),
         cashVariance: _asDouble(json['cash_variance']),
+        catalogSalesTotal: _asDouble(json['catalog_sales_total']),
+        totalVariances: _asDouble(json['total_variances']),
+        grossSalesTotal: _asDouble(json['gross_sales_total']),
+      );
+}
+
+class DailySummaryVarianceModel {
+  final String customer;
+  final String? invoiceNumber;
+  final String product;
+  final String unit;
+  final double quantity;
+  final double catalogPrice;
+  final double chargedPrice;
+  // POSITIVE = customer paid MORE than catalog price (delegate collected
+  // extra cash); NEGATIVE = customer paid LESS. See
+  // AdminDelegateController::dailySummary()'s doc comment.
+  final double variance;
+
+  const DailySummaryVarianceModel({
+    required this.customer,
+    required this.invoiceNumber,
+    required this.product,
+    required this.unit,
+    required this.quantity,
+    required this.catalogPrice,
+    required this.chargedPrice,
+    required this.variance,
+  });
+
+  factory DailySummaryVarianceModel.fromJson(Map<String, dynamic> json) => DailySummaryVarianceModel(
+        customer: json['customer'] as String? ?? 'غير معروف',
+        invoiceNumber: json['invoice_number'] as String?,
+        product: json['product'] as String? ?? '',
+        unit: json['unit'] as String? ?? '',
+        quantity: _asDouble(json['quantity']),
+        catalogPrice: _asDouble(json['catalog_price']),
+        chargedPrice: _asDouble(json['charged_price']),
+        variance: _asDouble(json['variance']),
       );
 }
 
@@ -1591,6 +1650,7 @@ class DailySummaryModel {
   final List<DailySummaryDebtInvoiceModel> debtInvoices;
   final List<DailySummaryReturnModel> returns;
   final List<DailySummaryExpenseModel> expenses;
+  final List<DailySummaryVarianceModel> variances;
 
   const DailySummaryModel({
     required this.settlementId,
@@ -1605,6 +1665,7 @@ class DailySummaryModel {
     required this.debtInvoices,
     required this.returns,
     required this.expenses,
+    required this.variances,
   });
 
   factory DailySummaryModel.fromJson(Map<String, dynamic> json) {
@@ -1634,6 +1695,9 @@ class DailySummaryModel {
           .toList(),
       expenses: (json['expenses'] as List? ?? [])
           .map((e) => DailySummaryExpenseModel.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      variances: (json['variances'] as List? ?? [])
+          .map((e) => DailySummaryVarianceModel.fromJson(e as Map<String, dynamic>))
           .toList(),
     );
   }

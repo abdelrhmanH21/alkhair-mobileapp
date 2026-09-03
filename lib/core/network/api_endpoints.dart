@@ -80,6 +80,10 @@ class ApiEndpoints {
   // Delegate — trip status update (id injected at call site)
   static String delegateLoadingStatus(int id) => '/delegate/loading/$id/status';
 
+  // Delegate — confirm a pending mid-shift loading addition (Part 5)
+  static String delegateLoadingAdditionConfirm(int additionId) =>
+      '/delegate/loading-additions/$additionId/confirm';
+
   // Admin
   static const String adminDelegates    = '/admin/delegates';
   static const String adminDashboard    = '/admin/dashboard';
@@ -87,6 +91,8 @@ class ApiEndpoints {
   static const String adminShiftSummary = '/admin/delegate/shift-summary';
   static const String adminSettle       = '/admin/settle-delegate';
   static const String adminLoadings     = '/admin/loadings';
+  // Add products to an already-active loading (Part 5) — id injected at call site.
+  static String adminLoadingAddItems(int loadingId) => '/admin/loadings/$loadingId/add-items';
   static const String adminProducts     = '/admin/products';
   static const String adminWarehouses   = '/admin/warehouses';
   static const String adminPayrollSummary = '/admin/payroll-summary';

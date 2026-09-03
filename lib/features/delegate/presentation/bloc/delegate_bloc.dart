@@ -33,6 +33,7 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
   DelegateBloc(this._repo, this._gps) : super(const DelegateInitial()) {
     on<DelegateLoadingFetched>(_onFetchLoading);
     on<DelegateLoadingConfirmed>(_onConfirmLoading);
+    on<DelegateLoadingAdditionConfirmed>(_onConfirmLoadingAddition);
     on<DelegateTruckStockFetched>(_onFetchTruckStock);
     on<DelegateDashboardRequested>(_onFetchDashboard);
     on<DelegateClientSearchRequested>(_onSearchClients);
@@ -86,6 +87,26 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
     try {
       final loading = await _repo.confirmLoading();
       emit(DelegateLoadingConfirmedState(loading, requestId: event.requestId));
+    } on DioException catch (e) {
+      emit(DelegateFailure(_parseError(e), requestId: event.requestId));
+    } catch (_) {
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.', requestId: event.requestId));
+    }
+  }
+
+  Future<void> _onConfirmLoadingAddition(
+    DelegateLoadingAdditionConfirmed event,
+    Emitter<DelegateState> emit,
+  ) async {
+    emit(DelegateLoading(requestId: event.requestId));
+    try {
+      await _repo.confirmLoadingAddition(event.additionId);
+      // Re-fetch so pendingAdditions/items/truck-stock-backing state all
+      // reflect the just-confirmed addition, same as confirmLoading() above
+      // returns the loading fresh from the server rather than patching it
+      // locally.
+      final loading = await _repo.getCurrentLoading();
+      emit(DelegateLoadingAdditionConfirmedState(loading, requestId: event.requestId));
     } on DioException catch (e) {
       emit(DelegateFailure(_parseError(e), requestId: event.requestId));
     } catch (_) {

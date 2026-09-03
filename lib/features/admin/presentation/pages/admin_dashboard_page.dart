@@ -16,6 +16,7 @@ import '../../../delegate/presentation/bloc/delegate_bloc.dart';
 import '../../../delegate/presentation/pages/delegate_reports_page.dart';
 import '../widgets/operation_sheet.dart';
 import 'settle_delegate_page.dart';
+import 'add_loading_items_page.dart';
 import 'create_loading_page.dart';
 import 'admin_expenses_page.dart';
 import 'admin_customers_suppliers_page.dart';
@@ -163,6 +164,14 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
               ),
             ),
           ),
+        ),
+        OperationSheetItem(
+          icon: Icons.add_shopping_cart_rounded,
+          color: AppTheme.accent,
+          title: 'إضافة منتجات لتحميلة نشطة',
+          subtitle: 'زيادة على شحنة مندوب أثناء الوردية، بانتظار تأكيده',
+          onTap: () => Navigator.push(
+              context, MaterialPageRoute(builder: (_) => const AddLoadingItemsPage())),
         ),
         OperationSheetItem(
           icon: Icons.people_outline,

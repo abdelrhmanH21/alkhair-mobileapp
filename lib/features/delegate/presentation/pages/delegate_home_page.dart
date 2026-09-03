@@ -592,6 +592,39 @@ class _ShipmentSummaryCard extends StatelessWidget {
                 ),
               ],
             ),
+            // Mid-shift top-up (Part 5) awaiting confirmation — surfaced
+            // here too (not just inside LoadingPage) so it's visible right
+            // on the home tab without navigating in first. The actual
+            // confirm action lives in LoadingPage/_PendingAdditionCard —
+            // this is a tap-through notice, not a duplicate action flow.
+            if (loading.pendingAdditions.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              InkWell(
+                onTap: () => _openDetails(context),
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: AppTheme.accent.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppTheme.accent.withValues(alpha: 0.4)),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.add_shopping_cart_rounded, color: AppTheme.accent, size: 18),
+                      SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'تمت إضافة منتجات جديدة للشحنة — اضغط للمراجعة والتأكيد',
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                      Icon(Icons.chevron_left_rounded, color: AppTheme.accent),
+                    ],
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 14),
             Row(
               children: [

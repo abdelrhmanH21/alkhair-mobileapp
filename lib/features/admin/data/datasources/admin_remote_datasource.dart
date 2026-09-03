@@ -25,6 +25,13 @@ abstract class AdminRemoteDataSource {
     required List<Map<String, dynamic>> items,
     String? notes,
   });
+  /// Adds products to an already-active (accepted/in_transit) loading —
+  /// requires the delegate's own confirmation before the stock is trusted;
+  /// see DelegateLoadingController::addItems()/confirmAddition().
+  Future<void> addLoadingItems({
+    required int loadingId,
+    required List<Map<String, dynamic>> items,
+  });
   Future<void> updateNotificationPreference(bool enabled);
 
   // ── Expenses & Treasuries ──────────────────────────────────────────────
@@ -336,6 +343,16 @@ class AdminRemoteDataSourceImpl implements AdminRemoteDataSource {
       'warehouse_id': warehouseId,
       'items': items,
       if (notes != null && notes.isNotEmpty) 'notes': notes,
+    });
+  }
+
+  @override
+  Future<void> addLoadingItems({
+    required int loadingId,
+    required List<Map<String, dynamic>> items,
+  }) async {
+    await _client.dio.post(ApiEndpoints.adminLoadingAddItems(loadingId), data: {
+      'items': items,
     });
   }
 

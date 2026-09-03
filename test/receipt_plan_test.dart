@@ -11,6 +11,7 @@ void main() {
     clientName: 'أحمد محمد عبدالله',
     clientPhone: '01012345678',
     showPhone: true,
+    clientRegion: 'المنطقة الأولى',
     delegateName: 'محمود الملواني',
     issuedAt: DateTime(2026, 7, 17, 14, 30),
     salesItems: const [
@@ -100,8 +101,12 @@ void main() {
       expect(texts.any((t) => t.startsWith('المرتجعات: -30.00')), isTrue);
     });
 
-    test('includes phone line when showPhone is true and phone is non-empty', () {
-      expect(texts.any((t) => t.startsWith('الهاتف :')), isTrue);
+    test('includes region line when the customer has a region set (customer-facing receipt shows region, not phone)', () {
+      expect(texts.any((t) => t.startsWith('المنطقة :')), isTrue);
+      // The phone number is deliberately never shown on this receipt
+      // anymore, regardless of showPhone — see buildReceiptPlan's doc
+      // comment. Phone visibility stays admin-only elsewhere in the app.
+      expect(texts.any((t) => t.startsWith('الهاتف :')), isFalse);
     });
 
     test('includes exactly one logo element when logoUrl is set', () {
@@ -137,7 +142,7 @@ void main() {
       final invoiceNoIdx = indexOf((t) => t.startsWith('رقم الفاتورة:'));
       final dateIdx = indexOf((t) => t.startsWith('التاريخ:'));
       final customerIdx = indexOf((t) => t.startsWith('العميل :'));
-      final phoneIdx = indexOf((t) => t.startsWith('الهاتف :'));
+      final regionIdx = indexOf((t) => t.startsWith('المنطقة :'));
       final delegateIdx = indexOf((t) => t.startsWith('المندوب:'));
       final grossIdx = indexOf((t) => t.startsWith('إجمالي المبيعات:'));
       final discountIdx = indexOf((t) => t.startsWith('الخصم:'));
@@ -150,8 +155,8 @@ void main() {
 
       expect(invoiceNoIdx, lessThan(dateIdx));
       expect(dateIdx, lessThan(customerIdx));
-      expect(customerIdx, lessThan(phoneIdx));
-      expect(phoneIdx, lessThan(delegateIdx));
+      expect(customerIdx, lessThan(regionIdx));
+      expect(regionIdx, lessThan(delegateIdx));
       expect(grossIdx, lessThan(discountIdx));
       expect(discountIdx, lessThan(returnsTotalIdx));
       expect(returnsTotalIdx, lessThan(debtIdx));
@@ -211,7 +216,8 @@ void main() {
       texts = plan.whereType<ReceiptTextLine>().map((e) => e.text).toList();
     });
 
-    test('omits phone line when showPhone is false', () {
+    test('omits region line entirely when the customer has no region set (never shown as "المنطقة: —")', () {
+      expect(texts.any((t) => t.startsWith('المنطقة :')), isFalse);
       expect(texts.any((t) => t.startsWith('الهاتف :')), isFalse);
     });
 

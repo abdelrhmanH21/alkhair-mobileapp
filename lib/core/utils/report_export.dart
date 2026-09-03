@@ -53,6 +53,8 @@ class DailySummaryExportData {
   final List<List<String>> returnsRows;
   final List<String> expensesHeaders;
   final List<List<String>> expensesRows;
+  final List<String> variancesHeaders;
+  final List<List<String>> variancesRows;
 
   const DailySummaryExportData({
     required this.title,
@@ -70,6 +72,8 @@ class DailySummaryExportData {
     required this.returnsRows,
     required this.expensesHeaders,
     required this.expensesRows,
+    required this.variancesHeaders,
+    required this.variancesRows,
   });
 }
 
@@ -201,7 +205,11 @@ class ReportExporter {
                   data: rows,
                   headerStyle: pw.TextStyle(
                       fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 9),
-                  headerDecoration: const pw.BoxDecoration(color: PdfColors.blueGrey800),
+                  // Strictly black & white — this report must never print in
+                  // color (unlike exportPdf() above, used by other reports,
+                  // which keeps its blueGrey800 branding). grey800 in place
+                  // of the app's blue accent.
+                  headerDecoration: const pw.BoxDecoration(color: PdfColors.grey800),
                   cellStyle: const pw.TextStyle(fontSize: 8.5),
                   cellAlignment: pw.Alignment.centerRight,
                   headerAlignment: pw.Alignment.centerRight,
@@ -255,8 +263,10 @@ class ReportExporter {
             pw.Text('تاريخ الإصدار: $generatedAt',
                 style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
             if (data.isBackfilled)
+              // Strictly black & white — no orange, unlike the on-screen
+              // amber warning this note mirrors.
               pw.Text('⚠ بيانات تاريخية غير مكتملة',
-                  style: const pw.TextStyle(fontSize: 9, color: PdfColors.orange800)),
+                  style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold, color: PdfColors.grey900)),
             pw.SizedBox(height: 8),
             pw.Divider(color: PdfColors.grey400),
           ],
@@ -286,6 +296,7 @@ class ReportExporter {
           sectionTable('الأجل', data.debtHeaders, data.debtRows),
           sectionTable('المرتجعات', data.returnsHeaders, data.returnsRows),
           sectionTable('المصروفات', data.expensesHeaders, data.expensesRows),
+          sectionTable('الفروقات', data.variancesHeaders, data.variancesRows),
         ],
       ),
     );

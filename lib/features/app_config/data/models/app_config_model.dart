@@ -7,7 +7,12 @@ class AppConfigModel {
   // Backend falls back to logoUrl itself when no color logo is uploaded, so
   // this is never null when logoUrl isn't.
   final String? logoColorUrl;
-  final double maxPriceOverridePct;
+  // Max allowed discount BELOW the resolved price (a delegate/admin
+  // submitting a lower unit_price than resolved is rejected past this
+  // percentage). There is deliberately no corresponding markup cap — a
+  // price ABOVE resolved is always accepted server-side, no matter how
+  // large — see DelegateInvoiceController::resolveBoundedPrice().
+  final double maxPriceDiscountPct;
   final String headerText;
   final String footerText;
   final bool showPhone;
@@ -20,7 +25,7 @@ class AppConfigModel {
     required this.companyName,
     this.logoUrl,
     this.logoColorUrl,
-    this.maxPriceOverridePct = 10,
+    this.maxPriceDiscountPct = 20,
     this.headerText = '',
     this.footerText = '',
     this.showPhone = true,
@@ -31,8 +36,8 @@ class AppConfigModel {
         companyName: json['company_name'] as String? ?? '',
         logoUrl: json['logo_url'] as String?,
         logoColorUrl: json['logo_color_url'] as String?,
-        maxPriceOverridePct:
-            (json['max_price_override_pct'] as num?)?.toDouble() ?? 10,
+        maxPriceDiscountPct:
+            (json['max_price_discount_pct'] as num?)?.toDouble() ?? 20,
         headerText: json['header_text'] as String? ?? '',
         footerText: json['footer_text'] as String? ?? '',
         showPhone: json['show_phone'] as bool? ?? true,
@@ -46,7 +51,7 @@ class AppConfigModel {
         'company_name': companyName,
         'logo_url': logoUrl,
         'logo_color_url': logoColorUrl,
-        'max_price_override_pct': maxPriceOverridePct,
+        'max_price_discount_pct': maxPriceDiscountPct,
         'header_text': headerText,
         'footer_text': footerText,
         'show_phone': showPhone,

@@ -79,6 +79,10 @@ class DelegateRepositoryImpl implements DelegateRepository {
   Future<LoadingModel> confirmLoading() => _remote.confirmLoading();
 
   @override
+  Future<void> confirmLoadingAddition(int additionId) =>
+      _remote.confirmLoadingAddition(additionId);
+
+  @override
   Future<List<TruckStockModel>> getTruckStock() async {
     final stocks = await _remote.fetchTruckStock();
     await _cache.set(_kTruckStock, stocks.map((s) => s.toJson()).toList());

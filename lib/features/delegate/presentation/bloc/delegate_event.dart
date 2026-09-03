@@ -27,6 +27,15 @@ class DelegateLoadingFetched extends DelegateEvent {}
 
 class DelegateLoadingConfirmed extends DelegateEvent {}
 
+/// Confirms receipt of a pending mid-shift loading addition (Part 5) — see
+/// DelegateLoadingController::confirmAddition().
+class DelegateLoadingAdditionConfirmed extends DelegateEvent {
+  final int additionId;
+  DelegateLoadingAdditionConfirmed(this.additionId);
+  @override
+  List<Object?> get props => [additionId];
+}
+
 class DelegateTruckStockFetched extends DelegateEvent {}
 
 class DelegateDashboardRequested extends DelegateEvent {}

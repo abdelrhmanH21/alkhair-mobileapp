@@ -32,6 +32,7 @@ import 'admin_waste_page.dart';
 import 'admin_inventory_count_page.dart';
 import 'admin_settlement_history_page.dart';
 import 'staff_operations_page.dart';
+import 'distributors_page.dart';
 
 /// Admin shell: bottom nav with exactly 5 destinations —
 ///   1. الرئيسية (center, emphasized — the working-capital dashboard, unchanged)
@@ -310,6 +311,14 @@ class _AdminDashboardPageState extends State<AdminDashboardPage> {
           subtitle: 'تسجيل جزاء أو سلفة أو مكافأة لموظف',
           onTap: () => Navigator.push(
               context, MaterialPageRoute(builder: (_) => const StaffOperationsPage())),
+        ),
+        OperationSheetItem(
+          icon: Icons.local_shipping_outlined,
+          color: Colors.brown,
+          title: 'الموزعون',
+          subtitle: 'تسليم/استرجاع بضاعة ودفعات الموزعين — كشف حساب',
+          onTap: () =>
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const DistributorsPage())),
         ),
       ],
     );

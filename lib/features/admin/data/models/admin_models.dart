@@ -1702,3 +1702,157 @@ class DailySummaryModel {
     );
   }
 }
+
+// ─── الموزعون (Distributors) ────────────────────────────────────────────
+// Mirrors AdminDistributorController's JSON shapes exactly (Distributor /
+// DistributorTransaction / DistributorTransactionItem models on the
+// backend). All decimal-cast columns (running_balance, amount,
+// balance_after, quantity, unit_price, subtotal) go through _asDouble()
+// since Laravel serializes Eloquent `decimal` casts as JSON strings.
+
+class DistributorModel {
+  final int id;
+  final String name;
+  final String? phone;
+  final String? notes;
+  final double runningBalance;
+
+  const DistributorModel({
+    required this.id,
+    required this.name,
+    required this.phone,
+    required this.notes,
+    required this.runningBalance,
+  });
+
+  factory DistributorModel.fromJson(Map<String, dynamic> json) => DistributorModel(
+        id: json['id'] as int,
+        name: json['name'] as String,
+        phone: json['phone'] as String?,
+        notes: json['notes'] as String?,
+        runningBalance: _asDouble(json['running_balance']),
+      );
+
+  @override
+  String toString() => name;
+}
+
+class DistributorTransactionItemModel {
+  final int productId;
+  final String productName;
+  final String unit;
+  final double quantity;
+  final double unitPrice;
+  final double subtotal;
+
+  const DistributorTransactionItemModel({
+    required this.productId,
+    required this.productName,
+    required this.unit,
+    required this.quantity,
+    required this.unitPrice,
+    required this.subtotal,
+  });
+
+  factory DistributorTransactionItemModel.fromJson(Map<String, dynamic> json) {
+    final product = json['product'] as Map<String, dynamic>?;
+    return DistributorTransactionItemModel(
+      productId: json['product_id'] as int,
+      productName: product?['name'] as String? ?? '',
+      unit: product?['unit'] as String? ?? '',
+      quantity: _asDouble(json['quantity']),
+      unitPrice: _asDouble(json['unit_price']),
+      subtotal: _asDouble(json['subtotal']),
+    );
+  }
+}
+
+/// type: 'goods_issued' | 'goods_returned' | 'payment' — matches the
+/// backend enum verbatim, so no separate Dart enum mapping is needed.
+class DistributorTransactionModel {
+  final int id;
+  final String type;
+  final String transactionDate; // 'Y-m-d', kept as a plain date string
+  final double amount;
+  final double balanceAfter;
+  final String? notes;
+  final String? warehouseName;
+  final String? treasuryName;
+  final int? treasuryId;
+  final String? createdByName;
+  final List<DistributorTransactionItemModel> items;
+
+  const DistributorTransactionModel({
+    required this.id,
+    required this.type,
+    required this.transactionDate,
+    required this.amount,
+    required this.balanceAfter,
+    required this.notes,
+    required this.warehouseName,
+    required this.treasuryName,
+    required this.treasuryId,
+    required this.createdByName,
+    required this.items,
+  });
+
+  bool get isGoods => type == 'goods_issued' || type == 'goods_returned';
+
+  factory DistributorTransactionModel.fromJson(Map<String, dynamic> json) {
+    final warehouse = json['warehouse'] as Map<String, dynamic>?;
+    final treasury = json['treasury'] as Map<String, dynamic>?;
+    final createdBy = json['created_by'] as Map<String, dynamic>?;
+    return DistributorTransactionModel(
+      id: json['id'] as int,
+      type: json['type'] as String,
+      transactionDate: (json['transaction_date'] as String).substring(0, 10),
+      amount: _asDouble(json['amount']),
+      balanceAfter: _asDouble(json['balance_after']),
+      notes: json['notes'] as String?,
+      warehouseName: warehouse?['name'] as String?,
+      treasuryName: treasury?['name'] as String?,
+      treasuryId: treasury?['id'] as int?,
+      createdByName: createdBy?['name'] as String?,
+      items: (json['items'] as List? ?? [])
+          .map((e) => DistributorTransactionItemModel.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+}
+
+class DistributorStatementModel {
+  final DistributorModel distributor;
+  final List<DistributorTransactionModel> transactions;
+
+  const DistributorStatementModel({required this.distributor, required this.transactions});
+
+  factory DistributorStatementModel.fromJson(Map<String, dynamic> json) => DistributorStatementModel(
+        distributor: DistributorModel.fromJson(json['distributor'] as Map<String, dynamic>),
+        transactions: (json['transactions'] as List? ?? [])
+            .map((e) => DistributorTransactionModel.fromJson(e as Map<String, dynamic>))
+            .toList(),
+      );
+}
+
+class DistributorDailyReceiptModel {
+  final DistributorModel distributor;
+  final String date;
+  final List<DistributorTransactionModel> transactions;
+  final double balanceAfter;
+
+  const DistributorDailyReceiptModel({
+    required this.distributor,
+    required this.date,
+    required this.transactions,
+    required this.balanceAfter,
+  });
+
+  factory DistributorDailyReceiptModel.fromJson(Map<String, dynamic> json) => DistributorDailyReceiptModel(
+        distributor: DistributorModel.fromJson(json['distributor'] as Map<String, dynamic>),
+        date: json['date'] as String,
+        transactions: (json['transactions'] as List? ?? [])
+            .map((e) => DistributorTransactionModel.fromJson(e as Map<String, dynamic>))
+            .toList(),
+        balanceAfter: _asDouble(json['balance_after']),
+      );
+}

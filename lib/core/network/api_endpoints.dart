@@ -108,4 +108,15 @@ class ApiEndpoints {
   static const String adminWaste = '/admin/waste';
   static const String adminInventoryCountItems = '/admin/inventory-count/items';
   static const String adminInventoryCount = '/admin/inventory-count';
+
+  // ── الموزعون (Distributors) ──────────────────────────────────────────
+  static const String adminDistributors = '/admin/distributors';
+  static String adminDistributor(int id) => '/admin/distributors/$id';
+  static String adminDistributorIssue(int id) => '/admin/distributors/$id/issue';
+  static String adminDistributorReturn(int id) => '/admin/distributors/$id/return';
+  static String adminDistributorPayment(int id) => '/admin/distributors/$id/payment';
+  static String adminDistributorTransaction(int id, int transactionId) =>
+      '/admin/distributors/$id/transactions/$transactionId';
+  static String adminDistributorStatement(int id) => '/admin/distributors/$id/statement';
+  static String adminDistributorDailyReceipt(int id) => '/admin/distributors/$id/daily-receipt';
 }

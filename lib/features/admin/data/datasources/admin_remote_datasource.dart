@@ -256,6 +256,48 @@ abstract class AdminRemoteDataSource {
     required double amount,
     String? notes,
   });
+
+  // ── الموزعون (Distributors) ──────────────────────────────────────────
+  Future<List<DistributorModel>> fetchDistributors();
+  Future<DistributorModel> createDistributor({
+    required String name,
+    String? phone,
+    String? notes,
+  });
+  Future<DistributorTransactionModel> issueDistributorGoods({
+    required int distributorId,
+    required String transactionDate,
+    required List<Map<String, dynamic>> items,
+    String? notes,
+  });
+  Future<DistributorTransactionModel> returnDistributorGoods({
+    required int distributorId,
+    required String transactionDate,
+    required List<Map<String, dynamic>> items,
+    String? notes,
+  });
+  Future<DistributorTransactionModel> payDistributor({
+    required int distributorId,
+    required String transactionDate,
+    required double amount,
+    required int treasuryId,
+    String? notes,
+  });
+  /// Edits any past transaction (any type). [body] carries exactly the
+  /// fields AdminDistributorController::updateTransaction() expects for
+  /// that transaction's type — goods (transaction_date/items/notes) or
+  /// payment (transaction_date/amount/treasury_id/notes) — built by the
+  /// caller since only it knows which type is being edited.
+  Future<DistributorTransactionModel> updateDistributorTransaction({
+    required int distributorId,
+    required int transactionId,
+    required Map<String, dynamic> body,
+  });
+  Future<DistributorStatementModel> fetchDistributorStatement(int distributorId);
+  Future<DistributorDailyReceiptModel> fetchDistributorDailyReceipt({
+    required int distributorId,
+    required String date,
+  });
 }
 
 class AdminRemoteDataSourceImpl implements AdminRemoteDataSource {
@@ -1016,5 +1058,106 @@ class AdminRemoteDataSourceImpl implements AdminRemoteDataSource {
       'amount': amount,
       if (notes != null && notes.isNotEmpty) 'notes': notes,
     });
+  }
+
+  // ── الموزعون (Distributors) ──────────────────────────────────────────
+
+  @override
+  Future<List<DistributorModel>> fetchDistributors() async {
+    final res = await _client.dio.get(ApiEndpoints.adminDistributors);
+    final list = (res.data as Map<String, dynamic>)['data'] as List? ?? [];
+    return list.map((e) => DistributorModel.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  @override
+  Future<DistributorModel> createDistributor({
+    required String name,
+    String? phone,
+    String? notes,
+  }) async {
+    final res = await _client.dio.post(ApiEndpoints.adminDistributors, data: {
+      'name': name,
+      if (phone != null && phone.isNotEmpty) 'phone': phone,
+      if (notes != null && notes.isNotEmpty) 'notes': notes,
+    });
+    return DistributorModel.fromJson((res.data as Map<String, dynamic>)['data'] as Map<String, dynamic>);
+  }
+
+  @override
+  Future<DistributorTransactionModel> issueDistributorGoods({
+    required int distributorId,
+    required String transactionDate,
+    required List<Map<String, dynamic>> items,
+    String? notes,
+  }) async {
+    final res = await _client.dio.post(ApiEndpoints.adminDistributorIssue(distributorId), data: {
+      'transaction_date': transactionDate,
+      'items': items,
+      if (notes != null && notes.isNotEmpty) 'notes': notes,
+    });
+    return DistributorTransactionModel.fromJson((res.data as Map<String, dynamic>)['data'] as Map<String, dynamic>);
+  }
+
+  @override
+  Future<DistributorTransactionModel> returnDistributorGoods({
+    required int distributorId,
+    required String transactionDate,
+    required List<Map<String, dynamic>> items,
+    String? notes,
+  }) async {
+    final res = await _client.dio.post(ApiEndpoints.adminDistributorReturn(distributorId), data: {
+      'transaction_date': transactionDate,
+      'items': items,
+      if (notes != null && notes.isNotEmpty) 'notes': notes,
+    });
+    return DistributorTransactionModel.fromJson((res.data as Map<String, dynamic>)['data'] as Map<String, dynamic>);
+  }
+
+  @override
+  Future<DistributorTransactionModel> payDistributor({
+    required int distributorId,
+    required String transactionDate,
+    required double amount,
+    required int treasuryId,
+    String? notes,
+  }) async {
+    final res = await _client.dio.post(ApiEndpoints.adminDistributorPayment(distributorId), data: {
+      'transaction_date': transactionDate,
+      'amount': amount,
+      'treasury_id': treasuryId,
+      if (notes != null && notes.isNotEmpty) 'notes': notes,
+    });
+    return DistributorTransactionModel.fromJson((res.data as Map<String, dynamic>)['data'] as Map<String, dynamic>);
+  }
+
+  @override
+  Future<DistributorTransactionModel> updateDistributorTransaction({
+    required int distributorId,
+    required int transactionId,
+    required Map<String, dynamic> body,
+  }) async {
+    final res = await _client.dio.put(
+      ApiEndpoints.adminDistributorTransaction(distributorId, transactionId),
+      data: body,
+    );
+    return DistributorTransactionModel.fromJson((res.data as Map<String, dynamic>)['data'] as Map<String, dynamic>);
+  }
+
+  @override
+  Future<DistributorStatementModel> fetchDistributorStatement(int distributorId) async {
+    final res = await _client.dio.get(ApiEndpoints.adminDistributorStatement(distributorId));
+    return DistributorStatementModel.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  @override
+  Future<DistributorDailyReceiptModel> fetchDistributorDailyReceipt({
+    required int distributorId,
+    required String date,
+  }) async {
+    final res = await _client.dio.get(
+      ApiEndpoints.adminDistributorDailyReceipt(distributorId),
+      queryParameters: {'date': date},
+    );
+    return DistributorDailyReceiptModel.fromJson(res.data as Map<String, dynamic>);
   }
 }

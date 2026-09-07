@@ -692,6 +692,12 @@ class PayrollSummaryRowModel {
   // Whether users.sales_rep_id points at this rep — drives the "حذف نهائي"
   // action on the rep detail page. See SalesRepController::forceDestroy().
   final bool hasLinkedUser;
+  // Manual commission override (Part 2) — see CommissionOverride /
+  // SalesRepPayrollService::summary(). computedCommissionEarned is always
+  // the underlying sales-based figure, even while an override is active, so
+  // the rep detail page can offer "revert to computed value".
+  final bool isCommissionOverridden;
+  final double computedCommissionEarned;
 
   const PayrollSummaryRowModel({
     required this.repId,
@@ -706,6 +712,8 @@ class PayrollSummaryRowModel {
     required this.bonusTotal,
     required this.netPayable,
     required this.hasLinkedUser,
+    required this.isCommissionOverridden,
+    required this.computedCommissionEarned,
   });
 
   factory PayrollSummaryRowModel.fromJson(Map<String, dynamic> json) =>
@@ -724,6 +732,10 @@ class PayrollSummaryRowModel {
         bonusTotal: _asDouble(json['bonus_total']),
         netPayable: _asDouble(json['net_payable']),
         hasLinkedUser: json['has_linked_user'] as bool? ?? false,
+        isCommissionOverridden: json['is_commission_overridden'] as bool? ?? false,
+        computedCommissionEarned: json['computed_commission_earned'] == null
+            ? _asDouble(json['commission_earned'])
+            : _asDouble(json['computed_commission_earned']),
       );
 }
 

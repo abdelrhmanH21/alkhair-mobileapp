@@ -51,12 +51,17 @@ class BonusModel {
   final String date;
   final double amount;
   final String? reason;
+  // Whether this bonus has already been folded into a paid payroll record —
+  // once true it's frozen and can no longer be deleted (mirrors Penalty/
+  // Advance's is_applied/is_deducted gating on the web delete buttons).
+  final bool isApplied;
 
   const BonusModel({
     required this.id,
     required this.date,
     required this.amount,
     this.reason,
+    this.isApplied = false,
   });
 
   factory BonusModel.fromJson(Map<String, dynamic> json) => BonusModel(
@@ -64,6 +69,7 @@ class BonusModel {
         date: json['date'] as String? ?? '',
         amount: (json['amount'] as num? ?? 0).toDouble(),
         reason: json['reason'] as String?,
+        isApplied: json['is_applied'] as bool? ?? false,
       );
 }
 

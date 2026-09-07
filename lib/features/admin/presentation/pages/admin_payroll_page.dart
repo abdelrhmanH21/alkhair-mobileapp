@@ -143,7 +143,12 @@ class _RepCard extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  _MiniStat(label: 'العمولة', value: rep.commissionEarned, color: AppTheme.secondary),
+                  _MiniStat(
+                    label: 'العمولة',
+                    value: rep.commissionEarned,
+                    color: AppTheme.secondary,
+                    overridden: rep.isCommissionOverridden,
+                  ),
                   _MiniStat(label: 'الجزاءات', value: rep.penaltiesTotal, color: AppTheme.danger),
                   _MiniStat(label: 'السلف', value: rep.advancesTotal, color: AppTheme.accent),
                   _MiniStat(label: 'المكافآت', value: rep.bonusTotal, color: Colors.green),
@@ -161,13 +166,30 @@ class _MiniStat extends StatelessWidget {
   final String label;
   final double value;
   final Color color;
-  const _MiniStat({required this.label, required this.value, required this.color});
+  // Shows a small "معدّل يدويًا" indicator dot next to the value — currently
+  // only used for the commission stat (Part 2's manual override).
+  final bool overridden;
+  const _MiniStat({
+    required this.label,
+    required this.value,
+    required this.color,
+    this.overridden = false,
+  });
 
   @override
   Widget build(BuildContext context) => Column(
         children: [
-          Text(value.toStringAsFixed(0),
-              style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 13)),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(value.toStringAsFixed(0),
+                  style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 13)),
+              if (overridden) ...[
+                const SizedBox(width: 3),
+                const Icon(Icons.edit, size: 10, color: Colors.amber),
+              ],
+            ],
+          ),
           const SizedBox(height: 2),
           Text(label, style: const TextStyle(fontSize: 10, color: AppTheme.textMuted)),
         ],
@@ -192,10 +214,57 @@ class _RepPayrollDetailPageState extends State<_RepPayrollDetailPage>
   bool _targetChanged = false;
   bool _deleting = false;
 
+  // Local copy of the commission figures, seeded from the static snapshot
+  // `widget.rep` (the list row at the time this page was opened) and kept
+  // fresh here after a manual override is set/reverted — see
+  // _refreshCommission() below.
+  late double _commissionEarned = widget.rep.commissionEarned;
+  late double _computedCommissionEarned = widget.rep.computedCommissionEarned;
+  late bool _isCommissionOverridden = widget.rep.isCommissionOverridden;
+
   @override
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  // Re-fetches this rep's row from the payroll summary list (the only
+  // endpoint that exposes commission_earned/is_commission_overridden for a
+  // given month) after a commission-override change, so the header below
+  // reflects the new value without leaving this page.
+  Future<void> _refreshCommission() async {
+    try {
+      final rows = await widget.remote.fetchPayrollSummary(month: widget.month);
+      final updated = rows.where((r) => r.repId == widget.rep.repId).firstOrNull;
+      if (updated == null || !mounted) return;
+      setState(() {
+        _commissionEarned = updated.commissionEarned;
+        _computedCommissionEarned = updated.computedCommissionEarned;
+        _isCommissionOverridden = updated.isCommissionOverridden;
+      });
+    } catch (_) {
+      // Non-fatal — the header just keeps showing the pre-refresh value.
+    }
+  }
+
+  Future<void> _openEditCommission() async {
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => _EditCommissionOverrideSheet(
+        remote: widget.remote,
+        repId: widget.rep.repId,
+        repName: widget.rep.repName,
+        month: widget.month,
+        currentAmount: _commissionEarned,
+        isOverridden: _isCommissionOverridden,
+      ),
+    );
+    if (saved == true) {
+      _targetChanged = true; // reused as the generic "refresh the list on pop" flag
+      await _refreshCommission();
+      if (mounted) AppSnackbar.showSuccess(context, 'تم تحديث العمولة.');
+    }
   }
 
   // "حذف نهائي" — hard-deletes this rep and cascades every referencing
@@ -306,13 +375,61 @@ class _RepPayrollDetailPageState extends State<_RepPayrollDetailPage>
             ],
           ),
         ),
-        body: TabBarView(
-          controller: _tabController,
+        body: Column(
           children: [
-            _CommissionBreakdownTab(remote: widget.remote, repId: widget.rep.repId),
-            _RepPenaltiesTab(remote: widget.remote, repId: widget.rep.repId),
-            _RepAdvancesTab(remote: widget.remote, repId: widget.rep.repId),
-            _RepBonusesTab(remote: widget.remote, repId: widget.rep.repId),
+            // العمولة المكتسبة — computed by default, or the manually-set
+            // override for widget.month if one is active (Part 2).
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              color: _isCommissionOverridden ? Colors.amber.withValues(alpha: 0.08) : null,
+              child: Row(
+                children: [
+                  const Text('العمولة المكتسبة', style: TextStyle(fontSize: 13, color: AppTheme.textMuted)),
+                  const SizedBox(width: 6),
+                  if (_isCommissionOverridden)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.shade100,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: const Text('معدّل يدويًا',
+                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.brown)),
+                    ),
+                  const Spacer(),
+                  if (_isCommissionOverridden)
+                    Text('(المحسوب: ${_computedCommissionEarned.toStringAsFixed(0)})',
+                        style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
+                  const SizedBox(width: 8),
+                  Text(_commissionEarned.toStringAsFixed(2),
+                      style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.secondary, fontSize: 15)),
+                  IconButton(
+                    icon: const Icon(Icons.edit_outlined, size: 18),
+                    tooltip: 'تعديل العمولة يدويًا',
+                    onPressed: _openEditCommission,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            Expanded(
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  _CommissionBreakdownTab(remote: widget.remote, repId: widget.rep.repId),
+                  _RepPenaltiesTab(remote: widget.remote, repId: widget.rep.repId),
+                  _RepAdvancesTab(remote: widget.remote, repId: widget.rep.repId),
+                  _RepBonusesTab(
+                    remote: widget.remote,
+                    repId: widget.rep.repId,
+                    onChanged: () => _targetChanged = true,
+                  ),
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -494,7 +611,11 @@ class _RepAdvancesTabState extends State<_RepAdvancesTab> {
 class _RepBonusesTab extends StatefulWidget {
   final AdminRemoteDataSource remote;
   final int repId;
-  const _RepBonusesTab({required this.remote, required this.repId});
+  // Notifies the parent detail page that data changed, so it marks the
+  // rep list (one level up) for refresh on pop — same convention as
+  // _openEditCommission's use of _targetChanged.
+  final VoidCallback? onChanged;
+  const _RepBonusesTab({required this.remote, required this.repId, this.onChanged});
 
   @override
   State<_RepBonusesTab> createState() => _RepBonusesTabState();
@@ -503,6 +624,7 @@ class _RepBonusesTab extends StatefulWidget {
 class _RepBonusesTabState extends State<_RepBonusesTab> {
   List<BonusModel>? _rows;
   String? _error;
+  int? _deletingId;
 
   @override
   void initState() {
@@ -517,6 +639,48 @@ class _RepBonusesTabState extends State<_RepBonusesTab> {
       if (mounted) setState(() => _rows = rows);
     } catch (_) {
       if (mounted) setState(() => _error = 'فشل تحميل المكافآت.');
+    }
+  }
+
+  // "حذف" — mirrors _forceDelete's AlertDialog confirm pattern (the only
+  // delete-confirm convention already in this app; the web's ConfirmDialog
+  // equivalent doesn't exist on mobile for penalties/advances either).
+  Future<void> _delete(BonusModel bonus) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('حذف المكافأة'),
+        content: const Text('هل تريد حذف هذه المكافأة؟'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('حذف'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() => _deletingId = bonus.id);
+    try {
+      await widget.remote.deleteBonus(bonus.id);
+      if (!mounted) return;
+      setState(() {
+        _rows = _rows?.where((b) => b.id != bonus.id).toList();
+        _deletingId = null;
+      });
+      widget.onChanged?.call();
+      AppSnackbar.showSuccess(context, 'تم حذف المكافأة.');
+    } on DioException catch (e) {
+      if (!mounted) return;
+      setState(() => _deletingId = null);
+      AppSnackbar.showError(context, e.response?.data?['message'] as String? ?? 'فشل الحذف.');
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _deletingId = null);
+      AppSnackbar.showError(context, 'حدث خطأ غير متوقع.');
     }
   }
 
@@ -538,9 +702,27 @@ class _RepBonusesTabState extends State<_RepBonusesTab> {
           child: ListTile(
             leading: const Icon(Icons.add_circle_outline, color: Colors.green),
             title: Text(b.reason?.isNotEmpty == true ? b.reason! : 'مكافأة'),
-            subtitle: Text(b.date),
-            trailing: Text(b.amount.toStringAsFixed(2),
-                style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
+            subtitle: Text(b.isApplied ? '${b.date} · طُبِّقت في كشف الرواتب' : b.date),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(b.amount.toStringAsFixed(2),
+                    style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.green)),
+                if (!b.isApplied) ...[
+                  const SizedBox(width: 4),
+                  _deletingId == b.id
+                      ? const SizedBox(
+                          width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                      : IconButton(
+                          icon: const Icon(Icons.delete_outline, size: 20, color: AppTheme.danger),
+                          tooltip: 'حذف',
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                          onPressed: () => _delete(b),
+                        ),
+                ],
+              ],
+            ),
           ),
         );
       },
@@ -646,4 +828,157 @@ class _EditTargetSheetState extends State<_EditTargetSheet> {
       ),
     );
   }
+}
+
+// ─── Edit commission-override sheet (Part 2) ─────────────────────────────────
+
+class _EditCommissionOverrideSheet extends StatefulWidget {
+  final AdminRemoteDataSource remote;
+  final int repId;
+  final String repName;
+  final String month;
+  final double currentAmount;
+  final bool isOverridden;
+  const _EditCommissionOverrideSheet({
+    required this.remote,
+    required this.repId,
+    required this.repName,
+    required this.month,
+    required this.currentAmount,
+    required this.isOverridden,
+  });
+
+  @override
+  State<_EditCommissionOverrideSheet> createState() => _EditCommissionOverrideSheetState();
+}
+
+class _EditCommissionOverrideSheetState extends State<_EditCommissionOverrideSheet> {
+  final _formKey = GlobalKey<FormState>();
+  late final _amountCtrl = TextEditingController(text: widget.currentAmount.toStringAsFixed(2));
+  final _notesCtrl = TextEditingController();
+  bool _submitting = false;
+  bool _reverting = false;
+
+  @override
+  void dispose() {
+    _amountCtrl.dispose();
+    _notesCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+    setState(() => _submitting = true);
+    try {
+      await widget.remote.setCommissionOverride(
+        repId: widget.repId,
+        month: widget.month,
+        amount: double.parse(_amountCtrl.text.trim()),
+        notes: _notesCtrl.text.trim(),
+      );
+      if (!mounted) return;
+      Navigator.of(context).pop(true);
+    } on DioException catch (e) {
+      if (!mounted) return;
+      setState(() => _submitting = false);
+      AppSnackbar.showError(
+          context, e.response?.data?['message'] as String? ?? 'فشل حفظ العمولة.');
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _submitting = false);
+      AppSnackbar.showError(context, 'حدث خطأ غير متوقع.');
+    }
+  }
+
+  Future<void> _revert() async {
+    setState(() => _reverting = true);
+    try {
+      await widget.remote.deleteCommissionOverride(repId: widget.repId, month: widget.month);
+      if (!mounted) return;
+      Navigator.of(context).pop(true);
+    } on DioException catch (e) {
+      if (!mounted) return;
+      setState(() => _reverting = false);
+      AppSnackbar.showError(
+          context, e.response?.data?['message'] as String? ?? 'فشل الإلغاء.');
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _reverting = false);
+      AppSnackbar.showError(context, 'حدث خطأ غير متوقع.');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+        left: 16,
+        right: 16,
+        top: 16,
+      ),
+      child: SingleChildScrollView(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('تعديل العمولة يدويًا — ${widget.repName}',
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              const SizedBox(height: 4),
+              Text('الشهر: ${widget.month} — لن يؤثر هذا التعديل على أي شهر آخر.',
+                  style: const TextStyle(fontSize: 12, color: AppTheme.textMuted)),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _amountCtrl,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: const InputDecoration(labelText: 'العمولة المكتسبة (ج.م)'),
+                validator: (v) {
+                  final amount = double.tryParse(v ?? '');
+                  if (amount == null || amount < 0) return 'قيمة غير صحيحة';
+                  return null;
+                },
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _notesCtrl,
+                decoration: const InputDecoration(labelText: 'سبب / ملاحظة (اختياري)'),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                height: 50,
+                child: ElevatedButton(
+                  onPressed: _submitting || _reverting ? null : _submit,
+                  child: _submitting
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Text('حفظ التعديل'),
+                ),
+              ),
+              if (widget.isOverridden) ...[
+                const SizedBox(height: 10),
+                SizedBox(
+                  height: 46,
+                  child: OutlinedButton(
+                    onPressed: _submitting || _reverting ? null : _revert,
+                    child: _reverting
+                        ? const SizedBox(
+                            width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Text('الرجوع للقيمة المحسوبة تلقائيًا'),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 20),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+extension _FirstOrNull<T> on Iterable<T> {
+  T? get firstOrNull => isEmpty ? null : first;
 }

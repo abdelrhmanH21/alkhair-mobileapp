@@ -122,6 +122,19 @@ abstract class AdminRemoteDataSource {
   Future<void> forceDeleteRep(int repId);
   Future<List<PenaltyModel>> fetchRepPenalties(int repId);
   Future<List<BonusModel>> fetchRepBonuses(int repId);
+  // Mirrors the web "حذف" action on the bonus row — the mobile-reachable
+  // counterpart AdminStaffOperationController::destroy() provides (there is
+  // no such route for penalties/advances yet, only bonuses).
+  Future<void> deleteBonus(int bonusId);
+  // Manual commission override for one rep+month (Part 2). setCommissionOverride
+  // creates/updates it; deleteCommissionOverride reverts to the computed value.
+  Future<void> setCommissionOverride({
+    required int repId,
+    required String month,
+    required double amount,
+    String? notes,
+  });
+  Future<void> deleteCommissionOverride({required int repId, required String month});
 
   // ── Settlement history (سجل التسويات) ──────────────────────────────────
   Future<SettlementRecordPageModel> fetchSettlementHistory({
@@ -677,6 +690,36 @@ class AdminRemoteDataSourceImpl implements AdminRemoteDataSource {
     );
     final list = (res.data as Map<String, dynamic>)['data'] as List? ?? [];
     return list.map((e) => BonusModel.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  @override
+  Future<void> deleteBonus(int bonusId) async {
+    await _client.dio.delete(
+      ApiEndpoints.adminStaffOperation(bonusId),
+      queryParameters: {'type': 'bonus'},
+    );
+  }
+
+  @override
+  Future<void> setCommissionOverride({
+    required int repId,
+    required String month,
+    required double amount,
+    String? notes,
+  }) async {
+    await _client.dio.put(ApiEndpoints.adminCommissionOverride(repId), data: {
+      'month': month,
+      'amount': amount,
+      if (notes != null && notes.isNotEmpty) 'notes': notes,
+    });
+  }
+
+  @override
+  Future<void> deleteCommissionOverride({required int repId, required String month}) async {
+    await _client.dio.delete(
+      ApiEndpoints.adminCommissionOverride(repId),
+      queryParameters: {'month': month},
+    );
   }
 
   @override

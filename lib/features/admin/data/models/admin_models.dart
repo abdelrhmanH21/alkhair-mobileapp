@@ -1791,6 +1791,10 @@ class DistributorTransactionModel {
   final String? warehouseName;
   final String? treasuryName;
   final int? treasuryId;
+  // Only set for type == 'payment': 'cash' | 'bank_transfer' | 'wallet_transfer'
+  // — distinct from treasuryId (WHICH treasury received the money), the
+  // admin chooses both independently. Matches the backend enum verbatim.
+  final String? paymentMethod;
   final String? createdByName;
   final List<DistributorTransactionItemModel> items;
 
@@ -1804,6 +1808,7 @@ class DistributorTransactionModel {
     required this.warehouseName,
     required this.treasuryName,
     required this.treasuryId,
+    required this.paymentMethod,
     required this.createdByName,
     required this.items,
   });
@@ -1824,6 +1829,7 @@ class DistributorTransactionModel {
       warehouseName: warehouse?['name'] as String?,
       treasuryName: treasury?['name'] as String?,
       treasuryId: treasury?['id'] as int?,
+      paymentMethod: json['payment_method'] as String?,
       createdByName: createdBy?['name'] as String?,
       items: (json['items'] as List? ?? [])
           .map((e) => DistributorTransactionItemModel.fromJson(e as Map<String, dynamic>))

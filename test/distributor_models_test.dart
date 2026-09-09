@@ -57,7 +57,7 @@ void main() {
       expect(model.createdByName, 'Admin');
     });
 
-    test('payment transaction is not isGoods and carries treasury info', () {
+    test('payment transaction is not isGoods and carries treasury + payment_method info', () {
       final model = DistributorTransactionModel.fromJson({
         'id': 11,
         'type': 'payment',
@@ -67,6 +67,7 @@ void main() {
         'notes': 'دفعة نقدية',
         'warehouse': null,
         'treasury': {'id': 3, 'name': 'الخزينة الرئيسية'},
+        'payment_method': 'wallet_transfer',
         'created_by': null,
         'items': [],
       });
@@ -74,6 +75,8 @@ void main() {
       expect(model.isGoods, isFalse);
       expect(model.treasuryId, 3);
       expect(model.treasuryName, 'الخزينة الرئيسية');
+      // payment_method is captured as its own field, independent of treasury.
+      expect(model.paymentMethod, 'wallet_transfer');
       expect(model.notes, 'دفعة نقدية');
       expect(model.items, isEmpty);
     });

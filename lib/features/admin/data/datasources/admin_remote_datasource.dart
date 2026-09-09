@@ -294,13 +294,14 @@ abstract class AdminRemoteDataSource {
     required String transactionDate,
     required double amount,
     required int treasuryId,
+    required String paymentMethod,
     String? notes,
   });
   /// Edits any past transaction (any type). [body] carries exactly the
   /// fields AdminDistributorController::updateTransaction() expects for
   /// that transaction's type — goods (transaction_date/items/notes) or
-  /// payment (transaction_date/amount/treasury_id/notes) — built by the
-  /// caller since only it knows which type is being edited.
+  /// payment (transaction_date/amount/treasury_id/payment_method/notes) —
+  /// built by the caller since only it knows which type is being edited.
   Future<DistributorTransactionModel> updateDistributorTransaction({
     required int distributorId,
     required int transactionId,
@@ -1162,12 +1163,14 @@ class AdminRemoteDataSourceImpl implements AdminRemoteDataSource {
     required String transactionDate,
     required double amount,
     required int treasuryId,
+    required String paymentMethod,
     String? notes,
   }) async {
     final res = await _client.dio.post(ApiEndpoints.adminDistributorPayment(distributorId), data: {
       'transaction_date': transactionDate,
       'amount': amount,
       'treasury_id': treasuryId,
+      'payment_method': paymentMethod,
       if (notes != null && notes.isNotEmpty) 'notes': notes,
     });
     return DistributorTransactionModel.fromJson((res.data as Map<String, dynamic>)['data'] as Map<String, dynamic>);

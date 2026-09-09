@@ -19,6 +19,20 @@ const Map<String, String> _typeLabels = {
   'goods_returned': 'استرجاع بضاعة',
   'payment': 'دفعة',
 };
+const Map<String, String> _paymentMethodLabels = {
+  'cash': 'نقدي',
+  'bank_transfer': 'تحويل بنكي',
+  'wallet_transfer': 'تحويل محفظة إلكترونية',
+};
+/// Print-only label for a transaction row's "النوع" cell — a payment row
+/// shows its actual payment method (نقدي/تحويل بنكي/تحويل محفظة إلكترونية)
+/// instead of the generic "دفعة", mirroring the web print's printTypeLabel().
+String _printTypeLabel(DistributorTransactionModel tx) {
+  if (tx.type == 'payment' && tx.paymentMethod != null) {
+    return _paymentMethodLabels[tx.paymentMethod] ?? tx.paymentMethod!;
+  }
+  return _typeLabels[tx.type] ?? tx.type;
+}
 
 /// كشف حساب موزع + الإجراءات الثلاثة المستقلة (تسليم/استرجاع بضاعة، تسجيل
 /// دفعة) + تعديل حركة سابقة. Mirrors AdminDistributorController's endpoints
@@ -159,7 +173,7 @@ class _DistributorDetailPageState extends State<DistributorDetailPage> {
         editing: editing,
         treasuries: _treasuries,
         defaultDate: _selectedDate,
-        onSubmit: (transactionDate, amount, treasuryId, notes) async {
+        onSubmit: (transactionDate, amount, treasuryId, paymentMethod, notes) async {
           try {
             if (editing != null) {
               await _remote.updateDistributorTransaction(
@@ -169,6 +183,7 @@ class _DistributorDetailPageState extends State<DistributorDetailPage> {
                   'transaction_date': transactionDate,
                   'amount': amount,
                   'treasury_id': treasuryId,
+                  'payment_method': paymentMethod,
                   if (notes != null) 'notes': notes,
                 },
               );
@@ -178,6 +193,7 @@ class _DistributorDetailPageState extends State<DistributorDetailPage> {
                 transactionDate: transactionDate,
                 amount: amount,
                 treasuryId: treasuryId,
+                paymentMethod: paymentMethod,
                 notes: notes,
               );
             }
@@ -221,7 +237,7 @@ class _DistributorDetailPageState extends State<DistributorDetailPage> {
       rows: rows
           .map((tx) => [
                 tx.transactionDate,
-                _typeLabels[tx.type] ?? tx.type,
+                _printTypeLabel(tx),
                 tx.isGoods
                     ? tx.items.map((i) => '${i.productName} ×${i.quantity.toStringAsFixed(2)}').join('، ')
                     : 'خزينة: ${tx.treasuryName ?? '-'}',
@@ -653,7 +669,7 @@ class _PaymentFormSheet extends StatefulWidget {
   final DistributorTransactionModel? editing;
   final List<TreasuryModel> treasuries;
   final DateTime defaultDate;
-  final void Function(String transactionDate, double amount, int treasuryId, String? notes) onSubmit;
+  final void Function(String transactionDate, double amount, int treasuryId, String paymentMethod, String? notes) onSubmit;
   const _PaymentFormSheet({required this.editing, required this.treasuries, required this.defaultDate, required this.onSubmit});
 
   @override
@@ -665,6 +681,7 @@ class _PaymentFormSheetState extends State<_PaymentFormSheet> {
   final _amountCtrl = TextEditingController();
   final _notesCtrl = TextEditingController();
   int? _treasuryId;
+  String? _paymentMethod;
   bool _submitting = false;
 
   @override
@@ -674,6 +691,7 @@ class _PaymentFormSheetState extends State<_PaymentFormSheet> {
     _amountCtrl.text = widget.editing != null ? widget.editing!.amount.toStringAsFixed(2) : '';
     _notesCtrl.text = widget.editing?.notes ?? '';
     _treasuryId = widget.editing?.treasuryId ?? (widget.treasuries.isNotEmpty ? widget.treasuries.first.id : null);
+    _paymentMethod = widget.editing?.paymentMethod;
   }
 
   @override
@@ -699,8 +717,12 @@ class _PaymentFormSheetState extends State<_PaymentFormSheet> {
       AppSnackbar.showError(context, 'يرجى اختيار الخزينة.');
       return;
     }
+    if (_paymentMethod == null) {
+      AppSnackbar.showError(context, 'يرجى اختيار نوع الدفع.');
+      return;
+    }
     setState(() => _submitting = true);
-    widget.onSubmit(_fmt.format(_date), amount, _treasuryId!, _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim());
+    widget.onSubmit(_fmt.format(_date), amount, _treasuryId!, _paymentMethod!, _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim());
   }
 
   @override
@@ -734,6 +756,16 @@ class _PaymentFormSheetState extends State<_PaymentFormSheet> {
             decoration: const InputDecoration(labelText: 'الخزينة'),
             items: widget.treasuries.map((t) => DropdownMenuItem(value: t.id, child: Text(t.name))).toList(),
             onChanged: (v) => setState(() => _treasuryId = v),
+          ),
+          const SizedBox(height: 10),
+          DropdownButtonFormField<String>(
+            initialValue: _paymentMethod,
+            isExpanded: true,
+            decoration: const InputDecoration(labelText: 'نوع الدفع'),
+            items: _paymentMethodLabels.entries
+                .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
+                .toList(),
+            onChanged: (v) => setState(() => _paymentMethod = v),
           ),
           const SizedBox(height: 10),
           TextField(controller: _notesCtrl, maxLines: 2, decoration: const InputDecoration(labelText: 'ملاحظات (اختياري)')),

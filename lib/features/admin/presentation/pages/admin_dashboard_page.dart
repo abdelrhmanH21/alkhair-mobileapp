@@ -663,6 +663,7 @@ class _WorkingCapitalSection extends StatelessWidget {
       _WcComponent('نقدية بالخزائن', breakdown.cash, AppTheme.primary),
       _WcComponent('مواد خام', breakdown.rawMaterials, AppTheme.secondary),
       _WcComponent('منتجات تامة', breakdown.finishedGoods, AppTheme.accent),
+      _WcComponent('مخزون الشحن (عند المناديب)', breakdown.truckStock, Colors.indigo),
       _WcComponent('ذمم مدينة (عملاء وموزعين)', breakdown.receivables, Colors.teal),
     ].where((c) => c.value > 0).toList();
     final componentsTotal = components.fold<double>(0, (s, c) => s + c.value);

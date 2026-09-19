@@ -113,6 +113,7 @@ class WorkingCapitalBreakdownModel {
   final double cash;
   final double rawMaterials;
   final double finishedGoods;
+  final double truckStock;
   final double inventoryValue;
   final double receivables;
   final double payrollPaidToDate;
@@ -122,6 +123,7 @@ class WorkingCapitalBreakdownModel {
     required this.cash,
     required this.rawMaterials,
     required this.finishedGoods,
+    required this.truckStock,
     required this.inventoryValue,
     required this.receivables,
     required this.payrollPaidToDate,
@@ -133,6 +135,7 @@ class WorkingCapitalBreakdownModel {
         cash: _asDouble(json['cash']),
         rawMaterials: _asDouble(json['raw_materials']),
         finishedGoods: _asDouble(json['finished_goods']),
+        truckStock: _asDouble(json['truck_stock']),
         inventoryValue: _asDouble(json['inventory_value']),
         receivables: _asDouble(json['receivables']),
         payrollPaidToDate: _asDouble(json['payroll_paid_to_date']),

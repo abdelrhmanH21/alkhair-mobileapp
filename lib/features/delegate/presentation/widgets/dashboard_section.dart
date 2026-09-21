@@ -3,6 +3,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/widgets/progress_ring.dart';
 import '../../../../core/widgets/state_views.dart';
+import '../../../auth/presentation/bloc/auth_bloc.dart';
+import '../../../auth/presentation/bloc/auth_state.dart';
 import '../bloc/delegate_bloc.dart';
 import '../bloc/delegate_event.dart';
 import '../bloc/delegate_state.dart';
@@ -12,6 +14,7 @@ import '../pages/penalties_page.dart';
 import '../pages/advances_page.dart';
 import '../pages/bonuses_page.dart';
 import '../pages/commission_breakdown_page.dart';
+import 'price_variance_dashboard_section.dart';
 
 /// Reusable delegate-performance dashboard. Self-contained: dispatches its own
 /// fetch and owns its own loading/error/data lifecycle, so it can be dropped
@@ -48,6 +51,13 @@ class _DashboardSectionState extends State<DashboardSection> {
   @override
   void initState() {
     super.initState();
+    // A free-pricing delegate never needs this fetch at all — build() below
+    // replaces this whole widget with PriceVarianceDashboardSection, which
+    // does its own fetch instead.
+    final authState = context.read<AuthBloc>().state;
+    if (authState is AuthAuthenticated && authState.user.isFreePricingDelegate) {
+      return;
+    }
     final cached = context.read<DelegateBloc>().getCachedDashboard();
     if (cached != null) {
       _dashboard = cached;
@@ -69,6 +79,15 @@ class _DashboardSectionState extends State<DashboardSection> {
 
   @override
   Widget build(BuildContext context) {
+    // "مندوب حر السعر" — replaces this entire target/commission dashboard
+    // with the price-variance self-service view. Every OTHER delegate
+    // (is_free_pricing_delegate=false, the overwhelming majority) is
+    // completely unaffected below this check.
+    final authState = context.watch<AuthBloc>().state;
+    if (authState is AuthAuthenticated && authState.user.isFreePricingDelegate) {
+      return const PriceVarianceDashboardSection();
+    }
+
     return BlocListener<DelegateBloc, DelegateState>(
       listener: (_, state) {
         if (state is DelegateDashboardLoaded) {

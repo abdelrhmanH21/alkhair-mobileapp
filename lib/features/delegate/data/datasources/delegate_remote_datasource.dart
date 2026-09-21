@@ -14,6 +14,7 @@ import '../models/breakdown_models.dart';
 import '../models/transaction_record_models.dart';
 import '../models/report_models.dart';
 import '../models/customer_invoice_history_model.dart';
+import '../models/price_variance_models.dart';
 
 abstract class DelegateRemoteDataSource {
   Future<LoadingModel?> fetchCurrentLoading();
@@ -63,6 +64,9 @@ abstract class DelegateRemoteDataSource {
   Future<List<AdvanceModel>> fetchAdvances();
   Future<List<BonusModel>> fetchBonuses();
   Future<List<CommissionDayModel>> fetchCommissionBreakdown();
+  /// "مندوب حر السعر" self-service — replaces fetchDashboard() entirely for
+  /// this delegate type. See DelegateDashboardController::priceVarianceSummary().
+  Future<PriceVarianceSummaryModel> fetchPriceVarianceSummary();
   Future<String> submitExpense({
     required double amount,
     required String description,
@@ -318,6 +322,12 @@ class DelegateRemoteDataSourceImpl implements DelegateRemoteDataSource {
     final res = await _client.dio.get(ApiEndpoints.delegateCommissionBreakdown);
     final list = res.data['data'] as List? ?? [];
     return list.map((e) => CommissionDayModel.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  @override
+  Future<PriceVarianceSummaryModel> fetchPriceVarianceSummary() async {
+    final res = await _client.dio.get(ApiEndpoints.delegatePriceVarianceSummary);
+    return PriceVarianceSummaryModel.fromJson(res.data['data'] as Map<String, dynamic>);
   }
 
   @override

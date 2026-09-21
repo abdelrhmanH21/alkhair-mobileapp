@@ -210,7 +210,12 @@ class _RepPayrollDetailPage extends StatefulWidget {
 
 class _RepPayrollDetailPageState extends State<_RepPayrollDetailPage>
     with SingleTickerProviderStateMixin {
-  late final TabController _tabController = TabController(length: 4, vsync: this);
+  // Not `late final` — recreated by _toggleFreePricing() below, since the
+  // tab COUNT itself differs between a normal rep (4 tabs) and a
+  // "مندوب حر السعر" rep (5 tabs: reference prices + variance ledger
+  // replace the target/commission-oriented tab).
+  late TabController _tabController =
+      TabController(length: widget.rep.isFreePricingDelegate ? 5 : 4, vsync: this);
   bool _targetChanged = false;
   bool _deleting = false;
 
@@ -222,10 +227,53 @@ class _RepPayrollDetailPageState extends State<_RepPayrollDetailPage>
   late double _computedCommissionEarned = widget.rep.computedCommissionEarned;
   late bool _isCommissionOverridden = widget.rep.isCommissionOverridden;
 
+  // "مندوب حر السعر" toggle + balance — same seed-then-refresh pattern.
+  late bool _isFreePricingDelegate = widget.rep.isFreePricingDelegate;
+  late double _priceVarianceBalance = widget.rep.priceVarianceBalance;
+  bool _togglingType = false;
+
   @override
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  Future<void> _toggleFreePricing(bool value) async {
+    setState(() => _togglingType = true);
+    try {
+      await widget.remote.toggleFreePricingDelegate(repId: widget.rep.repId, isFreePricingDelegate: value);
+      if (!mounted) return;
+      // Dispose the OLD controller BEFORE creating the new one —
+      // SingleTickerProviderStateMixin allows only one active ticker at a
+      // time, so a moment where both exist throws.
+      _tabController.dispose();
+      setState(() {
+        _isFreePricingDelegate = value;
+        _tabController = TabController(length: value ? 5 : 4, vsync: this);
+        _togglingType = false;
+        _targetChanged = true;
+      });
+      if (mounted) AppSnackbar.showSuccess(context, 'تم تحديث نوع المندوب.');
+    } on DioException catch (e) {
+      if (!mounted) return;
+      setState(() => _togglingType = false);
+      AppSnackbar.showError(context, e.response?.data?['message'] as String? ?? 'فشل التحديث.');
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _togglingType = false);
+      AppSnackbar.showError(context, 'حدث خطأ غير متوقع.');
+    }
+  }
+
+  Future<void> _refreshPriceVarianceBalance() async {
+    try {
+      final rows = await widget.remote.fetchPayrollSummary(month: widget.month);
+      final updated = rows.where((r) => r.repId == widget.rep.repId).firstOrNull;
+      if (updated == null || !mounted) return;
+      setState(() => _priceVarianceBalance = updated.priceVarianceBalance);
+    } catch (_) {
+      // Non-fatal — the header just keeps showing the pre-refresh value.
+    }
   }
 
   // Re-fetches this rep's row from the payroll summary list (the only
@@ -345,11 +393,15 @@ class _RepPayrollDetailPageState extends State<_RepPayrollDetailPage>
         appBar: AppBar(
           title: Text(widget.rep.repName),
           actions: [
-            IconButton(
-              icon: const Icon(Icons.flag_outlined),
-              tooltip: 'تعديل الهدف',
-              onPressed: _openEditTarget,
-            ),
+            // Target-setting is not applicable to a "مندوب حر السعر" rep
+            // (no fixed_salary/commission at all — see
+            // SalesRepPayrollService) — hidden entirely for that rep type.
+            if (!_isFreePricingDelegate)
+              IconButton(
+                icon: const Icon(Icons.flag_outlined),
+                tooltip: 'تعديل الهدف',
+                onPressed: _openEditTarget,
+              ),
             IconButton(
               icon: _deleting
                   ? const SizedBox(
@@ -367,67 +419,122 @@ class _RepPayrollDetailPageState extends State<_RepPayrollDetailPage>
             labelColor: Colors.white,
             unselectedLabelColor: Colors.white70,
             indicatorColor: Colors.white,
-            tabs: const [
-              Tab(text: 'العمولة اليومية'),
-              Tab(text: 'الجزاءات'),
-              Tab(text: 'السلف'),
-              Tab(text: 'المكافآت'),
-            ],
+            tabs: _isFreePricingDelegate
+                ? const [
+                    Tab(text: 'الأسعار المرجعية'),
+                    Tab(text: 'فروقات الأسعار'),
+                    Tab(text: 'الجزاءات'),
+                    Tab(text: 'السلف'),
+                    Tab(text: 'المكافآت'),
+                  ]
+                : const [
+                    Tab(text: 'العمولة اليومية'),
+                    Tab(text: 'الجزاءات'),
+                    Tab(text: 'السلف'),
+                    Tab(text: 'المكافآت'),
+                  ],
           ),
         ),
         body: Column(
           children: [
-            // العمولة المكتسبة — computed by default, or the manually-set
-            // override for widget.month if one is active (Part 2).
+            // "مندوب حر السعر" toggle — always visible, whichever way it's
+            // currently set, so admin can flip it either direction here.
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              color: _isCommissionOverridden ? Colors.amber.withValues(alpha: 0.08) : null,
-              child: Row(
-                children: [
-                  const Text('العمولة المكتسبة', style: TextStyle(fontSize: 13, color: AppTheme.textMuted)),
-                  const SizedBox(width: 6),
-                  if (_isCommissionOverridden)
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: Colors.amber.shade100,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: const Text('معدّل يدويًا',
-                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.brown)),
-                    ),
-                  const Spacer(),
-                  if (_isCommissionOverridden)
-                    Text('(المحسوب: ${_computedCommissionEarned.toStringAsFixed(0)})',
-                        style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
-                  const SizedBox(width: 8),
-                  Text(_commissionEarned.toStringAsFixed(2),
-                      style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.secondary, fontSize: 15)),
-                  IconButton(
-                    icon: const Icon(Icons.edit_outlined, size: 18),
-                    tooltip: 'تعديل العمولة يدويًا',
-                    onPressed: _openEditCommission,
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                  ),
-                ],
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              color: _isFreePricingDelegate ? Colors.purple.withValues(alpha: 0.06) : null,
+              child: SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                title: const Text('مندوب حر السعر', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                subtitle: const Text('بدون راتب أو عمولة — التعويض من فروقات الأسعار فقط',
+                    style: TextStyle(fontSize: 11, color: AppTheme.textMuted)),
+                value: _isFreePricingDelegate,
+                onChanged: _togglingType ? null : _toggleFreePricing,
               ),
             ),
+            const Divider(height: 1),
+            // Summary bar — فروقات الأسعار balance for a free-pricing rep,
+            // العمولة المكتسبة (with manual override, Part 2) otherwise.
+            if (_isFreePricingDelegate)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                child: Row(
+                  children: [
+                    const Text('المستحق (فروقات الأسعار)', style: TextStyle(fontSize: 13, color: AppTheme.textMuted)),
+                    const Spacer(),
+                    Text(_priceVarianceBalance.toStringAsFixed(2),
+                        style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.secondary, fontSize: 15)),
+                  ],
+                ),
+              )
+            else
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                color: _isCommissionOverridden ? Colors.amber.withValues(alpha: 0.08) : null,
+                child: Row(
+                  children: [
+                    const Text('العمولة المكتسبة', style: TextStyle(fontSize: 13, color: AppTheme.textMuted)),
+                    const SizedBox(width: 6),
+                    if (_isCommissionOverridden)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.shade100,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: const Text('معدّل يدويًا',
+                            style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.brown)),
+                      ),
+                    const Spacer(),
+                    if (_isCommissionOverridden)
+                      Text('(المحسوب: ${_computedCommissionEarned.toStringAsFixed(0)})',
+                          style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
+                    const SizedBox(width: 8),
+                    Text(_commissionEarned.toStringAsFixed(2),
+                        style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.secondary, fontSize: 15)),
+                    IconButton(
+                      icon: const Icon(Icons.edit_outlined, size: 18),
+                      tooltip: 'تعديل العمولة يدويًا',
+                      onPressed: _openEditCommission,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                    ),
+                  ],
+                ),
+              ),
             const Divider(height: 1),
             Expanded(
               child: TabBarView(
                 controller: _tabController,
-                children: [
-                  _CommissionBreakdownTab(remote: widget.remote, repId: widget.rep.repId),
-                  _RepPenaltiesTab(remote: widget.remote, repId: widget.rep.repId),
-                  _RepAdvancesTab(remote: widget.remote, repId: widget.rep.repId),
-                  _RepBonusesTab(
-                    remote: widget.remote,
-                    repId: widget.rep.repId,
-                    onChanged: () => _targetChanged = true,
-                  ),
-                ],
+                children: _isFreePricingDelegate
+                    ? [
+                        _ReferencePricesTab(remote: widget.remote, repId: widget.rep.repId),
+                        _PriceVarianceTab(
+                          remote: widget.remote,
+                          repId: widget.rep.repId,
+                          onChanged: _refreshPriceVarianceBalance,
+                        ),
+                        _RepPenaltiesTab(remote: widget.remote, repId: widget.rep.repId),
+                        _RepAdvancesTab(remote: widget.remote, repId: widget.rep.repId),
+                        _RepBonusesTab(
+                          remote: widget.remote,
+                          repId: widget.rep.repId,
+                          onChanged: () => _targetChanged = true,
+                        ),
+                      ]
+                    : [
+                        _CommissionBreakdownTab(remote: widget.remote, repId: widget.rep.repId),
+                        _RepPenaltiesTab(remote: widget.remote, repId: widget.rep.repId),
+                        _RepAdvancesTab(remote: widget.remote, repId: widget.rep.repId),
+                        _RepBonusesTab(
+                          remote: widget.remote,
+                          repId: widget.rep.repId,
+                          onChanged: () => _targetChanged = true,
+                        ),
+                      ],
               ),
             ),
           ],
@@ -726,6 +833,416 @@ class _RepBonusesTabState extends State<_RepBonusesTab> {
           ),
         );
       },
+    );
+  }
+}
+
+// ─── الأسعار المرجعية (مندوب حر السعر) ────────────────────────────────────────
+
+class _ReferencePricesTab extends StatefulWidget {
+  final AdminRemoteDataSource remote;
+  final int repId;
+  const _ReferencePricesTab({required this.remote, required this.repId});
+
+  @override
+  State<_ReferencePricesTab> createState() => _ReferencePricesTabState();
+}
+
+class _ReferencePricesTabState extends State<_ReferencePricesTab> {
+  List<FreePricingReferencePriceModel>? _rows;
+  List<SimpleProductModel> _products = [];
+  String? _error;
+  SimpleProductModel? _selectedProduct;
+  final _priceCtrl = TextEditingController();
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _priceCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    setState(() => _error = null);
+    try {
+      final results = await Future.wait([
+        widget.remote.fetchFreePricingReferencePrices(widget.repId),
+        widget.remote.fetchProducts(),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _rows = results[0] as List<FreePricingReferencePriceModel>;
+        _products = results[1] as List<SimpleProductModel>;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _error = 'فشل تحميل الأسعار المرجعية.');
+    }
+  }
+
+  Future<void> _save() async {
+    final product = _selectedProduct;
+    final price = double.tryParse(_priceCtrl.text);
+    if (product == null || price == null || price < 0) {
+      AppSnackbar.showError(context, 'يرجى اختيار منتج وإدخال سعر صحيح.');
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      final rows = await widget.remote.setFreePricingReferencePrices(
+        repId: widget.repId,
+        prices: [
+          {'product_id': product.id, 'reference_price': price},
+        ],
+      );
+      if (!mounted) return;
+      setState(() {
+        _rows = rows;
+        _saving = false;
+        _selectedProduct = null;
+        _priceCtrl.clear();
+      });
+      AppSnackbar.showSuccess(context, 'تم حفظ السعر المرجعي.');
+    } on DioException catch (e) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      AppSnackbar.showError(context, e.response?.data?['message'] as String? ?? 'فشل الحفظ.');
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _saving = false);
+      AppSnackbar.showError(context, 'حدث خطأ غير متوقع.');
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_error != null) return AppErrorView(message: _error!, onRetry: _load);
+    if (_rows == null) return const Center(child: CircularProgressIndicator());
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                flex: 3,
+                child: DropdownButtonFormField<SimpleProductModel>(
+                  initialValue: _selectedProduct,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: 'المنتج', isDense: true),
+                  items: _products.map((p) => DropdownMenuItem(value: p, child: Text(p.name))).toList(),
+                  onChanged: (p) => setState(() => _selectedProduct = p),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                flex: 2,
+                child: TextField(
+                  controller: _priceCtrl,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(labelText: 'السعر المرجعي', isDense: true),
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton.filled(
+                onPressed: _saving ? null : _save,
+                icon: _saving
+                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                    : const Icon(Icons.check),
+              ),
+            ],
+          ),
+        ),
+        const Divider(height: 1),
+        Expanded(
+          child: _rows!.isEmpty
+              ? const Center(
+                  child: Text('لا توجد أسعار مرجعية بعد.', style: TextStyle(color: AppTheme.textMuted)))
+              : ListView.builder(
+                  padding: const EdgeInsets.all(12),
+                  itemCount: _rows!.length,
+                  itemBuilder: (_, i) {
+                    final rp = _rows![i];
+                    return Card(
+                      margin: const EdgeInsets.symmetric(vertical: 4),
+                      child: ListTile(
+                        leading: const Icon(Icons.shopping_bag_outlined, color: AppTheme.primary),
+                        title: Text(rp.productName),
+                        subtitle: Text(rp.productUnit),
+                        trailing: Text(rp.referencePrice.toStringAsFixed(2),
+                            style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primary)),
+                        onTap: () {
+                          final product = _products.where((p) => p.id == rp.productId).firstOrNull;
+                          setState(() {
+                            _selectedProduct = product;
+                            _priceCtrl.text = rp.referencePrice.toStringAsFixed(2);
+                          });
+                        },
+                      ),
+                    );
+                  },
+                ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─── فروقات الأسعار (مندوب حر السعر) ───────────────────────────────────────────
+
+class _PriceVarianceTab extends StatefulWidget {
+  final AdminRemoteDataSource remote;
+  final int repId;
+  final VoidCallback? onChanged;
+  const _PriceVarianceTab({required this.remote, required this.repId, this.onChanged});
+
+  @override
+  State<_PriceVarianceTab> createState() => _PriceVarianceTabState();
+}
+
+class _PriceVarianceTabState extends State<_PriceVarianceTab> {
+  PriceVarianceStatementModel? _statement;
+  List<TreasuryModel> _treasuries = [];
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() => _error = null);
+    try {
+      final results = await Future.wait([
+        widget.remote.fetchPriceVarianceStatement(widget.repId),
+        widget.remote.fetchTreasuries(),
+      ]);
+      if (!mounted) return;
+      setState(() {
+        _statement = results[0] as PriceVarianceStatementModel;
+        _treasuries = results[1] as List<TreasuryModel>;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _error = 'فشل تحميل كشف فروقات الأسعار.');
+    }
+  }
+
+  void _openPayoutSheet() {
+    if (_treasuries.isEmpty) {
+      AppSnackbar.showError(context, 'جاري تحميل بيانات الخزائن، حاول بعد قليل.');
+      return;
+    }
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => _PayoutFormSheet(
+        treasuries: _treasuries,
+        onSubmit: (amount, treasuryId, notes) async {
+          try {
+            await widget.remote.payoutPriceVariance(
+              repId: widget.repId, amount: amount, treasuryId: treasuryId, notes: notes,
+            );
+            if (!mounted) return;
+            Navigator.pop(context);
+            AppSnackbar.showSuccess(context, 'تم صرف المستحق بنجاح.');
+            await _load();
+            widget.onChanged?.call();
+          } on DioException catch (e) {
+            if (!mounted) return;
+            AppSnackbar.showError(context, e.response?.data?['message'] as String? ?? 'فشل الصرف.');
+          } catch (_) {
+            if (!mounted) return;
+            AppSnackbar.showError(context, 'حدث خطأ غير متوقع.');
+          }
+        },
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_error != null) return AppErrorView(message: _error!, onRetry: _load);
+    final statement = _statement;
+    if (statement == null) return const Center(child: CircularProgressIndicator());
+
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView(
+        padding: const EdgeInsets.all(12),
+        children: [
+          Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: AppTheme.secondary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('المستحق للمندوب', style: TextStyle(fontWeight: FontWeight.w600)),
+                Text(statement.priceVarianceBalance.toStringAsFixed(2),
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppTheme.secondary)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          ElevatedButton.icon(
+            onPressed: _openPayoutSheet,
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.secondary),
+            icon: const Icon(Icons.payments_outlined, size: 16),
+            label: const Text('صرف مستحقات فروقات الأسعار'),
+          ),
+          const SizedBox(height: 14),
+          if (statement.transactions.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 20),
+              child: Center(child: Text('لا توجد حركات بعد.', style: TextStyle(color: AppTheme.textMuted))),
+            )
+          else
+            ...statement.transactions.reversed.map((tx) => _VarianceTxCard(tx: tx)),
+        ],
+      ),
+    );
+  }
+}
+
+class _VarianceTxCard extends StatelessWidget {
+  final PriceVarianceTransactionModel tx;
+  const _VarianceTxCard({required this.tx});
+
+  @override
+  Widget build(BuildContext context) {
+    final isAccrual = tx.type == 'accrual';
+    final color = isAccrual ? (tx.amount >= 0 ? AppTheme.secondary : AppTheme.danger) : AppTheme.accent;
+    final detail = isAccrual
+        ? 'فاتورة ${tx.invoiceNumber ?? '-'}${tx.customerName != null ? ' — ${tx.customerName}' : ''}'
+        : (tx.notes?.isNotEmpty == true ? tx.notes! : 'صرف مستحقات');
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
+                  child: Text(isAccrual ? 'فرق سعر بيع' : 'صرف',
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: color)),
+                ),
+                Text('${tx.amount >= 0 ? '+' : ''}${tx.amount.toStringAsFixed(2)}',
+                    style: TextStyle(fontWeight: FontWeight.bold, color: color)),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(detail, style: const TextStyle(fontSize: 12)),
+            const SizedBox(height: 6),
+            Text('الرصيد بعدها: ${tx.balanceAfter.toStringAsFixed(2)}',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: AppTheme.textMuted)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PayoutFormSheet extends StatefulWidget {
+  final List<TreasuryModel> treasuries;
+  final void Function(double amount, int treasuryId, String? notes) onSubmit;
+  const _PayoutFormSheet({required this.treasuries, required this.onSubmit});
+
+  @override
+  State<_PayoutFormSheet> createState() => _PayoutFormSheetState();
+}
+
+class _PayoutFormSheetState extends State<_PayoutFormSheet> {
+  final _amountCtrl = TextEditingController();
+  final _notesCtrl = TextEditingController();
+  int? _treasuryId;
+  bool _submitting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _treasuryId = widget.treasuries.isNotEmpty ? widget.treasuries.first.id : null;
+  }
+
+  @override
+  void dispose() {
+    _amountCtrl.dispose();
+    _notesCtrl.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final amount = double.tryParse(_amountCtrl.text);
+    if (amount == null || amount <= 0) {
+      AppSnackbar.showError(context, 'يرجى إدخال مبلغ صحيح.');
+      return;
+    }
+    if (_treasuryId == null) {
+      AppSnackbar.showError(context, 'يرجى اختيار الخزينة.');
+      return;
+    }
+    setState(() => _submitting = true);
+    widget.onSubmit(amount, _treasuryId!, _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, left: 16, right: 16, top: 16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(children: [
+            const Text('صرف مستحقات فروقات الأسعار', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            const Spacer(),
+            IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+          ]),
+          const SizedBox(height: 10),
+          TextField(
+            controller: _amountCtrl,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: const InputDecoration(labelText: 'المبلغ'),
+          ),
+          const SizedBox(height: 10),
+          DropdownButtonFormField<int>(
+            initialValue: _treasuryId,
+            isExpanded: true,
+            decoration: const InputDecoration(labelText: 'الخزينة'),
+            items: widget.treasuries.map((t) => DropdownMenuItem(value: t.id, child: Text(t.name))).toList(),
+            onChanged: (v) => setState(() => _treasuryId = v),
+          ),
+          const SizedBox(height: 10),
+          TextField(controller: _notesCtrl, maxLines: 2, decoration: const InputDecoration(labelText: 'ملاحظات (اختياري)')),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 46,
+            child: ElevatedButton(
+              onPressed: _submitting ? null : _submit,
+              child: _submitting
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Text('تأكيد الصرف'),
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
+      ),
     );
   }
 }

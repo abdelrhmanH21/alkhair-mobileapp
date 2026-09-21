@@ -701,6 +701,10 @@ class PayrollSummaryRowModel {
   // the rep detail page can offer "revert to computed value".
   final bool isCommissionOverridden;
   final double computedCommissionEarned;
+  // "مندوب حر السعر" — drives the alternate فروقات الأسعار detail view
+  // (_RepPayrollDetailPage) instead of the normal target/commission tabs.
+  final bool isFreePricingDelegate;
+  final double priceVarianceBalance;
 
   const PayrollSummaryRowModel({
     required this.repId,
@@ -717,6 +721,8 @@ class PayrollSummaryRowModel {
     required this.hasLinkedUser,
     required this.isCommissionOverridden,
     required this.computedCommissionEarned,
+    this.isFreePricingDelegate = false,
+    this.priceVarianceBalance = 0,
   });
 
   factory PayrollSummaryRowModel.fromJson(Map<String, dynamic> json) =>
@@ -739,6 +745,8 @@ class PayrollSummaryRowModel {
         computedCommissionEarned: json['computed_commission_earned'] == null
             ? _asDouble(json['commission_earned'])
             : _asDouble(json['computed_commission_earned']),
+        isFreePricingDelegate: json['is_free_pricing_delegate'] as bool? ?? false,
+        priceVarianceBalance: _asDouble(json['price_variance_balance']),
       );
 }
 
@@ -1876,4 +1884,95 @@ class DistributorDailyReceiptModel {
             .toList(),
         balanceAfter: _asDouble(json['balance_after']),
       );
+}
+
+// ─── "مندوب حر السعر" (free-pricing delegate) management ────────────────────
+
+/// Mirrors FreePricingReferencePrice — this rep's own custom base price for
+/// one product. Genuinely per-rep, never the catalog price.
+class FreePricingReferencePriceModel {
+  final int id;
+  final int productId;
+  final String productName;
+  final String productUnit;
+  final double referencePrice;
+
+  const FreePricingReferencePriceModel({
+    required this.id,
+    required this.productId,
+    required this.productName,
+    required this.productUnit,
+    required this.referencePrice,
+  });
+
+  factory FreePricingReferencePriceModel.fromJson(Map<String, dynamic> json) {
+    final product = json['product'] as Map<String, dynamic>?;
+    return FreePricingReferencePriceModel(
+      id: json['id'] as int,
+      productId: json['product_id'] as int,
+      productName: product?['name'] as String? ?? '',
+      productUnit: product?['unit'] as String? ?? '',
+      referencePrice: _asDouble(json['reference_price']),
+    );
+  }
+}
+
+/// Mirrors one PriceVarianceTransaction ledger row — an accrual (tied to an
+/// invoice) or an admin payout.
+class PriceVarianceTransactionModel {
+  final int id;
+  final String type; // 'accrual' | 'payout'
+  final double amount;
+  final double balanceAfter;
+  final String? notes;
+  final DateTime createdAt;
+  final String? invoiceNumber;
+  final String? customerName;
+  final String? createdByName;
+
+  const PriceVarianceTransactionModel({
+    required this.id,
+    required this.type,
+    required this.amount,
+    required this.balanceAfter,
+    this.notes,
+    required this.createdAt,
+    this.invoiceNumber,
+    this.customerName,
+    this.createdByName,
+  });
+
+  factory PriceVarianceTransactionModel.fromJson(Map<String, dynamic> json) {
+    final invoice = json['invoice'] as Map<String, dynamic>?;
+    final customer = invoice?['customer'] as Map<String, dynamic>?;
+    final createdBy = json['created_by'] as Map<String, dynamic>?;
+    return PriceVarianceTransactionModel(
+      id: json['id'] as int,
+      type: json['type'] as String? ?? '',
+      amount: _asDouble(json['amount']),
+      balanceAfter: _asDouble(json['balance_after']),
+      notes: json['notes'] as String?,
+      createdAt: DateTime.tryParse(json['created_at'] as String? ?? '') ?? DateTime.now(),
+      invoiceNumber: invoice?['invoice_number'] as String?,
+      customerName: customer?['name'] as String?,
+      createdByName: createdBy?['name'] as String?,
+    );
+  }
+}
+
+class PriceVarianceStatementModel {
+  final double priceVarianceBalance;
+  final List<PriceVarianceTransactionModel> transactions;
+
+  const PriceVarianceStatementModel({required this.priceVarianceBalance, required this.transactions});
+
+  factory PriceVarianceStatementModel.fromJson(Map<String, dynamic> json) {
+    final rep = json['rep'] as Map<String, dynamic>?;
+    return PriceVarianceStatementModel(
+      priceVarianceBalance: _asDouble(rep?['price_variance_balance']),
+      transactions: (json['transactions'] as List? ?? [])
+          .map((e) => PriceVarianceTransactionModel.fromJson(e as Map<String, dynamic>))
+          .toList(),
+    );
+  }
 }

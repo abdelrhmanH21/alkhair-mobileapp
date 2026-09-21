@@ -51,6 +51,7 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
     on<DelegateAdvancesFetched>(_onFetchAdvances);
     on<DelegateBonusesFetched>(_onFetchBonuses);
     on<DelegateCommissionBreakdownFetched>(_onFetchCommissionBreakdown);
+    on<DelegatePriceVarianceSummaryFetched>(_onFetchPriceVarianceSummary);
     on<DelegateExpenseSubmitted>(_onSubmitExpense);
     on<DelegateNoteSubmitted>(_onSubmitNote);
     on<DelegateCustomerCollectionSubmitted>(_onSubmitCustomerCollection);
@@ -451,6 +452,21 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
     try {
       final days = await _repo.getCommissionBreakdown();
       emit(DelegateCommissionBreakdownLoaded(days, requestId: event.requestId));
+    } on DioException catch (e) {
+      emit(DelegateFailure(_parseError(e), requestId: event.requestId));
+    } catch (_) {
+      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.', requestId: event.requestId));
+    }
+  }
+
+  Future<void> _onFetchPriceVarianceSummary(
+    DelegatePriceVarianceSummaryFetched event,
+    Emitter<DelegateState> emit,
+  ) async {
+    emit(DelegateLoading(requestId: event.requestId));
+    try {
+      final summary = await _repo.getPriceVarianceSummary();
+      emit(DelegatePriceVarianceSummaryLoaded(summary, requestId: event.requestId));
     } on DioException catch (e) {
       emit(DelegateFailure(_parseError(e), requestId: event.requestId));
     } catch (_) {

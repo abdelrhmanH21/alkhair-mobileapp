@@ -29,6 +29,7 @@ class ApiEndpoints {
   static const String delegateAdvances             = '/delegate/advances';
   static const String delegateBonuses              = '/delegate/bonuses';
   static const String delegateCommissionBreakdown  = '/delegate/commission-breakdown';
+  static const String delegatePriceVarianceSummary = '/delegate/price-variance-summary';
 
   // Delegate — clients
   static const String delegateClients       = '/delegate/clients';
@@ -122,4 +123,10 @@ class ApiEndpoints {
       '/admin/distributors/$id/transactions/$transactionId';
   static String adminDistributorStatement(int id) => '/admin/distributors/$id/statement';
   static String adminDistributorDailyReceipt(int id) => '/admin/distributors/$id/daily-receipt';
+
+  // "مندوب حر السعر" admin management ─────────────────────────────────────
+  static String adminFreePricingToggle(int repId) => '/admin/sales-reps/$repId/free-pricing-toggle';
+  static String adminFreePricingReferencePrices(int repId) => '/admin/sales-reps/$repId/reference-prices';
+  static String adminFreePricingPayout(int repId) => '/admin/sales-reps/$repId/price-variance-payout';
+  static String adminFreePricingStatement(int repId) => '/admin/sales-reps/$repId/price-variance-statement';
 }

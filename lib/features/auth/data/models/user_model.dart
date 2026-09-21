@@ -9,6 +9,11 @@ class UserModel {
   final bool hasActiveLoading;
   final int truckStockCount;
   final bool salesNotificationsEnabled;
+  // "مندوب حر السعر" — this delegate's linked SalesRep has
+  // is_free_pricing_delegate=true. Drives dashboard_section.dart replacing
+  // the normal target/commission view entirely with the price-variance
+  // self-service view. Always false for a non-delegate role.
+  final bool isFreePricingDelegate;
 
   const UserModel({
     required this.id,
@@ -21,6 +26,7 @@ class UserModel {
     required this.hasActiveLoading,
     required this.truckStockCount,
     this.salesNotificationsEnabled = true,
+    this.isFreePricingDelegate = false,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) => UserModel(
@@ -35,6 +41,7 @@ class UserModel {
         truckStockCount: json['truck_stock_count'] as int? ?? 0,
         salesNotificationsEnabled:
             json['sales_notifications_enabled'] as bool? ?? true,
+        isFreePricingDelegate: json['is_free_pricing_delegate'] as bool? ?? false,
       );
 
   bool get isDelegate => role == 'delegate';

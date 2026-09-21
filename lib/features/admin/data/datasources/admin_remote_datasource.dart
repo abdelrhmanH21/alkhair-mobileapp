@@ -146,6 +146,20 @@ abstract class AdminRemoteDataSource {
   Future<DailySummaryModel> fetchDailySummary(int settlementId);
   Future<List<AdvanceModel>> fetchRepAdvances(int repId);
   Future<List<CommissionDayModel>> fetchRepCommissionBreakdown(int repId);
+  // "مندوب حر السعر" management ─────────────────────────────────────────
+  Future<void> toggleFreePricingDelegate({required int repId, required bool isFreePricingDelegate});
+  Future<List<FreePricingReferencePriceModel>> fetchFreePricingReferencePrices(int repId);
+  Future<List<FreePricingReferencePriceModel>> setFreePricingReferencePrices({
+    required int repId,
+    required List<Map<String, dynamic>> prices,
+  });
+  Future<void> payoutPriceVariance({
+    required int repId,
+    required double amount,
+    required int treasuryId,
+    String? notes,
+  });
+  Future<PriceVarianceStatementModel> fetchPriceVarianceStatement(int repId);
   Future<void> setRepTarget({
     required int repId,
     required String month,
@@ -756,6 +770,56 @@ class AdminRemoteDataSourceImpl implements AdminRemoteDataSource {
       'target_amount': targetAmount,
       if (notes != null && notes.isNotEmpty) 'notes': notes,
     });
+  }
+
+  // "مندوب حر السعر" management ─────────────────────────────────────────
+
+  @override
+  Future<void> toggleFreePricingDelegate({required int repId, required bool isFreePricingDelegate}) async {
+    await _client.dio.put(
+      ApiEndpoints.adminFreePricingToggle(repId),
+      data: {'is_free_pricing_delegate': isFreePricingDelegate},
+    );
+  }
+
+  @override
+  Future<List<FreePricingReferencePriceModel>> fetchFreePricingReferencePrices(int repId) async {
+    final res = await _client.dio.get(ApiEndpoints.adminFreePricingReferencePrices(repId));
+    final list = (res.data as Map<String, dynamic>)['data'] as List? ?? [];
+    return list.map((e) => FreePricingReferencePriceModel.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  @override
+  Future<List<FreePricingReferencePriceModel>> setFreePricingReferencePrices({
+    required int repId,
+    required List<Map<String, dynamic>> prices,
+  }) async {
+    final res = await _client.dio.put(
+      ApiEndpoints.adminFreePricingReferencePrices(repId),
+      data: {'prices': prices},
+    );
+    final list = (res.data as Map<String, dynamic>)['data'] as List? ?? [];
+    return list.map((e) => FreePricingReferencePriceModel.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  @override
+  Future<void> payoutPriceVariance({
+    required int repId,
+    required double amount,
+    required int treasuryId,
+    String? notes,
+  }) async {
+    await _client.dio.post(ApiEndpoints.adminFreePricingPayout(repId), data: {
+      'amount': amount,
+      'treasury_id': treasuryId,
+      if (notes != null && notes.isNotEmpty) 'notes': notes,
+    });
+  }
+
+  @override
+  Future<PriceVarianceStatementModel> fetchPriceVarianceStatement(int repId) async {
+    final res = await _client.dio.get(ApiEndpoints.adminFreePricingStatement(repId));
+    return PriceVarianceStatementModel.fromJson(res.data as Map<String, dynamic>);
   }
 
   // ── Production ("بدء تشغيلة جديدة" / "استلام إنتاج تام") ────────────────

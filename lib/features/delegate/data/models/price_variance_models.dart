@@ -63,7 +63,7 @@ class PriceVarianceLoadingModel {
 }
 
 /// Mirrors GET /v1/mobile/delegate/price-variance-summary's whole response —
-/// replaces DashboardModel entirely for a "مندوب حر السعر" delegate.
+/// feeds the biometric-locked "تقرير التحميلات" report tab for a "مندوب حر السعر" delegate.
 class PriceVarianceSummaryModel {
   final double priceVarianceBalance;
   final List<PriceVarianceLoadingModel> byLoading;

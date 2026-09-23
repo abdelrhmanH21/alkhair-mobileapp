@@ -12,12 +12,12 @@ import '../bloc/request_tracker.dart';
 import '../../data/models/price_variance_models.dart';
 import '../pages/price_variance_loading_detail_page.dart';
 
-/// "مندوب حر السعر" self-service dashboard — REPLACES DashboardSection
-/// entirely for a delegate whose linked SalesRep has
-/// is_free_pricing_delegate=true (see dashboard_section.dart's own branch).
-/// Shows the prominent accrued balance ("المستحق لك") and a tappable
-/// drill-down by تحميلة (loading/shipment); each loading expands (via
-/// PriceVarianceLoadingDetailPage) into every sale within it.
+/// "مندوب حر السعر" self-service balance view: the prominent accrued balance
+/// ("المستحق لك") and a tappable drill-down by تحميلة (loading/shipment); each
+/// loading expands (via PriceVarianceLoadingDetailPage) into every sale within
+/// it. NOT shown on the home dashboard — it is hosted only by
+/// PriceVarianceReportTab, behind التقارير → "تقرير التحميلات" and the
+/// biometric lock.
 ///
 /// Every money figure here is masked until the delegate passes the device's
 /// biometric / PIN check (SensitiveRevealController — see its doc comment for

@@ -14,7 +14,6 @@ import '../pages/penalties_page.dart';
 import '../pages/advances_page.dart';
 import '../pages/bonuses_page.dart';
 import '../pages/commission_breakdown_page.dart';
-import 'price_variance_dashboard_section.dart';
 
 /// Reusable delegate-performance dashboard. Self-contained: dispatches its own
 /// fetch and owns its own loading/error/data lifecycle, so it can be dropped
@@ -51,9 +50,8 @@ class _DashboardSectionState extends State<DashboardSection> {
   @override
   void initState() {
     super.initState();
-    // A free-pricing delegate never needs this fetch at all — build() below
-    // replaces this whole widget with PriceVarianceDashboardSection, which
-    // does its own fetch instead.
+    // A free-pricing delegate gets no payroll dashboard at all (see build())
+    // — skip the fetch entirely.
     final authState = context.read<AuthBloc>().state;
     if (authState is AuthAuthenticated && authState.user.isFreePricingDelegate) {
       return;
@@ -79,13 +77,15 @@ class _DashboardSectionState extends State<DashboardSection> {
 
   @override
   Widget build(BuildContext context) {
-    // "مندوب حر السعر" — replaces this entire target/commission dashboard
-    // with the price-variance self-service view. Every OTHER delegate
-    // (is_free_pricing_delegate=false, the overwhelming majority) is
-    // completely unaffected below this check.
+    // "مندوب حر السعر" — renders NOTHING on the home screen: no target /
+    // commission / salary cards (their salary and commission are always 0 by
+    // design, which would itself look odd) and, above all, no trace of the
+    // price-variance balance. That view lives only behind التقارير →
+    // "تقرير التحميلات" and the biometric lock (see delegate_reports_page.dart).
+    // Every OTHER delegate (the overwhelming majority) is unaffected.
     final authState = context.watch<AuthBloc>().state;
     if (authState is AuthAuthenticated && authState.user.isFreePricingDelegate) {
-      return const PriceVarianceDashboardSection();
+      return const SizedBox.shrink();
     }
 
     return BlocListener<DelegateBloc, DelegateState>(

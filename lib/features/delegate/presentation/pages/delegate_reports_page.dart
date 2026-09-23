@@ -1,16 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
+import '../../../../core/di/service_locator.dart';
+import '../../../../core/security/sensitive_reveal_controller.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/app_snackbar.dart';
 import '../../../../core/utils/report_export.dart';
+import '../../../../core/widgets/masked_amount.dart';
 import '../../../app_config/presentation/bloc/app_config_bloc.dart';
 import '../../../app_config/presentation/bloc/app_config_state.dart';
+import '../../../auth/presentation/bloc/auth_bloc.dart';
+import '../../../auth/presentation/bloc/auth_state.dart';
 import '../bloc/delegate_bloc.dart';
 import '../bloc/delegate_event.dart';
 import '../bloc/delegate_state.dart';
 import '../bloc/request_tracker.dart';
 import '../../data/models/report_models.dart';
+import '../widgets/price_variance_report_tab.dart';
 
 enum _ReportPeriod { month, week, custom }
 enum _ReportKind { region, product }
@@ -18,8 +24,15 @@ enum _ReportKind { region, product }
 /// تقارير المندوب — بيانات مبيعاته (المناطق/الأصناف) لفترة قابلة للاختيار.
 /// مصدر مصدرها الوحيد: DelegateReportController::byRegion()/byProduct()، نفس
 /// أسلوب جلب البيانات المستخدم في CommissionBreakdownPage.
+///
+/// A "مندوب حر السعر" delegate additionally gets a third tab, "تقرير التحميلات"
+/// (per-loading breakdown, biometric-locked — see PriceVarianceReportTab).
+/// It sits last in the same TabBar as the two ordinary reports and is named
+/// like one, so it reads as just another report rather than a special feature.
 class DelegateReportsPage extends StatefulWidget {
-  const DelegateReportsPage({super.key});
+  /// Overridable for tests; defaults to the app-wide shared instance.
+  final SensitiveRevealController? revealController;
+  const DelegateReportsPage({super.key, this.revealController});
 
   @override
   State<DelegateReportsPage> createState() => _DelegateReportsPageState();
@@ -27,7 +40,11 @@ class DelegateReportsPage extends StatefulWidget {
 
 class _DelegateReportsPageState extends State<DelegateReportsPage>
     with SingleTickerProviderStateMixin {
-  late final TabController _tabController = TabController(length: 2, vsync: this);
+  static const int _lockedTabIndex = 2;
+  late final TabController _tabController;
+  late final bool _hasLockedTab;
+  late final SensitiveRevealController _reveal;
+  int _lastTabIndex = 0;
   _ReportPeriod _period = _ReportPeriod.month;
   DateTimeRange? _customRange;
 
@@ -43,13 +60,40 @@ class _DelegateReportsPageState extends State<DelegateReportsPage>
   @override
   void initState() {
     super.initState();
+    final authState = context.read<AuthBloc>().state;
+    _hasLockedTab = authState is AuthAuthenticated && authState.user.isFreePricingDelegate;
+    _reveal = widget.revealController ?? sl<SensitiveRevealController>();
+    _tabController = TabController(length: _hasLockedTab ? 3 : 2, vsync: this);
+    if (_hasLockedTab) _tabController.addListener(_onTabChanged);
     _fetchReports();
   }
 
   @override
   void dispose() {
+    if (_hasLockedTab) {
+      _tabController.removeListener(_onTabChanged);
+      // Leaving التقارير altogether re-masks. Deferred: lock() notifies
+      // listeners, which must not happen mid-teardown.
+      final reveal = _reveal;
+      Future.microtask(reveal.lock);
+    }
     _tabController.dispose();
     super.dispose();
+  }
+
+  /// Selecting the protected tab immediately starts the biometric / PIN
+  /// check; moving off it re-masks straight away.
+  void _onTabChanged() {
+    if (_tabController.indexIsChanging) return;
+    final index = _tabController.index;
+    if (index == _lastTabIndex) return;
+    _lastTabIndex = index;
+    setState(() {}); // the period chips are hidden on the protected tab
+    if (index == _lockedTabIndex) {
+      requestRevealWithFeedback(context, _reveal);
+    } else {
+      _reveal.lock();
+    }
   }
 
   void _fetchReports() {
@@ -144,9 +188,10 @@ class _DelegateReportsPageState extends State<DelegateReportsPage>
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white70,
           indicatorColor: Colors.white,
-          tabs: const [
-            Tab(text: 'تقرير المناطق'),
-            Tab(text: 'تقرير الأصناف'),
+          tabs: [
+            const Tab(text: 'تقرير المناطق'),
+            const Tab(text: 'تقرير الأصناف'),
+            if (_hasLockedTab) const Tab(text: 'تقرير التحميلات'),
           ],
         ),
       ),
@@ -165,7 +210,8 @@ class _DelegateReportsPageState extends State<DelegateReportsPage>
         },
         child: Column(
           children: [
-            Padding(
+            if (_tabController.index != _lockedTabIndex)
+              Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               child: Row(
                 children: [
@@ -203,6 +249,7 @@ class _DelegateReportsPageState extends State<DelegateReportsPage>
                 children: [
                   _RegionReportView(rows: _regionRows, periodLabel: _periodLabel),
                   _ProductReportView(rows: _productRows, periodLabel: _periodLabel),
+                  if (_hasLockedTab) PriceVarianceReportTab(revealController: _reveal),
                 ],
               ),
             ),

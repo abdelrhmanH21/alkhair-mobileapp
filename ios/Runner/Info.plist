@@ -28,6 +28,10 @@
 	<true/>
 	<!-- Mandatory proof-of-expense photo (تسجيل مصروف) + optional تسجيل
 	     ملاحظة attachment — image_picker's camera/gallery sources. -->
+	<!-- Face ID prompt guarding the free-pricing delegate's "المستحق لك"
+	     balance (local_auth); falls back to the device passcode. -->
+	<key>NSFaceIDUsageDescription</key>
+	<string>يستخدم التطبيق Face ID لحماية عرض مستحقاتك وفروقات الأسعار.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>يحتاج التطبيق للوصول إلى الكاميرا لالتقاط صورة إثبات المصروف أو إرفاقها بملاحظة.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

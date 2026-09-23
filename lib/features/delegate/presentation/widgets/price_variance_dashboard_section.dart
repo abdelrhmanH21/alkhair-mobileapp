@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../../../core/di/service_locator.dart';
+import '../../../../core/security/sensitive_reveal_controller.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/widgets/masked_amount.dart';
 import '../../../../core/widgets/state_views.dart';
 import '../bloc/delegate_bloc.dart';
 import '../bloc/delegate_event.dart';
@@ -15,8 +18,14 @@ import '../pages/price_variance_loading_detail_page.dart';
 /// Shows the prominent accrued balance ("المستحق لك") and a tappable
 /// drill-down by تحميلة (loading/shipment); each loading expands (via
 /// PriceVarianceLoadingDetailPage) into every sale within it.
+///
+/// Every money figure here is masked until the delegate passes the device's
+/// biometric / PIN check (SensitiveRevealController — see its doc comment for
+/// the re-lock rules).
 class PriceVarianceDashboardSection extends StatefulWidget {
-  const PriceVarianceDashboardSection({super.key});
+  /// Overridable for tests; defaults to the app-wide shared instance.
+  final SensitiveRevealController? revealController;
+  const PriceVarianceDashboardSection({super.key, this.revealController});
 
   @override
   State<PriceVarianceDashboardSection> createState() => _PriceVarianceDashboardSectionState();
@@ -27,6 +36,7 @@ class _PriceVarianceDashboardSectionState extends State<PriceVarianceDashboardSe
   String? _errorMessage;
   bool _retrying = false;
   final _tracker = RequestTracker<bool>();
+  late final SensitiveRevealController _reveal = widget.revealController ?? sl<SensitiveRevealController>();
 
   void _dispatchFetch() {
     final event = DelegatePriceVarianceSummaryFetched();
@@ -40,6 +50,15 @@ class _PriceVarianceDashboardSectionState extends State<PriceVarianceDashboardSe
     _dispatchFetch();
   }
 
+  @override
+  void dispose() {
+    // Leaving the delegate home / logging out re-masks everything. Deferred:
+    // lock() notifies listeners, which must not happen mid-teardown.
+    final reveal = _reveal;
+    Future.microtask(reveal.lock);
+    super.dispose();
+  }
+
   void _refresh() {
     setState(() => _retrying = true);
     _dispatchFetch();
@@ -48,7 +67,9 @@ class _PriceVarianceDashboardSectionState extends State<PriceVarianceDashboardSe
   void _openLoading(PriceVarianceLoadingModel loading) {
     Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => PriceVarianceLoadingDetailPage(loading: loading)),
+      MaterialPageRoute(
+        builder: (_) => PriceVarianceLoadingDetailPage(loading: loading, revealController: _reveal),
+      ),
     );
   }
 
@@ -124,9 +145,17 @@ class _PriceVarianceDashboardSectionState extends State<PriceVarianceDashboardSe
                       ],
                     ),
                     const SizedBox(height: 8),
-                    Text(
-                      '${summary!.priceVarianceBalance.toStringAsFixed(2)} ج.م',
-                      style: const TextStyle(color: AppTheme.accent, fontSize: 30, fontWeight: FontWeight.bold),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        MaskedAmount(
+                          controller: _reveal,
+                          text: '${summary!.priceVarianceBalance.toStringAsFixed(2)} ج.م',
+                          style: const TextStyle(color: AppTheme.accent, fontSize: 30, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(width: 12),
+                        RevealLockButton(controller: _reveal, color: Colors.white, size: 24),
+                      ],
                     ),
                   ],
                 ),
@@ -145,6 +174,7 @@ class _PriceVarianceDashboardSectionState extends State<PriceVarianceDashboardSe
             else
               ...summary.byLoading.map((loading) => _LoadingCard(
                     loading: loading,
+                    reveal: _reveal,
                     onTap: () => _openLoading(loading),
                   )),
           ],
@@ -156,8 +186,9 @@ class _PriceVarianceDashboardSectionState extends State<PriceVarianceDashboardSe
 
 class _LoadingCard extends StatelessWidget {
   final PriceVarianceLoadingModel loading;
+  final SensitiveRevealController reveal;
   final VoidCallback onTap;
-  const _LoadingCard({required this.loading, required this.onTap});
+  const _LoadingCard({required this.loading, required this.reveal, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -191,9 +222,11 @@ class _LoadingCard extends StatelessWidget {
                   ],
                 ),
               ),
-              Text(
-                '${positive ? '+' : ''}${loading.loadingVarianceTotal.toStringAsFixed(2)}',
+              MaskedAmount(
+                controller: reveal,
+                text: '${positive ? '+' : ''}${loading.loadingVarianceTotal.toStringAsFixed(2)}',
                 style: TextStyle(fontWeight: FontWeight.bold, color: color, fontSize: 15),
+                maskedStyle: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.textMuted, fontSize: 15),
               ),
               const SizedBox(width: 4),
               Icon(Icons.chevron_left_rounded, color: Colors.grey.shade400, size: 18),

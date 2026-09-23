@@ -149,7 +149,7 @@ abstract class AdminRemoteDataSource {
   // "مندوب حر السعر" management ─────────────────────────────────────────
   Future<void> toggleFreePricingDelegate({required int repId, required bool isFreePricingDelegate});
   Future<List<FreePricingReferencePriceModel>> fetchFreePricingReferencePrices(int repId);
-  Future<List<FreePricingReferencePriceModel>> setFreePricingReferencePrices({
+  Future<ReferencePriceSaveResult> setFreePricingReferencePrices({
     required int repId,
     required List<Map<String, dynamic>> prices,
   });
@@ -790,7 +790,7 @@ class AdminRemoteDataSourceImpl implements AdminRemoteDataSource {
   }
 
   @override
-  Future<List<FreePricingReferencePriceModel>> setFreePricingReferencePrices({
+  Future<ReferencePriceSaveResult> setFreePricingReferencePrices({
     required int repId,
     required List<Map<String, dynamic>> prices,
   }) async {
@@ -798,8 +798,7 @@ class AdminRemoteDataSourceImpl implements AdminRemoteDataSource {
       ApiEndpoints.adminFreePricingReferencePrices(repId),
       data: {'prices': prices},
     );
-    final list = (res.data as Map<String, dynamic>)['data'] as List? ?? [];
-    return list.map((e) => FreePricingReferencePriceModel.fromJson(e as Map<String, dynamic>)).toList();
+    return ReferencePriceSaveResult.fromJson(res.data as Map<String, dynamic>);
   }
 
   @override

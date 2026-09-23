@@ -9,6 +9,7 @@ import '../utils/push_notification_service.dart';
 import '../utils/offline_cache_service.dart';
 import '../utils/connectivity_service.dart';
 import '../utils/pending_action_queue.dart';
+import '../security/sensitive_reveal_controller.dart';
 
 import '../../features/app_config/data/datasources/app_config_local_datasource.dart';
 import '../../features/app_config/data/datasources/app_config_remote_datasource.dart';
@@ -49,6 +50,12 @@ Future<void> setupServiceLocator() async {
   sl.registerLazySingleton<ConnectivityService>(() => connectivity);
 
   sl.registerLazySingleton<PendingActionQueue>(() => PendingActionQueue(sl()));
+
+  // One shared lock for the free-pricing delegate's money figures, so a single
+  // biometric/PIN check reveals the dashboard balance and detail page together.
+  sl.registerLazySingleton<SensitiveRevealController>(
+    () => SensitiveRevealController(LocalAuthDeviceAuthenticator())..bindToAppLifecycle(),
+  );
 
   // ── AppConfig feature ────────────────────────────────────────────────────
   sl.registerLazySingleton<AppConfigLocalDataSource>(() => AppConfigLocalDataSource(prefs));

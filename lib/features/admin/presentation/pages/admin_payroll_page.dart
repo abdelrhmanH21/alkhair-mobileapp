@@ -894,7 +894,7 @@ class _ReferencePricesTabState extends State<_ReferencePricesTab> {
     }
     setState(() => _saving = true);
     try {
-      final rows = await widget.remote.setFreePricingReferencePrices(
+      final result = await widget.remote.setFreePricingReferencePrices(
         repId: widget.repId,
         prices: [
           {'product_id': product.id, 'reference_price': price},
@@ -902,12 +902,19 @@ class _ReferencePricesTabState extends State<_ReferencePricesTab> {
       );
       if (!mounted) return;
       setState(() {
-        _rows = rows;
+        _rows = result.rows;
         _saving = false;
         _selectedProduct = null;
         _priceCtrl.clear();
       });
-      AppSnackbar.showSuccess(context, 'تم حفظ السعر المرجعي.');
+      // A changed price is retroactive — tell the admin what it did to the balance.
+      AppSnackbar.showSuccess(
+        context,
+        result.invoicesRecalculated > 0 && result.balanceBefore != null && result.balanceAfter != null
+            ? 'تم حفظ السعر المرجعي وإعادة احتساب ${result.invoicesRecalculated} فاتورة سابقة. '
+                'المستحق: ${result.balanceBefore!.toStringAsFixed(2)} ← ${result.balanceAfter!.toStringAsFixed(2)} ج.م'
+            : 'تم حفظ السعر المرجعي.',
+      );
     } on DioException catch (e) {
       if (!mounted) return;
       setState(() => _saving = false);

@@ -1976,3 +1976,33 @@ class PriceVarianceStatementModel {
     );
   }
 }
+
+/// Result of saving reference prices: the rep's refreshed price list plus, when
+/// a price actually changed, what the retroactive recompute did to past
+/// accruals (AdminFreePricingController::setReferencePrices()'s
+/// `variance_recalculation`). [invoicesRecalculated] is 0 when nothing changed.
+class ReferencePriceSaveResult {
+  final List<FreePricingReferencePriceModel> rows;
+  final int invoicesRecalculated;
+  final double? balanceBefore;
+  final double? balanceAfter;
+
+  const ReferencePriceSaveResult({
+    required this.rows,
+    this.invoicesRecalculated = 0,
+    this.balanceBefore,
+    this.balanceAfter,
+  });
+
+  factory ReferencePriceSaveResult.fromJson(Map<String, dynamic> json) {
+    final recalc = json['variance_recalculation'];
+    return ReferencePriceSaveResult(
+      rows: (json['data'] as List? ?? [])
+          .map((e) => FreePricingReferencePriceModel.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      invoicesRecalculated: recalc is Map ? (recalc['invoices_recalculated'] as num? ?? 0).toInt() : 0,
+      balanceBefore: recalc is Map ? (recalc['balance_before'] as num?)?.toDouble() : null,
+      balanceAfter: recalc is Map ? (recalc['balance_after'] as num?)?.toDouble() : null,
+    );
+  }
+}

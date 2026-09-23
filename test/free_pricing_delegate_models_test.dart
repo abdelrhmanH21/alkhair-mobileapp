@@ -108,4 +108,28 @@ void main() {
       expect(model.byLoading, isEmpty);
     });
   });
+
+  group('ReferencePriceSaveResult.fromJson — retroactive recompute payload', () {
+    test('parses the recompute summary when prices changed (265 -> 255 example: 95 -> 145)', () {
+      final r = ReferencePriceSaveResult.fromJson({
+        'data': [],
+        'variance_recalculation': {
+          'invoices_recalculated': 2,
+          'balance_before': 95,
+          'balance_after': 145.0,
+          'changes': [],
+        },
+      });
+      expect(r.invoicesRecalculated, 2);
+      expect(r.balanceBefore, 95.0);
+      expect(r.balanceAfter, 145.0);
+    });
+
+    test('is a no-op result when nothing changed (variance_recalculation null)', () {
+      final r = ReferencePriceSaveResult.fromJson({'data': [], 'variance_recalculation': null});
+      expect(r.invoicesRecalculated, 0);
+      expect(r.balanceBefore, isNull);
+      expect(r.balanceAfter, isNull);
+    });
+  });
 }

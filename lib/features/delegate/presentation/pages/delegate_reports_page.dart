@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
@@ -7,6 +8,7 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/app_snackbar.dart';
 import '../../../../core/utils/report_export.dart';
 import '../../../../core/widgets/masked_amount.dart';
+import '../../../admin/data/datasources/admin_remote_datasource.dart';
 import '../../../app_config/presentation/bloc/app_config_bloc.dart';
 import '../../../app_config/presentation/bloc/app_config_state.dart';
 import '../../../auth/presentation/bloc/auth_bloc.dart';
@@ -29,10 +31,17 @@ enum _ReportKind { region, product }
 /// (per-loading breakdown, biometric-locked — see PriceVarianceReportTab).
 /// It sits last in the same TabBar as the two ordinary reports and is named
 /// like one, so it reads as just another report rather than a special feature.
+///
+/// Admin/manager (who reach this same page from the admin drawer, with the
+/// region/product reports aggregated company-wide) additionally get
+/// "تقرير الخزائن" and "تقرير الموردين" — company-wide only, never shown to
+/// a delegate — with the same period chips and PDF/Excel export.
 class DelegateReportsPage extends StatefulWidget {
   /// Overridable for tests; defaults to the app-wide shared instance.
   final SensitiveRevealController? revealController;
-  const DelegateReportsPage({super.key, this.revealController});
+  /// Overridable for tests; defaults to the service-locator instance.
+  final AdminRemoteDataSource? adminRemote;
+  const DelegateReportsPage({super.key, this.revealController, this.adminRemote});
 
   @override
   State<DelegateReportsPage> createState() => _DelegateReportsPageState();
@@ -40,9 +49,11 @@ class DelegateReportsPage extends StatefulWidget {
 
 class _DelegateReportsPageState extends State<DelegateReportsPage>
     with SingleTickerProviderStateMixin {
-  static const int _lockedTabIndex = 2;
   late final TabController _tabController;
   late final bool _hasLockedTab;
+  late final bool _isAdmin;
+  // Locked tab (free-pricing delegate only) always sits last.
+  int get _lockedTabIndex => _isAdmin ? 4 : 2;
   late final SensitiveRevealController _reveal;
   int _lastTabIndex = 0;
   _ReportPeriod _period = _ReportPeriod.month;
@@ -50,6 +61,11 @@ class _DelegateReportsPageState extends State<DelegateReportsPage>
 
   List<RegionReportRowModel>? _regionRows;
   List<ProductReportRowModel>? _productRows;
+  List<TreasuryReportRowModel>? _treasuryRows;
+  List<SupplierReportRowModel>? _supplierRows;
+  // Bumped on every period change so a slower response for an older period
+  // can never overwrite the rows of the one now selected.
+  int _adminFetchGeneration = 0;
 
   // This page lives forever behind DashboardSection's card (and every other
   // tab in DelegateHomePage's IndexedStack), all sharing one DelegateBloc.
@@ -62,8 +78,10 @@ class _DelegateReportsPageState extends State<DelegateReportsPage>
     super.initState();
     final authState = context.read<AuthBloc>().state;
     _hasLockedTab = authState is AuthAuthenticated && authState.user.isFreePricingDelegate;
+    _isAdmin = authState is AuthAuthenticated && authState.user.isAdmin;
     _reveal = widget.revealController ?? sl<SensitiveRevealController>();
-    _tabController = TabController(length: _hasLockedTab ? 3 : 2, vsync: this);
+    _tabController = TabController(
+        length: 2 + (_isAdmin ? 2 : 0) + (_hasLockedTab ? 1 : 0), vsync: this);
     if (_hasLockedTab) _tabController.addListener(_onTabChanged);
     _fetchReports();
   }
@@ -112,6 +130,39 @@ class _DelegateReportsPageState extends State<DelegateReportsPage>
     _tracker.start(productEvent.requestId, _ReportKind.product);
     context.read<DelegateBloc>().add(regionEvent);
     context.read<DelegateBloc>().add(productEvent);
+    if (_isAdmin) _fetchAdminReports(params);
+  }
+
+  /// تقرير الخزائن / تقرير الموردين — plain datasource calls (admin-only
+  /// data, nothing to share through the delegate bloc).
+  Future<void> _fetchAdminReports(({String? period, String? dateFrom, String? dateTo}) params) async {
+    final generation = ++_adminFetchGeneration;
+    final remote = widget.adminRemote ?? sl<AdminRemoteDataSource>();
+    Future<void> load<T>(Future<List<T>> Function() fetch, void Function(List<T>) apply) async {
+      try {
+        final rows = await fetch();
+        if (mounted && generation == _adminFetchGeneration) setState(() => apply(rows));
+      } on DioException catch (e) {
+        if (!mounted || generation != _adminFetchGeneration) return;
+        setState(() => apply(<T>[]));
+        AppSnackbar.showError(context, e.response?.data?['message'] as String? ?? 'تعذر تحميل التقرير.');
+      } catch (_) {
+        if (!mounted || generation != _adminFetchGeneration) return;
+        setState(() => apply(<T>[]));
+        AppSnackbar.showError(context, 'تعذر تحميل التقرير.');
+      }
+    }
+
+    await Future.wait([
+      load<TreasuryReportRowModel>(
+        () => remote.fetchTreasuryReport(period: params.period, dateFrom: params.dateFrom, dateTo: params.dateTo),
+        (rows) => _treasuryRows = rows,
+      ),
+      load<SupplierReportRowModel>(
+        () => remote.fetchSupplierReport(period: params.period, dateFrom: params.dateFrom, dateTo: params.dateTo),
+        (rows) => _supplierRows = rows,
+      ),
+    ]);
   }
 
   /// Human-readable period label for the export header — mirrors
@@ -160,6 +211,8 @@ class _DelegateReportsPageState extends State<DelegateReportsPage>
         _customRange = range;
         _regionRows = null;
         _productRows = null;
+        _treasuryRows = null;
+        _supplierRows = null;
       });
       _fetchReports();
     }
@@ -174,6 +227,8 @@ class _DelegateReportsPageState extends State<DelegateReportsPage>
       _period = period;
       _regionRows = null;
       _productRows = null;
+      _treasuryRows = null;
+      _supplierRows = null;
     });
     _fetchReports();
   }
@@ -185,12 +240,15 @@ class _DelegateReportsPageState extends State<DelegateReportsPage>
         title: const Text('التقارير'),
         bottom: TabBar(
           controller: _tabController,
+          isScrollable: _isAdmin,
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white70,
           indicatorColor: Colors.white,
           tabs: [
             const Tab(text: 'تقرير المناطق'),
             const Tab(text: 'تقرير الأصناف'),
+            if (_isAdmin) const Tab(text: 'تقرير الخزائن'),
+            if (_isAdmin) const Tab(text: 'تقرير الموردين'),
             if (_hasLockedTab) const Tab(text: 'تقرير التحميلات'),
           ],
         ),
@@ -249,6 +307,8 @@ class _DelegateReportsPageState extends State<DelegateReportsPage>
                 children: [
                   _RegionReportView(rows: _regionRows, periodLabel: _periodLabel),
                   _ProductReportView(rows: _productRows, periodLabel: _periodLabel),
+                  if (_isAdmin) _TreasuryReportView(rows: _treasuryRows, periodLabel: _periodLabel),
+                  if (_isAdmin) _SupplierReportView(rows: _supplierRows, periodLabel: _periodLabel),
                   if (_hasLockedTab) PriceVarianceReportTab(revealController: _reveal),
                 ],
               ),
@@ -397,7 +457,179 @@ class _ProductReportView extends StatelessWidget {
   }
 }
 
-// ─── Export buttons row (shared by both report tabs) ──────────────────────────
+class _TreasuryReportView extends StatelessWidget {
+  final List<TreasuryReportRowModel>? rows;
+  final String periodLabel;
+  const _TreasuryReportView({required this.rows, required this.periodLabel});
+
+  ReportExportData _exportData() {
+    final r = rows ?? [];
+    final totalBalance = r.fold(0.0, (s, row) => s + row.balance);
+    final totalCredit = r.fold(0.0, (s, row) => s + row.totalCredit);
+    final totalDebit = r.fold(0.0, (s, row) => s + row.totalDebit);
+    return ReportExportData(
+      title: 'تقرير الخزائن',
+      period: periodLabel,
+      headers: const ['الخزينة', 'الرصيد الحالي', 'إجمالي الوارد', 'إجمالي المنصرف', 'صافي الحركة'],
+      rows: r
+          .map((row) => [
+                row.treasuryName,
+                row.balance.toStringAsFixed(2),
+                row.totalCredit.toStringAsFixed(2),
+                row.totalDebit.toStringAsFixed(2),
+                row.netMovement.toStringAsFixed(2),
+              ])
+          .toList(),
+      totals: [
+        'الإجمالي',
+        totalBalance.toStringAsFixed(2),
+        totalCredit.toStringAsFixed(2),
+        totalDebit.toStringAsFixed(2),
+        (totalCredit - totalDebit).toStringAsFixed(2),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (rows == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (rows!.isEmpty) {
+      return const Center(child: Text('لا توجد خزائن.', style: TextStyle(color: AppTheme.textMuted)));
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.all(12),
+      itemCount: rows!.length + 1,
+      itemBuilder: (_, i) {
+        if (i == 0) {
+          return _ExportButtonsRow(buildData: _exportData);
+        }
+        final r = rows![i - 1];
+        return Card(
+          margin: const EdgeInsets.symmetric(vertical: 4),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(r.treasuryName,
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                    ),
+                    Text(r.balance.toStringAsFixed(2),
+                        style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primary)),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _ReportMiniStat(label: 'الوارد', value: r.totalCredit.toStringAsFixed(2)),
+                    _ReportMiniStat(label: 'المنصرف', value: r.totalDebit.toStringAsFixed(2)),
+                    _ReportMiniStat(label: 'صافي الحركة', value: r.netMovement.toStringAsFixed(2)),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _SupplierReportView extends StatelessWidget {
+  final List<SupplierReportRowModel>? rows;
+  final String periodLabel;
+  const _SupplierReportView({required this.rows, required this.periodLabel});
+
+  ReportExportData _exportData() {
+    final r = rows ?? [];
+    final totalBalance = r.fold(0.0, (s, row) => s + row.balance);
+    final totalPurchases = r.fold(0.0, (s, row) => s + row.totalPurchases);
+    final totalPaid = r.fold(0.0, (s, row) => s + row.totalPaid);
+    return ReportExportData(
+      title: 'تقرير الموردين',
+      period: periodLabel,
+      headers: const ['المورد', 'الرصيد الحالي', 'عدد الفواتير', 'إجمالي المشتريات', 'المدفوع'],
+      rows: r
+          .map((row) => [
+                row.supplierName,
+                row.balance.toStringAsFixed(2),
+                '${row.purchaseCount}',
+                row.totalPurchases.toStringAsFixed(2),
+                row.totalPaid.toStringAsFixed(2),
+              ])
+          .toList(),
+      totals: [
+        'الإجمالي',
+        totalBalance.toStringAsFixed(2),
+        '-',
+        totalPurchases.toStringAsFixed(2),
+        totalPaid.toStringAsFixed(2),
+      ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (rows == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (rows!.isEmpty) {
+      return const Center(child: Text('لا يوجد موردون.', style: TextStyle(color: AppTheme.textMuted)));
+    }
+    return ListView.builder(
+      padding: const EdgeInsets.all(12),
+      itemCount: rows!.length + 1,
+      itemBuilder: (_, i) {
+        if (i == 0) {
+          return _ExportButtonsRow(buildData: _exportData);
+        }
+        final r = rows![i - 1];
+        return Card(
+          margin: const EdgeInsets.symmetric(vertical: 4),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(r.supplierName,
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                    ),
+                    Text(r.balance.toStringAsFixed(2),
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: r.balance > 0 ? AppTheme.danger : AppTheme.textMuted)),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _ReportMiniStat(label: 'عدد الفواتير', value: '${r.purchaseCount}'),
+                    _ReportMiniStat(label: 'المشتريات', value: r.totalPurchases.toStringAsFixed(2)),
+                    _ReportMiniStat(label: 'المدفوع', value: r.totalPaid.toStringAsFixed(2)),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ─── Export buttons row (shared by every report tab) ──────────────────────────
 
 class _ExportButtonsRow extends StatefulWidget {
   final ReportExportData Function() buildData;

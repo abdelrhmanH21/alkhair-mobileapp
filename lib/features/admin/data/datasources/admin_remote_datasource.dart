@@ -3,6 +3,7 @@ import '../../../../core/network/api_endpoints.dart';
 import '../../../delegate/data/models/breakdown_models.dart';
 import '../../../delegate/data/models/client_model.dart';
 import '../../../delegate/data/models/customer_region_model.dart';
+import '../../../delegate/data/models/report_models.dart';
 import '../models/admin_models.dart';
 
 abstract class AdminRemoteDataSource {
@@ -116,6 +117,9 @@ abstract class AdminRemoteDataSource {
 
   // ── Payroll (العمالة) ─────────────────────────────────────────────────
   Future<List<PayrollSummaryRowModel>> fetchPayrollSummary({String? month});
+  // تقرير الخزائن / تقرير الموردين — same period params as the region/product reports.
+  Future<List<TreasuryReportRowModel>> fetchTreasuryReport({String? period, String? dateFrom, String? dateTo});
+  Future<List<SupplierReportRowModel>> fetchSupplierReport({String? period, String? dateFrom, String? dateTo});
   // "حذف نهائي" — hard-deletes a SalesRep with no linked User and cascades
   // every referencing table. Throws a DioException (422) if the rep DOES
   // have a linked user; the caller surfaces the server's Arabic message.
@@ -680,6 +684,32 @@ class AdminRemoteDataSourceImpl implements AdminRemoteDataSource {
     return list
         .map((e) => PayrollSummaryRowModel.fromJson(e as Map<String, dynamic>))
         .toList();
+  }
+
+  static Map<String, dynamic> _reportParams(String? period, String? dateFrom, String? dateTo) => {
+        if (period != null) 'period': period,
+        if (dateFrom != null) 'date_from': dateFrom,
+        if (dateTo != null) 'date_to': dateTo,
+      };
+
+  @override
+  Future<List<TreasuryReportRowModel>> fetchTreasuryReport({String? period, String? dateFrom, String? dateTo}) async {
+    final res = await _client.dio.get(
+      ApiEndpoints.adminReportTreasuries,
+      queryParameters: _reportParams(period, dateFrom, dateTo),
+    );
+    final list = (res.data as Map<String, dynamic>)['data'] as List? ?? [];
+    return list.map((e) => TreasuryReportRowModel.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  @override
+  Future<List<SupplierReportRowModel>> fetchSupplierReport({String? period, String? dateFrom, String? dateTo}) async {
+    final res = await _client.dio.get(
+      ApiEndpoints.adminReportSuppliers,
+      queryParameters: _reportParams(period, dateFrom, dateTo),
+    );
+    final list = (res.data as Map<String, dynamic>)['data'] as List? ?? [];
+    return list.map((e) => SupplierReportRowModel.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   @override

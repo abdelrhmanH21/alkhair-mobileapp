@@ -759,12 +759,16 @@ class StaffModel {
   final String name;
   final String workerType;
   final String? phone;
+  // "مندوب حر السعر": سلف/جزاءات/مكافآت recorded here move their المستحق
+  // (price_variance_balance) instead of payroll.
+  final bool isFreePricingDelegate;
 
   const StaffModel({
     required this.id,
     required this.name,
     required this.workerType,
     this.phone,
+    this.isFreePricingDelegate = false,
   });
 
   factory StaffModel.fromJson(Map<String, dynamic> json) => StaffModel(
@@ -772,6 +776,7 @@ class StaffModel {
         name: json['name'] as String? ?? '',
         workerType: json['worker_type'] as String? ?? 'sales_rep',
         phone: json['phone'] as String?,
+        isFreePricingDelegate: json['is_free_pricing_delegate'] as bool? ?? false,
       );
 }
 
@@ -1918,10 +1923,11 @@ class FreePricingReferencePriceModel {
 }
 
 /// Mirrors one PriceVarianceTransaction ledger row — an accrual (tied to an
-/// invoice) or an admin payout.
+/// invoice), an admin payout, or a سلفة/جزاء/مكافأة recorded for this rep
+/// type and redirected here instead of payroll.
 class PriceVarianceTransactionModel {
   final int id;
-  final String type; // 'accrual' | 'payout'
+  final String type; // 'accrual' | 'payout' | 'advance' | 'penalty' | 'bonus'
   final double amount;
   final double balanceAfter;
   final String? notes;
@@ -1941,6 +1947,17 @@ class PriceVarianceTransactionModel {
     this.customerName,
     this.createdByName,
   });
+
+  bool get isAccrual => type == 'accrual';
+
+  String get typeLabel => switch (type) {
+        'accrual' => 'فرق سعر بيع',
+        'payout' => 'صرف',
+        'advance' => 'سلفة',
+        'penalty' => 'جزاء',
+        'bonus' => 'مكافأة',
+        _ => type,
+      };
 
   factory PriceVarianceTransactionModel.fromJson(Map<String, dynamic> json) {
     final invoice = json['invoice'] as Map<String, dynamic>?;

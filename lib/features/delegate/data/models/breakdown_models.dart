@@ -4,12 +4,16 @@ class PenaltyModel {
   final String date;
   final double amount;
   final String reason;
+  // True for a "مندوب حر السعر" rep's record: it moved price_variance_balance
+  // (المستحق) instead of being a payroll deduction/addition.
+  final bool redirectedToPriceVariance;
 
   const PenaltyModel({
     required this.id,
     required this.date,
     required this.amount,
     required this.reason,
+    this.redirectedToPriceVariance = false,
   });
 
   factory PenaltyModel.fromJson(Map<String, dynamic> json) => PenaltyModel(
@@ -17,6 +21,7 @@ class PenaltyModel {
         date: json['date'] as String? ?? '',
         amount: (json['amount'] as num? ?? 0).toDouble(),
         reason: json['reason'] as String? ?? '',
+        redirectedToPriceVariance: json['redirected_to_price_variance'] as bool? ?? false,
       );
 }
 
@@ -27,6 +32,9 @@ class AdvanceModel {
   final double amount;
   final String type;
   final String? description;
+  // True for a "مندوب حر السعر" rep's record: it moved price_variance_balance
+  // (المستحق) instead of being a payroll deduction/addition.
+  final bool redirectedToPriceVariance;
 
   const AdvanceModel({
     required this.id,
@@ -34,6 +42,7 @@ class AdvanceModel {
     required this.amount,
     required this.type,
     this.description,
+    this.redirectedToPriceVariance = false,
   });
 
   factory AdvanceModel.fromJson(Map<String, dynamic> json) => AdvanceModel(
@@ -42,6 +51,7 @@ class AdvanceModel {
         amount: (json['amount'] as num? ?? 0).toDouble(),
         type: json['type'] as String? ?? '',
         description: json['description'] as String?,
+        redirectedToPriceVariance: json['redirected_to_price_variance'] as bool? ?? false,
       );
 }
 
@@ -55,6 +65,9 @@ class BonusModel {
   // once true it's frozen and can no longer be deleted (mirrors Penalty/
   // Advance's is_applied/is_deducted gating on the web delete buttons).
   final bool isApplied;
+  // True for a "مندوب حر السعر" rep's record: it moved price_variance_balance
+  // (المستحق) instead of being a payroll deduction/addition.
+  final bool redirectedToPriceVariance;
 
   const BonusModel({
     required this.id,
@@ -62,6 +75,7 @@ class BonusModel {
     required this.amount,
     this.reason,
     this.isApplied = false,
+    this.redirectedToPriceVariance = false,
   });
 
   factory BonusModel.fromJson(Map<String, dynamic> json) => BonusModel(
@@ -70,6 +84,7 @@ class BonusModel {
         amount: (json['amount'] as num? ?? 0).toDouble(),
         reason: json['reason'] as String?,
         isApplied: json['is_applied'] as bool? ?? false,
+        redirectedToPriceVariance: json['redirected_to_price_variance'] as bool? ?? false,
       );
 }
 

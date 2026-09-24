@@ -460,12 +460,25 @@ class _RepPayrollDetailPageState extends State<_RepPayrollDetailPage>
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                child: Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('المستحق (فروقات الأسعار)', style: TextStyle(fontSize: 13, color: AppTheme.textMuted)),
-                    const Spacer(),
-                    Text(_priceVarianceBalance.toStringAsFixed(2),
-                        style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.secondary, fontSize: 15)),
+                    Row(
+                      children: [
+                        const Text('المستحق (فروقات الأسعار)', style: TextStyle(fontSize: 13, color: AppTheme.textMuted)),
+                        const Spacer(),
+                        Text(_priceVarianceBalance.toStringAsFixed(2),
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: _priceVarianceBalance < 0 ? AppTheme.danger : AppTheme.secondary,
+                                fontSize: 15)),
+                      ],
+                    ),
+                    // Same "عمليات العمالة" flow as every rep — only the
+                    // effect differs for this rep type (backend
+                    // RedirectsToPriceVariance). Can go negative.
+                    const Text('السلف والجزاءات تُخصم منه، والمكافآت تُضاف إليه',
+                        style: TextStyle(fontSize: 11, color: AppTheme.textMuted)),
                   ],
                 ),
               )
@@ -522,7 +535,10 @@ class _RepPayrollDetailPageState extends State<_RepPayrollDetailPage>
                         _RepBonusesTab(
                           remote: widget.remote,
                           repId: widget.rep.repId,
-                          onChanged: () => _targetChanged = true,
+                          onChanged: () {
+                            _targetChanged = true;
+                            _refreshPriceVarianceBalance();
+                          },
                         ),
                       ]
                     : [
@@ -648,7 +664,7 @@ class _RepPenaltiesTabState extends State<_RepPenaltiesTab> {
           child: ListTile(
             leading: const Icon(Icons.remove_circle_outline, color: AppTheme.danger),
             title: Text(p.reason),
-            subtitle: Text(p.date),
+            subtitle: Text(p.redirectedToPriceVariance ? '${p.date} · خُصم من المستحق' : p.date),
             trailing: Text(p.amount.toStringAsFixed(2),
                 style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.danger)),
           ),
@@ -705,7 +721,7 @@ class _RepAdvancesTabState extends State<_RepAdvancesTab> {
           child: ListTile(
             leading: const Icon(Icons.request_quote_outlined, color: AppTheme.accent),
             title: Text(a.description?.isNotEmpty == true ? a.description! : a.type),
-            subtitle: Text('${a.date} — ${a.type}'),
+            subtitle: Text('${a.date} — ${a.type}${a.redirectedToPriceVariance ? ' · خُصمت من المستحق' : ''}'),
             trailing: Text(a.amount.toStringAsFixed(2),
                 style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.accent)),
           ),
@@ -809,7 +825,9 @@ class _RepBonusesTabState extends State<_RepBonusesTab> {
           child: ListTile(
             leading: const Icon(Icons.add_circle_outline, color: Colors.green),
             title: Text(b.reason?.isNotEmpty == true ? b.reason! : 'مكافأة'),
-            subtitle: Text(b.isApplied ? '${b.date} · طُبِّقت في كشف الرواتب' : b.date),
+            subtitle: Text(b.redirectedToPriceVariance
+                ? '${b.date} · أُضيفت إلى المستحق'
+                : b.isApplied ? '${b.date} · طُبِّقت في كشف الرواتب' : b.date),
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -1128,11 +1146,15 @@ class _VarianceTxCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isAccrual = tx.type == 'accrual';
-    final color = isAccrual ? (tx.amount >= 0 ? AppTheme.secondary : AppTheme.danger) : AppTheme.accent;
+    final isAccrual = tx.isAccrual;
+    final color = switch (tx.type) {
+      'accrual' || 'bonus' => tx.amount >= 0 ? AppTheme.secondary : AppTheme.danger,
+      'advance' || 'penalty' => AppTheme.danger,
+      _ => AppTheme.accent,
+    };
     final detail = isAccrual
         ? 'فاتورة ${tx.invoiceNumber ?? '-'}${tx.customerName != null ? ' — ${tx.customerName}' : ''}'
-        : (tx.notes?.isNotEmpty == true ? tx.notes! : 'صرف مستحقات');
+        : (tx.notes?.isNotEmpty == true ? tx.notes! : tx.type == 'payout' ? 'صرف مستحقات' : tx.typeLabel);
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
@@ -1147,7 +1169,7 @@ class _VarianceTxCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
-                  child: Text(isAccrual ? 'فرق سعر بيع' : 'صرف',
+                  child: Text(tx.typeLabel,
                       style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: color)),
                 ),
                 Text('${tx.amount >= 0 ? '+' : ''}${tx.amount.toStringAsFixed(2)}',

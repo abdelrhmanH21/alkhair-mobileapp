@@ -128,5 +128,9 @@ class ApiEndpoints {
   static String adminFreePricingToggle(int repId) => '/admin/sales-reps/$repId/free-pricing-toggle';
   static String adminFreePricingReferencePrices(int repId) => '/admin/sales-reps/$repId/reference-prices';
   static String adminFreePricingPayout(int repId) => '/admin/sales-reps/$repId/price-variance-payout';
+
+  // Admin — company-wide تقرير الخزائن / تقرير الموردين (التقارير screen)
+  static const String adminReportTreasuries = '/admin/reports/treasuries';
+  static const String adminReportSuppliers  = '/admin/reports/suppliers';
   static String adminFreePricingStatement(int repId) => '/admin/sales-reps/$repId/price-variance-statement';
 }

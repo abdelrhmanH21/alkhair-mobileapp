@@ -185,7 +185,9 @@ class _StaffOperationsPageState extends State<StaffOperationsPage> {
                                   const TextStyle(fontWeight: FontWeight.bold)),
                           subtitle: Text(_selectedStaff!.workerType == 'worker'
                               ? 'عامل إنتاج'
-                              : 'مندوب مبيعات'),
+                              : _selectedStaff!.isFreePricingDelegate
+                                  ? 'مندوب حر السعر — تُخصم السلف والجزاءات من المستحق وتُضاف المكافآت إليه'
+                                  : 'مندوب مبيعات'),
                           trailing: TextButton(
                             onPressed: () =>
                                 setState(() => _selectedStaff = null),

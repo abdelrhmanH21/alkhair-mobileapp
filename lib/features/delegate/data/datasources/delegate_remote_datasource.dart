@@ -125,7 +125,16 @@ class DelegateRemoteDataSourceImpl implements DelegateRemoteDataSource {
 
   @override
   Future<LoadingModel> confirmLoading() async {
-    final res = await _client.dio.post(ApiEndpoints.delegateLoadingConfirm);
+    // Rare, user-waits-on-it action done from the field on mobile data —
+    // give it more headroom than the global 15s/30s defaults rather than
+    // fail fast (the server side is idempotent, so a late success is safe).
+    final res = await _client.dio.post(
+      ApiEndpoints.delegateLoadingConfirm,
+      options: Options(
+        sendTimeout: const Duration(seconds: 30),
+        receiveTimeout: const Duration(seconds: 30),
+      ),
+    );
     return LoadingModel.fromJson(res.data['data'] as Map<String, dynamic>);
   }
 

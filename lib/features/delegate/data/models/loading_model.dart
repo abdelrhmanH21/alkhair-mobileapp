@@ -120,7 +120,13 @@ class LoadingModel {
 
   factory LoadingModel.fromJson(Map<String, dynamic> json) {
     final wh = json['warehouse'] as Map<String, dynamic>? ?? {};
-    final createdBy = json['created_by'] as Map<String, dynamic>?;
+    // `created_by` is the {id,name} relation when the server eager-loads
+    // createdBy, but the raw FK integer when it doesn't — confirm() didn't,
+    // and the old hard `as Map` cast threw a TypeError on every successful
+    // confirm-pickup (the real cause of its recurring spurious error). Never
+    // let an optional display-only field fail the whole parse again.
+    final rawCreatedBy = json['created_by'];
+    final createdBy = rawCreatedBy is Map<String, dynamic> ? rawCreatedBy : null;
     return LoadingModel(
       id: json['id'] as int,
       delegateId: json['delegate_id'] as int,

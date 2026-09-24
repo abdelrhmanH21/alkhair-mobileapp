@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:dio/dio.dart';
 import '../../domain/repositories/delegate_repository.dart';
@@ -30,7 +31,19 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
   Future<void> applyOptimisticTruckStockDelta(Map<int, double> productIdToQtyDelta) =>
       _repo.applyOptimisticTruckStockDelta(productIdToQtyDelta);
 
-  DelegateBloc(this._repo, this._gps) : super(const DelegateInitial()) {
+  /// Waits between confirm-pickup attempts (its length + 1 = max attempts).
+  /// Injectable only so tests don't sleep real seconds.
+  final List<Duration> _confirmRetryBackoff;
+
+  DelegateBloc(
+    this._repo,
+    this._gps, {
+    List<Duration> confirmRetryBackoff = const [
+      Duration(seconds: 2),
+      Duration(seconds: 4),
+    ],
+  })  : _confirmRetryBackoff = confirmRetryBackoff,
+        super(const DelegateInitial()) {
     on<DelegateLoadingFetched>(_onFetchLoading);
     on<DelegateLoadingConfirmed>(_onConfirmLoading);
     on<DelegateLoadingAdditionConfirmed>(_onConfirmLoadingAddition);
@@ -85,15 +98,66 @@ class DelegateBloc extends Bloc<DelegateEvent, DelegateState> {
     Emitter<DelegateState> emit,
   ) async {
     emit(DelegateLoading(requestId: event.requestId));
-    try {
-      final loading = await _repo.confirmLoading();
-      emit(DelegateLoadingConfirmedState(loading, requestId: event.requestId));
-    } on DioException catch (e) {
-      emit(DelegateFailure(_parseError(e), requestId: event.requestId));
-    } catch (_) {
-      emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.', requestId: event.requestId));
+    // Transient failures (timeouts, dropped connections, 5xx from the
+    // server/Cloudflare) are retried silently — confirm() is idempotent
+    // server-side (a replay after an already-committed confirm returns the
+    // accepted loading, never double-deducts), so retrying is always safe.
+    // The page stays in its busy state throughout and only ever sees the
+    // FINAL outcome: no intermediate error can flash.
+    final maxAttempts = _confirmRetryBackoff.length + 1;
+    final sw = Stopwatch()..start();
+    for (var attempt = 1; ; attempt++) {
+      try {
+        final loading = await _repo.confirmLoading();
+        _logConfirm(event.requestId, 'ok attempt=$attempt/$maxAttempts '
+            'status=${loading.status} elapsed=${sw.elapsedMilliseconds}ms');
+        emit(DelegateLoadingConfirmedState(loading, requestId: event.requestId));
+        return;
+      } on DioException catch (e) {
+        final transient = _isTransient(e);
+        _logConfirm(event.requestId, 'fail attempt=$attempt/$maxAttempts '
+            'type=${e.type.name} http=${e.response?.statusCode} '
+            'transient=$transient elapsed=${sw.elapsedMilliseconds}ms');
+        if (transient && attempt < maxAttempts) {
+          await Future<void>.delayed(_confirmRetryBackoff[attempt - 1]);
+          continue;
+        }
+        emit(DelegateFailure(_parseError(e), requestId: event.requestId));
+        return;
+      } catch (e, st) {
+        // Not a network problem — the server answered but the client
+        // couldn't handle it (this is how the created_by TypeError hid for
+        // months behind a generic message). Never retried; logged in full.
+        _logConfirm(event.requestId, 'client error attempt=$attempt '
+            'elapsed=${sw.elapsedMilliseconds}ms: $e\n$st');
+        emit(DelegateFailure('حدث خطأ غير متوقع. حاول مرة أخرى.', requestId: event.requestId));
+        return;
+      }
     }
   }
+
+  static bool _isTransient(DioException e) {
+    switch (e.type) {
+      case DioExceptionType.connectionTimeout:
+      case DioExceptionType.sendTimeout:
+      case DioExceptionType.receiveTimeout:
+      case DioExceptionType.connectionError:
+      case DioExceptionType.unknown:
+        return true;
+      case DioExceptionType.badResponse:
+        // 4xx are real answers (nothing pending, insufficient stock, 401) —
+        // retrying can't change them. 5xx/Cloudflare 52x may be transient.
+        return (e.response?.statusCode ?? 0) >= 500;
+      default:
+        return false;
+    }
+  }
+
+  /// Permanent, low-noise diagnostics for the confirm-pickup action only
+  /// (one line per attempt) — so a future recurrence can be diagnosed from
+  /// `adb logcat | grep confirm-pickup` instead of guessed at.
+  static void _logConfirm(String requestId, String message) =>
+      debugPrint('[confirm-pickup] req=$requestId $message');
 
   Future<void> _onConfirmLoadingAddition(
     DelegateLoadingAdditionConfirmed event,

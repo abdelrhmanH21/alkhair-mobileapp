@@ -73,7 +73,7 @@ class _DailySummaryPageState extends State<DailySummaryPage> {
       final export = DailySummaryExportData(
         title: 'ملخص اليوم',
         subtitle: 'المندوب: ${d.delegateName} — تحميلة #${d.loadingId}',
-        dateLabel: dateFmt.format(d.loadedAt ?? d.settledAt),
+        dateLabel: d.loadingDate ?? dateFmt.format(d.loadedAt ?? d.settledAt),
         isBackfilled: d.isBackfilled,
         productHeaders: const ['اسم الصنف', 'الوحدة', 'منصرف', 'مباع', 'سعر البيع', 'الإجمالي بالنقدي', 'رصيد السيارة'],
         productRows: d.products
@@ -175,7 +175,7 @@ class _DailySummaryPageState extends State<DailySummaryPage> {
           Text('المندوب: ${d.delegateName} — تحميلة #${d.loadingId}',
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
           const SizedBox(height: 2),
-          Text('التاريخ: ${dateFmt.format(d.loadedAt ?? d.settledAt)}',
+          Text('التاريخ: ${d.loadingDate ?? dateFmt.format(d.loadedAt ?? d.settledAt)}',
               style: const TextStyle(fontSize: 12, color: AppTheme.textMuted)),
           if (d.isBackfilled) ...[
             const SizedBox(height: 6),

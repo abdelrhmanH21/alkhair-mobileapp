@@ -91,6 +91,7 @@ class AdminBloc extends Bloc<AdminEvent, AdminState> {
         warehouseId: e.warehouseId,
         items: e.items,
         notes: e.notes,
+        loadingDate: e.loadingDate,
       );
       emit(AdminLoadingCreatedSuccess('تم إنشاء التحميلة وإرسالها للمندوب.'));
     } catch (e) {

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/app_snackbar.dart';
+import '../../data/datasources/admin_remote_datasource.dart';
 import '../../data/models/admin_models.dart';
 import '../bloc/admin_bloc.dart';
 import '../bloc/admin_event.dart';
@@ -22,6 +23,8 @@ class _CreateLoadingPageState extends State<CreateLoadingPage> {
   DelegateModel? _selectedDelegate;
   SimpleWarehouseModel? _selectedWarehouse;
   final List<_ItemEntry> _items = [];
+  // Business date of the توزيعة — today by default, may be backdated.
+  DateTime _loadingDate = DateUtils.dateOnly(DateTime.now());
 
   @override
   void initState() {
@@ -45,6 +48,17 @@ class _CreateLoadingPageState extends State<CreateLoadingPage> {
   void _removeItem(int index) {
     _items[index].qtyCtrl.dispose();
     setState(() => _items.removeAt(index));
+  }
+
+  Future<void> _pickLoadingDate() async {
+    final today = DateUtils.dateOnly(DateTime.now());
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _loadingDate,
+      firstDate: DateTime(today.year - 1),
+      lastDate: today, // backdating allowed, never a future day
+    );
+    if (picked != null) setState(() => _loadingDate = picked);
   }
 
   void _submit() {
@@ -78,6 +92,7 @@ class _CreateLoadingPageState extends State<CreateLoadingPage> {
           warehouseId: _selectedWarehouse!.id,
           items: itemsPayload,
           notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
+          loadingDate: _loadingDate,
         ));
   }
 
@@ -131,6 +146,8 @@ class _CreateLoadingPageState extends State<CreateLoadingPage> {
               selectedWarehouse: _selectedWarehouse,
               items: _items,
               notesCtrl: _notesCtrl,
+              loadingDate: _loadingDate,
+              onPickLoadingDate: _pickLoadingDate,
               onDelegateChanged: (d) => setState(() => _selectedDelegate = d),
               onWarehouseChanged: (w) => setState(() => _selectedWarehouse = w),
               onAddItem: () => _addItem(state.products),
@@ -155,6 +172,8 @@ class _FormBody extends StatelessWidget {
   final SimpleWarehouseModel? selectedWarehouse;
   final List<_ItemEntry> items;
   final TextEditingController notesCtrl;
+  final DateTime loadingDate;
+  final VoidCallback onPickLoadingDate;
   final ValueChanged<DelegateModel?> onDelegateChanged;
   final ValueChanged<SimpleWarehouseModel?> onWarehouseChanged;
   final VoidCallback onAddItem;
@@ -168,6 +187,8 @@ class _FormBody extends StatelessWidget {
     required this.selectedWarehouse,
     required this.items,
     required this.notesCtrl,
+    required this.loadingDate,
+    required this.onPickLoadingDate,
     required this.onDelegateChanged,
     required this.onWarehouseChanged,
     required this.onAddItem,
@@ -209,6 +230,27 @@ class _FormBody extends StatelessWidget {
                 border: OutlineInputBorder(),
                 contentPadding:
                     EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            // ── Loading (business) date ───────────────────────────────────
+            const _SectionHeader(title: 'تاريخ التوزيعة', icon: Icons.event_rounded),
+            const SizedBox(height: 8),
+            InkWell(
+              onTap: onPickLoadingDate,
+              borderRadius: BorderRadius.circular(4),
+              child: InputDecorator(
+                decoration: InputDecoration(
+                  border: const OutlineInputBorder(),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                  suffixIcon: const Icon(Icons.calendar_today_outlined, size: 18),
+                  helperText: DateUtils.isSameDay(loadingDate, DateTime.now())
+                      ? 'اليوم — يمكن اختيار تاريخ سابق'
+                      : 'تاريخ سابق',
+                ),
+                child: Text(formatLoadingDate(loadingDate)),
               ),
             ),
             const SizedBox(height: 20),

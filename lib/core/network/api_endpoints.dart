@@ -94,6 +94,7 @@ class ApiEndpoints {
   static const String adminLoadings     = '/admin/loadings';
   // Add products to an already-active loading (Part 5) — id injected at call site.
   static String adminLoadingAddItems(int loadingId) => '/admin/loadings/$loadingId/add-items';
+  static String adminLoadingDate(int loadingId) => '/admin/loadings/$loadingId/date';
   static const String adminProducts     = '/admin/products';
   static const String adminWarehouses   = '/admin/warehouses';
   static const String adminPayrollSummary = '/admin/payroll-summary';

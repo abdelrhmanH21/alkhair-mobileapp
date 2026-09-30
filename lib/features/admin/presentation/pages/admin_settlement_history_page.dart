@@ -1,7 +1,9 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/di/service_locator.dart';
 import '../../../../core/theme/app_theme.dart';
+import '../../../../core/utils/app_snackbar.dart';
 import '../../../../core/widgets/state_views.dart';
 import '../../data/datasources/admin_remote_datasource.dart';
 import '../../data/models/admin_models.dart';
@@ -99,6 +101,56 @@ class _AdminSettlementHistoryPageState extends State<AdminSettlementHistoryPage>
       });
     } catch (_) {
       setState(() => _loadingMore = false);
+    }
+  }
+
+  /// Correct a settled loading's business date: pick → confirm → PUT.
+  /// Only loading_date changes (never amounts or settled_at).
+  Future<void> _editLoadingDate(SettlementRecordModel record) async {
+    final today = DateUtils.dateOnly(DateTime.now());
+    final current = DateTime.tryParse(record.loadingDate ?? '') ?? today;
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: current.isAfter(today) ? today : current,
+      firstDate: DateTime(today.year - 2),
+      lastDate: today,
+      helpText: 'تاريخ التوزيعة',
+    );
+    if (picked == null || !mounted) return;
+    final newDate = formatLoadingDate(picked);
+    if (newDate == record.loadingDate) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('تعديل تاريخ التوزيعة'),
+        content: Text(
+            'سيتم تغيير تاريخ هذه التوزيعة إلى $newDate — سيؤثر هذا على تقارير فروقات الأسعار المرتبطة بها.\n\nلن تتغير أي مبالغ ولا تاريخ التسوية.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
+          ElevatedButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('تأكيد')),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await _remote.updateLoadingDate(loadingId: record.loadingId, loadingDate: picked);
+      if (!mounted) return;
+      AppSnackbar.showSuccess(context, 'تم تعديل تاريخ التوزيعة إلى $newDate');
+      _load();
+    } on DioException catch (e) {
+      if (!mounted) return;
+      final data = e.response?.data;
+      String? msg;
+      if (data is Map) {
+        final errs = data['errors'];
+        final fieldErr = errs is Map ? errs['loading_date'] : null;
+        msg = (fieldErr is List && fieldErr.isNotEmpty ? fieldErr.first : data['message']) as String?;
+      }
+      AppSnackbar.showError(context, msg ?? 'فشل تعديل التاريخ');
+    } catch (_) {
+      if (mounted) AppSnackbar.showError(context, 'حدث خطأ غير متوقع');
     }
   }
 
@@ -201,7 +253,10 @@ class _AdminSettlementHistoryPageState extends State<AdminSettlementHistoryPage>
               ),
             );
           }
-          return _SettlementCard(record: _rows[i]);
+          return _SettlementCard(
+            record: _rows[i],
+            onEditDate: () => _editLoadingDate(_rows[i]),
+          );
         },
       ),
     );
@@ -210,7 +265,8 @@ class _AdminSettlementHistoryPageState extends State<AdminSettlementHistoryPage>
 
 class _SettlementCard extends StatelessWidget {
   final SettlementRecordModel record;
-  const _SettlementCard({required this.record});
+  final VoidCallback onEditDate;
+  const _SettlementCard({required this.record, required this.onEditDate});
 
   @override
   Widget build(BuildContext context) {
@@ -239,13 +295,28 @@ class _SettlementCard extends StatelessWidget {
                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
                     Text('تحميلة #${record.loadingId}',
                         style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
+                    InkWell(
+                      onTap: onEditDate,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 2),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text('تاريخ التوزيعة: ${record.loadingDate ?? '—'}',
+                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+                            const SizedBox(width: 4),
+                            const Icon(Icons.edit_calendar_outlined, size: 15, color: AppTheme.primary),
+                          ],
+                        ),
+                      ),
+                    ),
                   ],
                 ),
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Text(
-                      DateFormat('yyyy-MM-dd HH:mm').format(record.settledAt),
+                      'تسوية: ${DateFormat('yyyy-MM-dd HH:mm').format(record.settledAt)}',
                       style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
                     ),
                     IconButton(

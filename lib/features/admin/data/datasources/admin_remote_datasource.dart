@@ -25,7 +25,11 @@ abstract class AdminRemoteDataSource {
     required int warehouseId,
     required List<Map<String, dynamic>> items,
     String? notes,
+    DateTime? loadingDate,
   });
+  /// Corrects an existing loading's business date (even once settled) —
+  /// only loading_date changes server-side, never amounts or settled_at.
+  Future<void> updateLoadingDate({required int loadingId, required DateTime loadingDate});
   /// Adds products to an already-active (accepted/in_transit) loading —
   /// requires the delegate's own confirmation before the stock is trusted;
   /// see DelegateLoadingController::addItems()/confirmAddition().
@@ -412,13 +416,22 @@ class AdminRemoteDataSourceImpl implements AdminRemoteDataSource {
     required int warehouseId,
     required List<Map<String, dynamic>> items,
     String? notes,
+    DateTime? loadingDate,
   }) async {
-    await _client.dio.post(ApiEndpoints.adminLoadings, data: {
-      'delegate_id': delegateId,
-      'warehouse_id': warehouseId,
-      'items': items,
-      if (notes != null && notes.isNotEmpty) 'notes': notes,
-    });
+    await _client.dio.post(ApiEndpoints.adminLoadings,
+        data: buildCreateLoadingPayload(
+          delegateId: delegateId,
+          warehouseId: warehouseId,
+          items: items,
+          notes: notes,
+          loadingDate: loadingDate,
+        ));
+  }
+
+  @override
+  Future<void> updateLoadingDate({required int loadingId, required DateTime loadingDate}) async {
+    await _client.dio.put(ApiEndpoints.adminLoadingDate(loadingId),
+        data: {'loading_date': formatLoadingDate(loadingDate)});
   }
 
   @override
@@ -1319,4 +1332,26 @@ Map<String, dynamic> buildCompleteProductionPayload({
       if (overheadVariable != null && overheadVariable > 0) 'overhead_variable': overheadVariable,
       'outputs': outputs,
       if (packagingMaterials.isNotEmpty) 'packaging_materials': packagingMaterials,
+    };
+
+/// Business date as the backend's `loading_date` (Y-m-d, local calendar day
+/// — no UTC conversion, which could shift it by a day).
+String formatLoadingDate(DateTime d) =>
+    '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+/// Body for POST /admin/loadings ("توزيعة جديدة"). `loadingDate` omitted →
+/// the server defaults to today.
+Map<String, dynamic> buildCreateLoadingPayload({
+  required int delegateId,
+  required int warehouseId,
+  required List<Map<String, dynamic>> items,
+  String? notes,
+  DateTime? loadingDate,
+}) =>
+    {
+      'delegate_id': delegateId,
+      'warehouse_id': warehouseId,
+      'items': items,
+      if (notes != null && notes.isNotEmpty) 'notes': notes,
+      if (loadingDate != null) 'loading_date': formatLoadingDate(loadingDate),
     };

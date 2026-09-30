@@ -40,14 +40,16 @@ class AdminLoadingSubmitted extends AdminEvent {
   final int warehouseId;
   final List<Map<String, dynamic>> items;
   final String? notes;
+  final DateTime? loadingDate;
 
   AdminLoadingSubmitted({
     required this.delegateId,
     required this.warehouseId,
     required this.items,
     this.notes,
+    this.loadingDate,
   });
 
   @override
-  List<Object?> get props => [delegateId, warehouseId, items];
+  List<Object?> get props => [delegateId, warehouseId, items, loadingDate];
 }

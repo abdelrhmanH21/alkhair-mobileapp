@@ -1316,6 +1316,8 @@ class SettlementRecordModel {
   final int loadingId;
   final String delegateName;
   final DateTime settledAt;
+  /// Business date of the توزيعة (Y-m-d string, editable), distinct from settledAt.
+  final String? loadingDate;
   // Null when genuinely unrecoverable for an old, pre-this-feature
   // settlement — never fabricated, see the backfill command's doc comment.
   final double? grossSales;
@@ -1336,6 +1338,7 @@ class SettlementRecordModel {
     required this.loadingId,
     required this.delegateName,
     required this.settledAt,
+    this.loadingDate,
     required this.grossSales,
     required this.expectedCash,
     required this.physicalCash,
@@ -1362,6 +1365,7 @@ class SettlementRecordModel {
       loadingId: json['loading_id'] as int? ?? 0,
       delegateName: delegate?['name'] as String? ?? 'غير معروف',
       settledAt: parseServerDateTime(json['settled_at'] as String?),
+      loadingDate: loadingDateOf(json['loading'] as Map<String, dynamic>?),
       grossSales: json['gross_sales'] != null ? _asDouble(json['gross_sales']) : null,
       expectedCash: _asDouble(json['expected_cash']),
       physicalCash: _asDouble(json['physical_cash']),
@@ -1671,6 +1675,8 @@ class DailySummaryModel {
   final String delegateName;
   final DateTime settledAt;
   final DateTime? loadedAt;
+  /// Business date of the shift (Y-m-d) — what "التاريخ" shows.
+  final String? loadingDate;
   final bool isBackfilled;
   final DailySummaryCashRowModel summary;
   final List<DailySummaryProductModel> products;
@@ -1686,6 +1692,7 @@ class DailySummaryModel {
     required this.delegateName,
     required this.settledAt,
     required this.loadedAt,
+    this.loadingDate,
     required this.isBackfilled,
     required this.summary,
     required this.products,
@@ -1707,6 +1714,7 @@ class DailySummaryModel {
       loadedAt: settlement['loaded_at'] != null
           ? parseServerDateTime(settlement['loaded_at'] as String?)
           : null,
+      loadingDate: settlement['loading_date'] as String?,
       isBackfilled: settlement['is_backfilled'] as bool? ?? false,
       summary: DailySummaryCashRowModel.fromJson(json['summary'] as Map<String, dynamic>),
       products: (json['products'] as List? ?? [])
@@ -2022,4 +2030,15 @@ class ReferencePriceSaveResult {
       balanceAfter: recalc is Map ? (recalc['balance_after'] as num?)?.toDouble() : null,
     );
   }
+}
+
+/// A loading's business date (`loading.loading_date`, Y-m-d), falling back
+/// to the local date of created_at for a row the backfill hasn't reached.
+String? loadingDateOf(Map<String, dynamic>? loading) {
+  if (loading == null) return null;
+  final d = loading['loading_date'] as String?;
+  if (d != null && d.length >= 10) return d.substring(0, 10);
+  final c = tryParseServerDateTime(loading['created_at'] as String?);
+  if (c == null) return null;
+  return '${c.year.toString().padLeft(4, '0')}-${c.month.toString().padLeft(2, '0')}-${c.day.toString().padLeft(2, '0')}';
 }

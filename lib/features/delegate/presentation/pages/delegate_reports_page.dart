@@ -17,7 +17,9 @@ import '../bloc/delegate_bloc.dart';
 import '../bloc/delegate_event.dart';
 import '../bloc/delegate_state.dart';
 import '../bloc/request_tracker.dart';
+import '../../data/models/client_model.dart';
 import '../../data/models/report_models.dart';
+import '../widgets/client_search_field.dart';
 import '../widgets/price_variance_report_tab.dart';
 
 enum _ReportPeriod { month, week, custom }
@@ -35,7 +37,10 @@ enum _ReportKind { region, product }
 /// Admin/manager (who reach this same page from the admin drawer, with the
 /// region/product reports aggregated company-wide) additionally get
 /// "تقرير الخزائن" and "تقرير الموردين" — company-wide only, never shown to
-/// a delegate — with the same period chips and PDF/Excel export.
+/// a delegate — with the same period chips and PDF/Excel export — plus
+/// "كشف حساب عميل": pick one customer, see their full chronological debt
+/// ledger (running balance after every row). That tab carries its own
+/// OPTIONAL date range (default: full history) instead of the shared chips.
 class DelegateReportsPage extends StatefulWidget {
   /// Overridable for tests; defaults to the app-wide shared instance.
   final SensitiveRevealController? revealController;
@@ -53,7 +58,11 @@ class _DelegateReportsPageState extends State<DelegateReportsPage>
   late final bool _hasLockedTab;
   late final bool _isAdmin;
   // Locked tab (free-pricing delegate only) always sits last.
-  int get _lockedTabIndex => _isAdmin ? 4 : 2;
+  int get _lockedTabIndex => _isAdmin ? 5 : 2;
+  static const int _customerLedgerTabIndex = 4; // admin only
+  bool get _showPeriodChips =>
+      _tabController.index != _lockedTabIndex &&
+      !(_isAdmin && _tabController.index == _customerLedgerTabIndex);
   late final SensitiveRevealController _reveal;
   int _lastTabIndex = 0;
   _ReportPeriod _period = _ReportPeriod.month;
@@ -81,15 +90,15 @@ class _DelegateReportsPageState extends State<DelegateReportsPage>
     _isAdmin = authState is AuthAuthenticated && authState.user.isAdmin;
     _reveal = widget.revealController ?? sl<SensitiveRevealController>();
     _tabController = TabController(
-        length: 2 + (_isAdmin ? 2 : 0) + (_hasLockedTab ? 1 : 0), vsync: this);
-    if (_hasLockedTab) _tabController.addListener(_onTabChanged);
+        length: 2 + (_isAdmin ? 3 : 0) + (_hasLockedTab ? 1 : 0), vsync: this);
+    if (_hasLockedTab || _isAdmin) _tabController.addListener(_onTabChanged);
     _fetchReports();
   }
 
   @override
   void dispose() {
+    if (_hasLockedTab || _isAdmin) _tabController.removeListener(_onTabChanged);
     if (_hasLockedTab) {
-      _tabController.removeListener(_onTabChanged);
       // Leaving التقارير altogether re-masks. Deferred: lock() notifies
       // listeners, which must not happen mid-teardown.
       final reveal = _reveal;
@@ -106,7 +115,8 @@ class _DelegateReportsPageState extends State<DelegateReportsPage>
     final index = _tabController.index;
     if (index == _lastTabIndex) return;
     _lastTabIndex = index;
-    setState(() {}); // the period chips are hidden on the protected tab
+    setState(() {}); // the period chips are hidden on the protected / ledger tabs
+    if (!_hasLockedTab) return;
     if (index == _lockedTabIndex) {
       requestRevealWithFeedback(context, _reveal);
     } else {
@@ -249,6 +259,7 @@ class _DelegateReportsPageState extends State<DelegateReportsPage>
             const Tab(text: 'تقرير الأصناف'),
             if (_isAdmin) const Tab(text: 'تقرير الخزائن'),
             if (_isAdmin) const Tab(text: 'تقرير الموردين'),
+            if (_isAdmin) const Tab(text: 'كشف حساب عميل'),
             if (_hasLockedTab) const Tab(text: 'تقرير التحميلات'),
           ],
         ),
@@ -268,7 +279,7 @@ class _DelegateReportsPageState extends State<DelegateReportsPage>
         },
         child: Column(
           children: [
-            if (_tabController.index != _lockedTabIndex)
+            if (_showPeriodChips)
               Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               child: Row(
@@ -309,6 +320,8 @@ class _DelegateReportsPageState extends State<DelegateReportsPage>
                   _ProductReportView(rows: _productRows, periodLabel: _periodLabel),
                   if (_isAdmin) _TreasuryReportView(rows: _treasuryRows, periodLabel: _periodLabel),
                   if (_isAdmin) _SupplierReportView(rows: _supplierRows, periodLabel: _periodLabel),
+                  if (_isAdmin)
+                    CustomerLedgerReportView(remote: widget.adminRemote ?? sl<AdminRemoteDataSource>()),
                   if (_hasLockedTab) PriceVarianceReportTab(revealController: _reveal),
                 ],
               ),
@@ -625,6 +638,299 @@ class _SupplierReportView extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+// ─── كشف حساب عميل ─────────────────────────────────────────────────────────────
+
+/// Builds the PDF/Excel payload for a customer ledger — top-level so the
+/// export columns are unit-testable without pumping the page.
+ReportExportData customerLedgerExportData(CustomerLedgerModel l) {
+  final fmt = NumberFormat('#,##0.00');
+  return ReportExportData(
+    title: 'كشف حساب عميل — ${l.customerName}',
+    period: customerLedgerPeriodLabel(l),
+    headers: const ['التاريخ', 'النوع', 'البيان', 'المبلغ', 'رصيد بعدها'],
+    rows: l.rows
+        .map((r) => [
+              r.date,
+              r.typeLabel,
+              r.actor == null ? r.description : '${r.description} — ${r.actor}',
+              r.isBalanceMarker ? '-' : fmt.format(r.amount),
+              fmt.format(r.balanceAfter),
+            ])
+        .toList(),
+    totals: [
+      l.periodTo == null ? 'إجمالي المديونية' : 'الرصيد في نهاية الفترة',
+      '-',
+      'مدين ${fmt.format(l.totalDebit)} / دائن ${fmt.format(l.totalCredit)}',
+      '-',
+      fmt.format(l.closingBalance),
+    ],
+  );
+}
+
+String customerLedgerPeriodLabel(CustomerLedgerModel l) => l.isFullHistory
+    ? 'كامل السجل'
+    : '${l.periodFrom ?? 'البداية'} — ${l.periodTo ?? 'اليوم'}';
+
+class CustomerLedgerReportView extends StatefulWidget {
+  final AdminRemoteDataSource remote;
+  const CustomerLedgerReportView({super.key, required this.remote});
+
+  @override
+  State<CustomerLedgerReportView> createState() => _CustomerLedgerReportViewState();
+}
+
+class _CustomerLedgerReportViewState extends State<CustomerLedgerReportView>
+    with AutomaticKeepAliveClientMixin {
+  final _searchCtrl = TextEditingController();
+  final _searchFocus = FocusNode();
+  List<ClientModel> _results = [];
+  bool _searchLoading = false;
+  ClientModel? _client;
+  DateTimeRange? _range; // null = full history
+  CustomerLedgerModel? _ledger;
+  bool _loading = false;
+  // Bumped per request so a slower response for a previously selected
+  // customer/range can never overwrite the one now shown.
+  int _generation = 0;
+
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchFocus.addListener(_onSearchFocusChanged);
+  }
+
+  @override
+  void dispose() {
+    _searchFocus.removeListener(_onSearchFocusChanged);
+    _searchFocus.dispose();
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  void _onSearchFocusChanged() {
+    if (_searchFocus.hasFocus && _searchCtrl.text.isEmpty) _search('');
+  }
+
+  Future<void> _search(String q) async {
+    setState(() => _searchLoading = true);
+    try {
+      final results = await widget.remote.searchCustomers(q);
+      if (!mounted) return;
+      setState(() {
+        _results = results;
+        _searchLoading = false;
+      });
+    } catch (_) {
+      if (mounted) setState(() => _searchLoading = false);
+    }
+  }
+
+  Future<void> _load() async {
+    final client = _client;
+    if (client == null) return;
+    final generation = ++_generation;
+    final fmt = DateFormat('yyyy-MM-dd');
+    setState(() => _loading = true);
+    try {
+      final ledger = await widget.remote.fetchCustomerLedger(
+        client.id,
+        dateFrom: _range == null ? null : fmt.format(_range!.start),
+        dateTo: _range == null ? null : fmt.format(_range!.end),
+      );
+      if (mounted && generation == _generation) {
+        setState(() {
+          _ledger = ledger;
+          _loading = false;
+        });
+      }
+    } on DioException catch (e) {
+      if (!mounted || generation != _generation) return;
+      setState(() => _loading = false);
+      AppSnackbar.showError(context, e.response?.data?['message'] as String? ?? 'تعذر تحميل كشف الحساب.');
+    } catch (_) {
+      if (!mounted || generation != _generation) return;
+      setState(() => _loading = false);
+      AppSnackbar.showError(context, 'تعذر تحميل كشف الحساب.');
+    }
+  }
+
+  Future<void> _pickRange() async {
+    final now = DateTime.now();
+    final range = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(now.year - 5),
+      lastDate: now,
+      initialDateRange: _range ?? DateTimeRange(start: DateTime(now.year, now.month), end: now),
+    );
+    if (range == null) return;
+    setState(() => _range = range);
+    _load();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    final ledger = _ledger;
+    final amountFmt = NumberFormat('#,##0.00');
+    return ListView(
+      padding: const EdgeInsets.all(12),
+      children: [
+        ClientSearchField(
+          controller: _searchCtrl,
+          focusNode: _searchFocus,
+          results: _results,
+          isLoading: _searchLoading,
+          selectedClient: _client,
+          onSearch: _search,
+          onSelect: (c) {
+            setState(() {
+              _client = c;
+              _searchCtrl.text = c.name;
+              _results = [];
+              _ledger = null;
+            });
+            FocusScope.of(context).unfocus();
+            _load();
+          },
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: ChoiceChip(
+                label: const Text('كامل السجل'),
+                selected: _range == null,
+                onSelected: (_) {
+                  if (_range == null) return;
+                  setState(() => _range = null);
+                  _load();
+                },
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: ChoiceChip(
+                label: Text(_range == null
+                    ? 'نطاق مخصص'
+                    : '${DateFormat('yy-MM-dd').format(_range!.start)}..${DateFormat('yy-MM-dd').format(_range!.end)}'),
+                selected: _range != null,
+                onSelected: (_) => _pickRange(),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        if (_client == null)
+          const Padding(
+            padding: EdgeInsets.only(top: 40),
+            child: Text('ابحث عن العميل لعرض كشف حسابه الكامل.',
+                textAlign: TextAlign.center, style: TextStyle(color: AppTheme.textMuted)),
+          )
+        else if (_loading && ledger == null)
+          const Padding(
+            padding: EdgeInsets.only(top: 40),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (ledger != null) ...[
+          _ExportButtonsRow(buildData: () => customerLedgerExportData(ledger)),
+          Card(
+            color: AppTheme.primary.withValues(alpha: 0.06),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _ReportMiniStat(label: 'مدين', value: amountFmt.format(ledger.totalDebit)),
+                  _ReportMiniStat(label: 'دائن', value: amountFmt.format(ledger.totalCredit)),
+                  _ReportMiniStat(label: 'المديونية الحالية', value: amountFmt.format(ledger.currentBalance)),
+                ],
+              ),
+            ),
+          ),
+          if (ledger.unexplainedTotal != 0)
+            Card(
+              color: AppTheme.accent.withValues(alpha: 0.15),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Text(
+                  'يوجد فرق غير مفسَّر بقيمة ${amountFmt.format(ledger.unexplainedTotal)} — تغيير في الرصيد لا يقابله سجل.',
+                  style: const TextStyle(fontSize: 12),
+                ),
+              ),
+            ),
+          ...ledger.rows.map((r) => _CustomerLedgerRowCard(row: r, fmt: amountFmt)),
+          Card(
+            margin: const EdgeInsets.only(top: 6),
+            child: ListTile(
+              title: Text(ledger.periodTo == null ? 'إجمالي المديونية الحالية' : 'الرصيد في نهاية الفترة',
+                  style: const TextStyle(fontWeight: FontWeight.bold)),
+              trailing: Text(amountFmt.format(ledger.closingBalance),
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppTheme.primary)),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _CustomerLedgerRowCard extends StatelessWidget {
+  final CustomerLedgerRowModel row;
+  final NumberFormat fmt;
+  const _CustomerLedgerRowCard({required this.row, required this.fmt});
+
+  @override
+  Widget build(BuildContext context) {
+    final Color amountColor = row.isBalanceMarker || row.amount == 0
+        ? AppTheme.textMuted
+        : (row.amount > 0 ? AppTheme.danger : Colors.green.shade700);
+    final Color? bg = switch (row.type) {
+      'unexplained' => AppTheme.accent.withValues(alpha: 0.12),
+      'debt_audit' => AppTheme.primary.withValues(alpha: 0.05),
+      _ => null,
+    };
+    return Card(
+      color: bg,
+      margin: const EdgeInsets.symmetric(vertical: 3),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(row.typeLabel, style: const TextStyle(fontWeight: FontWeight.bold)),
+                ),
+                Text(row.date, style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(row.actor == null ? row.description : '${row.description} — ${row.actor}',
+                style: const TextStyle(fontSize: 12, color: AppTheme.textMuted)),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    row.isBalanceMarker ? '' : '${row.amount > 0 ? '+' : ''}${fmt.format(row.amount)}',
+                    style: TextStyle(fontWeight: FontWeight.bold, color: amountColor),
+                  ),
+                ),
+                Text('رصيد بعدها: ${fmt.format(row.balanceAfter)}',
+                    style: const TextStyle(fontWeight: FontWeight.bold)),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

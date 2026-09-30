@@ -124,6 +124,7 @@ abstract class AdminRemoteDataSource {
   // تقرير الخزائن / تقرير الموردين — same period params as the region/product reports.
   Future<List<TreasuryReportRowModel>> fetchTreasuryReport({String? period, String? dateFrom, String? dateTo});
   Future<List<SupplierReportRowModel>> fetchSupplierReport({String? period, String? dateFrom, String? dateTo});
+  Future<CustomerLedgerModel> fetchCustomerLedger(int customerId, {String? dateFrom, String? dateTo});
   // "حذف نهائي" — hard-deletes a SalesRep with no linked User and cascades
   // every referencing table. Throws a DioException (422) if the rep DOES
   // have a linked user; the caller surfaces the server's Arabic message.
@@ -724,6 +725,15 @@ class AdminRemoteDataSourceImpl implements AdminRemoteDataSource {
     );
     final list = (res.data as Map<String, dynamic>)['data'] as List? ?? [];
     return list.map((e) => SupplierReportRowModel.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  @override
+  Future<CustomerLedgerModel> fetchCustomerLedger(int customerId, {String? dateFrom, String? dateTo}) async {
+    final res = await _client.dio.get(
+      ApiEndpoints.adminCustomerStatement(customerId),
+      queryParameters: _reportParams(null, dateFrom, dateTo),
+    );
+    return CustomerLedgerModel.fromJson(res.data as Map<String, dynamic>);
   }
 
   @override

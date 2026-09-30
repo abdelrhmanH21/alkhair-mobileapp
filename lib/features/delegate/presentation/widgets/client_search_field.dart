@@ -15,7 +15,9 @@ class ClientSearchField extends StatelessWidget {
   final ClientModel? selectedClient;
   final void Function(String) onSearch;
   final void Function(ClientModel) onSelect;
-  final VoidCallback onAddNew;
+  /// Null hides the "add new client" FAB (e.g. read-only pickers such as
+  /// the كشف حساب عميل report).
+  final VoidCallback? onAddNew;
   /// Opens سجل الفواتير السابقة for a client. Optional — callers that don't
   /// need this entry point (e.g. the معاملات tab's collection form) simply
   /// omit it and no history icon is shown.
@@ -30,7 +32,7 @@ class ClientSearchField extends StatelessWidget {
     required this.selectedClient,
     required this.onSearch,
     required this.onSelect,
-    required this.onAddNew,
+    this.onAddNew,
     this.onViewHistory,
   });
 
@@ -69,14 +71,16 @@ class ClientSearchField extends StatelessWidget {
                   },
                 ),
               ),
-              const SizedBox(width: 8),
-              FloatingActionButton.small(
-                heroTag: 'add_client_fab',
-                onPressed: onAddNew,
-                backgroundColor: AppTheme.primary,
-                tooltip: 'إضافة عميل جديد',
-                child: const Icon(Icons.person_add, color: Colors.white),
-              ),
+              if (onAddNew != null) ...[
+                const SizedBox(width: 8),
+                FloatingActionButton.small(
+                  heroTag: 'add_client_fab',
+                  onPressed: onAddNew,
+                  backgroundColor: AppTheme.primary,
+                  tooltip: 'إضافة عميل جديد',
+                  child: const Icon(Icons.person_add, color: Colors.white),
+                ),
+              ],
             ],
           ),
           if (selectedClient != null)
@@ -137,44 +141,49 @@ class ClientSearchField extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12),
                 boxShadow: const [BoxShadow(color: AppTheme.shadowColor, blurRadius: 10)],
               ),
-              child: ListView.separated(
-                shrinkWrap: true,
-                itemCount: results.length,
-                separatorBuilder: (_, __) => const Divider(height: 1),
-                itemBuilder: (_, i) {
-                  final c = results[i];
-                  return ListTile(
-                    dense: true,
-                    leading: const Icon(Icons.person_outline, size: 20),
-                    title: Text(c.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-                    subtitle: Text(c.phone,
-                        style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        if (c.balance > 0)
-                          Padding(
-                            padding: const EdgeInsets.only(left: 4),
-                            child: Text(
-                              '${c.balance.toStringAsFixed(0)} دين',
-                              style: const TextStyle(
-                                  color: AppTheme.danger, fontSize: 11),
+              // Own Material so the ListTiles' ink splashes aren't hidden
+              // behind this container's background.
+              child: Material(
+                type: MaterialType.transparency,
+                child: ListView.separated(
+                  shrinkWrap: true,
+                  itemCount: results.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (_, i) {
+                    final c = results[i];
+                    return ListTile(
+                      dense: true,
+                      leading: const Icon(Icons.person_outline, size: 20),
+                      title: Text(c.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                      subtitle: Text(c.phone,
+                          style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (c.balance > 0)
+                            Padding(
+                              padding: const EdgeInsets.only(left: 4),
+                              child: Text(
+                                '${c.balance.toStringAsFixed(0)} دين',
+                                style: const TextStyle(
+                                    color: AppTheme.danger, fontSize: 11),
+                              ),
                             ),
-                          ),
-                        if (onViewHistory != null)
-                          IconButton(
-                            icon: const Icon(Icons.history, size: 18),
-                            tooltip: 'عرض السجل',
-                            visualDensity: VisualDensity.compact,
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
-                            onPressed: () => onViewHistory!(c),
-                          ),
-                      ],
-                    ),
-                    onTap: () => onSelect(c),
-                  );
-                },
+                          if (onViewHistory != null)
+                            IconButton(
+                              icon: const Icon(Icons.history, size: 18),
+                              tooltip: 'عرض السجل',
+                              visualDensity: VisualDensity.compact,
+                              padding: EdgeInsets.zero,
+                              constraints: const BoxConstraints(),
+                              onPressed: () => onViewHistory!(c),
+                            ),
+                        ],
+                      ),
+                      onTap: () => onSelect(c),
+                    );
+                  },
+                ),
               ),
             ),
         ],

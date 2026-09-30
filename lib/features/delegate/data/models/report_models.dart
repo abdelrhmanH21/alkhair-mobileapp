@@ -111,3 +111,111 @@ class SupplierReportRowModel {
         purchaseCount: (json['purchase_count'] as num? ?? 0).toInt(),
       );
 }
+
+/// One row of كشف حساب عميل — mirrors CustomerDebtLedger::present().
+/// [amount] is signed (+ adds to the debt, − reduces it); [balanceAfter]
+/// is the running debt right after this row. type is one of opening,
+/// carried_forward, invoice, sale, collection, return, debt_audit,
+/// unexplained.
+class CustomerLedgerRowModel {
+  final String type;
+  final String typeLabel;
+  final String date;
+  final String? invoiceNumber;
+  final String? actor;
+  final String description;
+  final double amount;
+  final double balanceAfter;
+  final double? oldValue;
+  final double? newValue;
+  final String? notes;
+
+  const CustomerLedgerRowModel({
+    required this.type,
+    required this.typeLabel,
+    required this.date,
+    this.invoiceNumber,
+    this.actor,
+    required this.description,
+    required this.amount,
+    required this.balanceAfter,
+    this.oldValue,
+    this.newValue,
+    this.notes,
+  });
+
+  bool get isBalanceMarker => type == 'opening' || type == 'carried_forward';
+
+  factory CustomerLedgerRowModel.fromJson(Map<String, dynamic> json) => CustomerLedgerRowModel(
+        type: json['type'] as String? ?? '',
+        typeLabel: json['type_label'] as String? ?? '',
+        date: json['date'] as String? ?? '',
+        invoiceNumber: json['invoice_number'] as String?,
+        actor: json['actor'] as String?,
+        description: json['description'] as String? ?? '',
+        amount: (json['amount'] as num? ?? 0).toDouble(),
+        balanceAfter: (json['balance_after'] as num? ?? 0).toDouble(),
+        oldValue: (json['old_value'] as num?)?.toDouble(),
+        newValue: (json['new_value'] as num?)?.toDouble(),
+        notes: json['notes'] as String?,
+      );
+}
+
+/// Mirrors CompanyReportController::customerStatement() (كشف حساب عميل,
+/// admin/manager only). Rows are chronological; the last row's
+/// balance_after equals [currentBalance] unless a date_to cut it short
+/// (then it's [closingBalance], the balance at the end of the period).
+class CustomerLedgerModel {
+  final int customerId;
+  final String customerName;
+  final String? customerPhone;
+  final String? periodFrom;
+  final String? periodTo;
+  final List<CustomerLedgerRowModel> rows;
+  final double openingBalance;
+  final double totalDebit;
+  final double totalCredit;
+  final double closingBalance;
+  final double currentBalance;
+  final double unexplainedTotal;
+
+  const CustomerLedgerModel({
+    required this.customerId,
+    required this.customerName,
+    this.customerPhone,
+    this.periodFrom,
+    this.periodTo,
+    required this.rows,
+    required this.openingBalance,
+    required this.totalDebit,
+    required this.totalCredit,
+    required this.closingBalance,
+    required this.currentBalance,
+    required this.unexplainedTotal,
+  });
+
+  factory CustomerLedgerModel.fromJson(Map<String, dynamic> json) {
+    final customer = json['customer'] as Map<String, dynamic>? ?? const {};
+    final period = json['period'] as Map<String, dynamic>? ?? const {};
+    final summary = json['summary'] as Map<String, dynamic>? ?? const {};
+    double n(String k) => (summary[k] as num? ?? 0).toDouble();
+    return CustomerLedgerModel(
+      customerId: customer['id'] as int? ?? 0,
+      customerName: customer['name'] as String? ?? '',
+      customerPhone: customer['phone'] as String?,
+      periodFrom: period['from'] as String?,
+      periodTo: period['to'] as String?,
+      rows: (json['data'] as List? ?? [])
+          .map((e) => CustomerLedgerRowModel.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      openingBalance: n('opening_balance'),
+      totalDebit: n('total_debit'),
+      totalCredit: n('total_credit'),
+      closingBalance: n('closing_balance'),
+      currentBalance: n('current_balance'),
+      unexplainedTotal: n('unexplained_total'),
+    );
+  }
+
+  bool get isFullHistory => periodFrom == null && periodTo == null;
+}

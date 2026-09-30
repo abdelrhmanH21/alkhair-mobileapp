@@ -133,5 +133,7 @@ class ApiEndpoints {
   // Admin — company-wide تقرير الخزائن / تقرير الموردين (التقارير screen)
   static const String adminReportTreasuries = '/admin/reports/treasuries';
   static const String adminReportSuppliers  = '/admin/reports/suppliers';
+  // كشف حساب عميل (same التقارير screen) — full chronological debt ledger
+  static String adminCustomerStatement(int customerId) => '/admin/customers/$customerId/statement';
   static String adminFreePricingStatement(int repId) => '/admin/sales-reps/$repId/price-variance-statement';
 }

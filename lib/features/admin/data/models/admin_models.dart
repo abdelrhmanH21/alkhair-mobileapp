@@ -1943,6 +1943,13 @@ class PriceVarianceTransactionModel {
   final String? invoiceNumber;
   final String? customerName;
   final String? createdByName;
+  /// What this row came from (invoice/customer, treasury for a payout, the
+  /// سلفة/جزاء/مكافأة reason) — server-computed by statement().
+  final String? sourceLabel;
+  /// Business date of the source record (penalty_date etc.), if any.
+  final String? sourceDate;
+  final bool? _deletable;
+  final String? deleteBlockedReason;
 
   const PriceVarianceTransactionModel({
     required this.id,
@@ -1954,13 +1961,19 @@ class PriceVarianceTransactionModel {
     this.invoiceNumber,
     this.customerName,
     this.createdByName,
-  });
+    this.sourceLabel,
+    this.sourceDate,
+    bool? deletable,
+    this.deleteBlockedReason,
+  }) : _deletable = deletable;
 
   bool get isAccrual => type == 'accrual';
 
-  /// سلفة/جزاء/مكافأة rows (incl. settlement shortage penalties) can be
-  /// deleted from the ledger; invoice accruals and payouts cannot.
-  bool get isDeletable => type == 'advance' || type == 'penalty' || type == 'bonus';
+  /// Every row type except an invoice accrual (derived from a real sale —
+  /// only editing the invoice may change it) can be deleted; the server's
+  /// `deletable` flag is authoritative (it also blocks rows already applied
+  /// in payroll), with the type rule as fallback for older responses.
+  bool get isDeletable => _deletable ?? !isAccrual;
 
   String get typeLabel => switch (type) {
         'accrual' => 'فرق سعر بيع',
@@ -1985,6 +1998,10 @@ class PriceVarianceTransactionModel {
       invoiceNumber: invoice?['invoice_number'] as String?,
       customerName: customer?['name'] as String?,
       createdByName: createdBy?['name'] as String?,
+      sourceLabel: json['source_label'] as String?,
+      sourceDate: json['source_date'] as String?,
+      deletable: json['deletable'] as bool?,
+      deleteBlockedReason: json['delete_blocked_reason'] as String?,
     );
   }
 }

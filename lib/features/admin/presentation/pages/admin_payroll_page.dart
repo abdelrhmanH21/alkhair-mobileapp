@@ -1102,8 +1102,9 @@ class _PriceVarianceTabState extends State<_PriceVarianceTab> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text('حذف ${tx.typeLabel}'),
-        content: Text(
-            'هل تريد حذف هذه الحركة (${tx.amount.abs().toStringAsFixed(2)})؟ سيُعاد احتساب المستحق وكل الحركات بعدها.'),
+        content: Text('هل تريد حذف هذه الحركة (${tx.amount.abs().toStringAsFixed(2)})؟'
+            '${tx.type == 'payout' ? ' سيُعاد المبلغ إلى الخزينة.' : ''}'
+            ' سيُعاد احتساب المستحق وكل الحركات بعدها.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
           ElevatedButton(
@@ -1199,9 +1200,14 @@ class _VarianceTxCard extends StatelessWidget {
       'advance' || 'penalty' => AppTheme.danger,
       _ => AppTheme.accent,
     };
-    final detail = isAccrual
-        ? 'فاتورة ${tx.invoiceNumber ?? '-'}${tx.customerName != null ? ' — ${tx.customerName}' : ''}'
-        : (tx.notes?.isNotEmpty == true ? tx.notes! : tx.type == 'payout' ? 'صرف مستحقات' : tx.typeLabel);
+    final detail = tx.sourceLabel ??
+        (isAccrual
+            ? 'فاتورة ${tx.invoiceNumber ?? '-'}${tx.customerName != null ? ' — ${tx.customerName}' : ''}'
+            : (tx.notes?.isNotEmpty == true ? tx.notes! : tx.type == 'payout' ? 'صرف مستحقات' : tx.typeLabel));
+    final meta = [
+      if (tx.sourceDate != null) 'بتاريخ ${tx.sourceDate}',
+      if (tx.createdByName != null) 'بواسطة ${tx.createdByName}',
+    ].join(' · ');
 
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
@@ -1225,6 +1231,8 @@ class _VarianceTxCard extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(detail, style: const TextStyle(fontSize: 12)),
+            if (meta.isNotEmpty)
+              Text(meta, style: const TextStyle(fontSize: 10, color: AppTheme.textMuted)),
             const SizedBox(height: 6),
             Row(
               children: [
@@ -1232,7 +1240,12 @@ class _VarianceTxCard extends StatelessWidget {
                   child: Text('الرصيد بعدها: ${tx.balanceAfter.toStringAsFixed(2)}',
                       style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: AppTheme.textMuted)),
                 ),
-                if (onDelete != null)
+                if (onDelete == null)
+                  Tooltip(
+                    message: tx.deleteBlockedReason ?? '',
+                    child: const Icon(Icons.lock_outline, size: 16, color: AppTheme.textMuted),
+                  )
+                else
                   deleting
                       ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
                       : IconButton(

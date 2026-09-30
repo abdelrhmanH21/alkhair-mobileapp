@@ -194,6 +194,7 @@ abstract class AdminRemoteDataSource {
     double? overheadFixed,
     double? overheadVariable,
     required List<Map<String, dynamic>> outputs,
+    List<Map<String, dynamic>> packagingMaterials = const [],
   });
 
   // ── Customer search (shared by "عملية بيع" and "تحصيل من عميل") ──────────
@@ -942,12 +943,15 @@ class AdminRemoteDataSourceImpl implements AdminRemoteDataSource {
     double? overheadFixed,
     double? overheadVariable,
     required List<Map<String, dynamic>> outputs,
+    List<Map<String, dynamic>> packagingMaterials = const [],
   }) async {
-    await _client.dio.post(ApiEndpoints.manufacturingComplete(batchId), data: {
-      if (overheadFixed != null && overheadFixed > 0) 'overhead_fixed': overheadFixed,
-      if (overheadVariable != null && overheadVariable > 0) 'overhead_variable': overheadVariable,
-      'outputs': outputs,
-    });
+    await _client.dio.post(ApiEndpoints.manufacturingComplete(batchId),
+        data: buildCompleteProductionPayload(
+          overheadFixed: overheadFixed,
+          overheadVariable: overheadVariable,
+          outputs: outputs,
+          packagingMaterials: packagingMaterials,
+        ));
   }
 
   // ── Customer search (shared by "عملية بيع" and "تحصيل من عميل") ──────────
@@ -1300,3 +1304,19 @@ class AdminRemoteDataSourceImpl implements AdminRemoteDataSource {
     return DistributorDailyReceiptModel.fromJson(res.data as Map<String, dynamic>);
   }
 }
+
+/// Body for POST /manufacturing/{id}/complete ("استلام إنتاج تام").
+/// `packagingMaterials` entries are `{raw_material_id, quantity_used}` —
+/// packaging (علب، استيكر…) is deducted from raw-material stock server-side.
+Map<String, dynamic> buildCompleteProductionPayload({
+  double? overheadFixed,
+  double? overheadVariable,
+  required List<Map<String, dynamic>> outputs,
+  List<Map<String, dynamic>> packagingMaterials = const [],
+}) =>
+    {
+      if (overheadFixed != null && overheadFixed > 0) 'overhead_fixed': overheadFixed,
+      if (overheadVariable != null && overheadVariable > 0) 'overhead_variable': overheadVariable,
+      'outputs': outputs,
+      if (packagingMaterials.isNotEmpty) 'packaging_materials': packagingMaterials,
+    };

@@ -1036,6 +1036,7 @@ class _PriceVarianceTabState extends State<_PriceVarianceTab> {
   PriceVarianceStatementModel? _statement;
   List<TreasuryModel> _treasuries = [];
   String? _error;
+  int? _deletingId;
 
   @override
   void initState() {
@@ -1093,6 +1094,46 @@ class _PriceVarianceTabState extends State<_PriceVarianceTab> {
     );
   }
 
+  // Same AlertDialog confirm as _RepBonusesTab._delete. Deleting a
+  // سلفة/جزاء/مكافأة (incl. a settlement shortage) removes its source record
+  // too, and the server recomputes balance_after for every later row.
+  Future<void> _delete(PriceVarianceTransactionModel tx) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('حذف ${tx.typeLabel}'),
+        content: Text(
+            'هل تريد حذف هذه الحركة (${tx.amount.abs().toStringAsFixed(2)})؟ سيُعاد احتساب المستحق وكل الحركات بعدها.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('إلغاء')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.danger),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('حذف'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() => _deletingId = tx.id);
+    try {
+      await widget.remote.deletePriceVarianceTransaction(repId: widget.repId, transactionId: tx.id);
+      if (!mounted) return;
+      AppSnackbar.showSuccess(context, 'تم حذف الحركة وإعادة احتساب الرصيد.');
+      await _load();
+      widget.onChanged?.call();
+    } on DioException catch (e) {
+      if (!mounted) return;
+      AppSnackbar.showError(context, e.response?.data?['message'] as String? ?? 'فشل الحذف.');
+    } catch (_) {
+      if (!mounted) return;
+      AppSnackbar.showError(context, 'حدث خطأ غير متوقع.');
+    } finally {
+      if (mounted) setState(() => _deletingId = null);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_error != null) return AppErrorView(message: _error!, onRetry: _load);
@@ -1133,7 +1174,11 @@ class _PriceVarianceTabState extends State<_PriceVarianceTab> {
               child: Center(child: Text('لا توجد حركات بعد.', style: TextStyle(color: AppTheme.textMuted))),
             )
           else
-            ...statement.transactions.reversed.map((tx) => _VarianceTxCard(tx: tx)),
+            ...statement.transactions.reversed.map((tx) => _VarianceTxCard(
+                  tx: tx,
+                  deleting: _deletingId == tx.id,
+                  onDelete: tx.isDeletable ? () => _delete(tx) : null,
+                )),
         ],
       ),
     );
@@ -1142,7 +1187,9 @@ class _PriceVarianceTabState extends State<_PriceVarianceTab> {
 
 class _VarianceTxCard extends StatelessWidget {
   final PriceVarianceTransactionModel tx;
-  const _VarianceTxCard({required this.tx});
+  final bool deleting;
+  final VoidCallback? onDelete;
+  const _VarianceTxCard({required this.tx, this.deleting = false, this.onDelete});
 
   @override
   Widget build(BuildContext context) {
@@ -1179,8 +1226,24 @@ class _VarianceTxCard extends StatelessWidget {
             const SizedBox(height: 6),
             Text(detail, style: const TextStyle(fontSize: 12)),
             const SizedBox(height: 6),
-            Text('الرصيد بعدها: ${tx.balanceAfter.toStringAsFixed(2)}',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: AppTheme.textMuted)),
+            Row(
+              children: [
+                Expanded(
+                  child: Text('الرصيد بعدها: ${tx.balanceAfter.toStringAsFixed(2)}',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 11, color: AppTheme.textMuted)),
+                ),
+                if (onDelete != null)
+                  deleting
+                      ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                      : IconButton(
+                          icon: const Icon(Icons.delete_outline, size: 20, color: AppTheme.danger),
+                          tooltip: 'حذف',
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                          onPressed: onDelete,
+                        ),
+              ],
+            ),
           ],
         ),
       ),

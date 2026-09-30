@@ -169,6 +169,9 @@ abstract class AdminRemoteDataSource {
     String? notes,
   });
   Future<PriceVarianceStatementModel> fetchPriceVarianceStatement(int repId);
+  /// Deletes a سلفة/جزاء/مكافأة row (e.g. a settlement shortage) from the
+  /// rep's price-variance ledger; the server re-walks the whole chain.
+  Future<void> deletePriceVarianceTransaction({required int repId, required int transactionId});
   Future<void> setRepTarget({
     required int repId,
     required String month,
@@ -874,6 +877,11 @@ class AdminRemoteDataSourceImpl implements AdminRemoteDataSource {
     final res = await _client.dio.get(ApiEndpoints.adminFreePricingStatement(repId));
     return PriceVarianceStatementModel.fromJson(res.data as Map<String, dynamic>);
   }
+  @override
+  Future<void> deletePriceVarianceTransaction({required int repId, required int transactionId}) async {
+    await _client.dio.delete(ApiEndpoints.adminFreePricingTransaction(repId, transactionId));
+  }
+
 
   // ── Production ("بدء تشغيلة جديدة" / "استلام إنتاج تام") ────────────────
 

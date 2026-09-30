@@ -1958,6 +1958,10 @@ class PriceVarianceTransactionModel {
 
   bool get isAccrual => type == 'accrual';
 
+  /// سلفة/جزاء/مكافأة rows (incl. settlement shortage penalties) can be
+  /// deleted from the ledger; invoice accruals and payouts cannot.
+  bool get isDeletable => type == 'advance' || type == 'penalty' || type == 'bonus';
+
   String get typeLabel => switch (type) {
         'accrual' => 'فرق سعر بيع',
         'payout' => 'صرف',

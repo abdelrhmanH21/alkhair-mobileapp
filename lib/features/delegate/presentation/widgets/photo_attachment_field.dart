@@ -52,7 +52,11 @@ class PhotoAttachmentField extends StatelessWidget {
       // separate explicit size check, unlike ComplainPage.tsx's web upload
       // (a raw <input type=file> has no built-in compression, hence that
       // page's own client-side MAX_PHOTO_BYTES guard instead).
-      final picked = await ImagePicker().pickImage(source: source, imageQuality: 70);
+      // Also capped at 1600px: legible for a receipt/complaint photo, and a
+      // full-resolution camera shot would otherwise go up on mobile data
+      // and sit on the server's disk forever.
+      final picked = await ImagePicker().pickImage(
+          source: source, imageQuality: 70, maxWidth: 1600, maxHeight: 1600);
       return picked == null ? null : File(picked.path);
     } catch (_) {
       if (context.mounted) {

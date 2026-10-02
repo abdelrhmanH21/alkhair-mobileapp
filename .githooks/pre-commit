@@ -1,0 +1,39 @@
+#!/bin/sh
+# Warn-only (never blocks): flags uncommitted work that is NOT part of this
+# commit and hasn't been touched for a while — the signature of another,
+# possibly interrupted, session's unfinished changes. Several concurrent or
+# cut-off sessions on this repo have left correct-but-uncommitted work in the
+# tree; committing on top without noticing risks it being lost, duplicated,
+# or later swept into an unrelated commit.
+#
+# Enable once per clone:   git config core.hooksPath .githooks
+# Tune / silence:          STALE_MINUTES=120 git commit ...   SKIP_STALE_CHECK=1 git commit ...
+
+[ "${SKIP_STALE_CHECK:-0}" = "1" ] && exit 0
+threshold=$(( ${STALE_MINUTES:-60} * 60 ))
+now=$(date +%s)
+
+mtime() { stat -c %Y "$1" 2>/dev/null || stat -f %m "$1" 2>/dev/null; }
+
+stale=$(
+    { git diff --name-only; git ls-files --others --exclude-standard; } | sort -u |
+    while IFS= read -r f; do
+        [ -f "$f" ] || continue
+        m=$(mtime "$f") || continue
+        age=$(( now - m ))
+        [ "$age" -gt "$threshold" ] && printf '    %4d min  %s\n' $(( age / 60 )) "$f"
+    done
+)
+
+if [ -n "$stale" ]; then
+    {
+        echo ""
+        echo "⚠  pre-commit: uncommitted changes NOT in this commit, untouched for >${STALE_MINUTES:-60} min:"
+        echo "$stale"
+        echo "   Possibly another (interrupted?) session's unfinished work. Review with 'git diff' /"
+        echo "   'git status' before building on top — don't stash/checkout/clean them blindly."
+        echo "   (Warning only; the commit proceeds.)"
+        echo ""
+    } >&2
+fi
+exit 0

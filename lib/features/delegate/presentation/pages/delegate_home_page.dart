@@ -232,9 +232,14 @@ class _DelegateHomePageState extends State<DelegateHomePage> with WidgetsBinding
           ),
         ],
       ),
+      // Each tab wrapped in TickerMode so hidden tabs count as not visible:
+      // IndexedStack keeps every tab alive with tickers ON, and PollingMixin
+      // (_HomeTab, SettlementPage) reads TickerMode to decide whether to
+      // poll — without this both polled every 20s on whichever tab was shown.
       body: IndexedStack(
         index: _tab,
         children: [
+          for (final (i, tab) in [
           _HomeTab(
             onGoToSell: _goToSell,
             onLoadingChanged: (l) => setState(() => _loading = l),
@@ -252,6 +257,8 @@ class _DelegateHomePageState extends State<DelegateHomePage> with WidgetsBinding
               value: context.read<DelegateBloc>(),
               child: TransactionsPage(
                   hasActiveLoading: _canSell, refreshTick: _transactionsRefreshTick)),
+          ].indexed)
+            TickerMode(enabled: i == _tab, child: tab),
         ],
       ),
     );

@@ -2,12 +2,22 @@ import 'dart:async';
 import 'package:flutter/widgets.dart';
 
 /// Adds lightweight, silent background polling to a State: refetches on a
-/// fixed interval while the widget is alive and the app is foregrounded,
-/// pausing when backgrounded (via WidgetsBindingObserver) and resuming on
-/// return. The mixin itself never touches the UI — implementers decide how
-/// to apply a poll result, and must do so silently (no spinner, no error
-/// toast for a failed poll; only user-initiated actions should surface
-/// errors).
+/// fixed interval only while the app is foregrounded AND the widget is
+/// actually visible, pausing otherwise and resuming on return. The mixin
+/// itself never touches the UI — implementers decide how to apply a poll
+/// result, and must do so silently (no spinner, no error toast for a failed
+/// poll; only user-initiated actions should surface errors).
+///
+/// "Visible" is read from [TickerMode] — the same signal that pauses
+/// animations: Navigator/Overlay already disables it for a route covered by
+/// an opaque route pushed on top, and a tab container must disable it for
+/// its hidden tabs (an [IndexedStack] does NOT — it keeps every tab's
+/// tickers running — so wrap each tab in `TickerMode(enabled: selected)`;
+/// see DelegateHomePage). Without that, every polling tab in an
+/// IndexedStack keeps polling for the whole session whichever tab is shown.
+/// Becoming visible again just restarts the interval (same as returning to
+/// the foreground); screens that need fresh data the moment they're shown
+/// already refetch explicitly (e.g. SettlementPage's refreshTick).
 ///
 /// Usage:
 /// ```dart
@@ -35,6 +45,10 @@ mixin PollingMixin<T extends StatefulWidget> on State<T> {
   Timer? _pollTimer;
   _PollingLifecycleObserver? _lifecycleObserver;
 
+  bool _started = false;
+  bool _foreground = true;
+  bool _visible = true;
+
   /// How often to poll while visible and foregrounded. Override to customize.
   Duration get pollInterval => const Duration(seconds: 20);
 
@@ -47,47 +61,62 @@ mixin PollingMixin<T extends StatefulWidget> on State<T> {
   /// the poll needs, e.g. a bloc via context, are available).
   void startPolling() {
     _lifecycleObserver ??= _PollingLifecycleObserver(
-      onResumed: _resumeTimer,
-      onPaused: _pauseTimer,
+      onForegroundChanged: (foreground) {
+        _foreground = foreground;
+        _sync();
+      },
     );
     WidgetsBinding.instance.addObserver(_lifecycleObserver!);
-    _resumeTimer();
+    _started = true;
+    _sync();
   }
 
   /// Stops polling and unregisters the lifecycle observer — call from
   /// dispose() so nothing leaks.
   void stopPolling() {
-    _pauseTimer();
+    _started = false;
+    _sync();
     if (_lifecycleObserver != null) {
       WidgetsBinding.instance.removeObserver(_lifecycleObserver!);
       _lifecycleObserver = null;
     }
   }
 
-  void _resumeTimer() {
-    _pollTimer?.cancel();
-    _pollTimer = Timer.periodic(pollInterval, (_) => onPoll());
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final visible = TickerMode.valuesOf(context).enabled;
+    if (visible == _visible) return;
+    _visible = visible;
+    _sync();
   }
 
-  void _pauseTimer() {
-    _pollTimer?.cancel();
-    _pollTimer = null;
+  /// Starts/stops the timer on state TRANSITIONS only — didChangeDependencies
+  /// also fires for unrelated inherited changes (the keyboard resizing
+  /// MediaQuery, ...), which must not keep resetting the interval.
+  void _sync() {
+    final shouldRun = _started && _foreground && _visible;
+    if (shouldRun && _pollTimer == null) {
+      _pollTimer = Timer.periodic(pollInterval, (_) => onPoll());
+    } else if (!shouldRun && _pollTimer != null) {
+      _pollTimer!.cancel();
+      _pollTimer = null;
+    }
   }
 }
 
 class _PollingLifecycleObserver with WidgetsBindingObserver {
-  final VoidCallback onResumed;
-  final VoidCallback onPaused;
-  _PollingLifecycleObserver({required this.onResumed, required this.onPaused});
+  final ValueChanged<bool> onForegroundChanged;
+  _PollingLifecycleObserver({required this.onForegroundChanged});
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      onResumed();
+      onForegroundChanged(true);
     } else if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive ||
         state == AppLifecycleState.detached) {
-      onPaused();
+      onForegroundChanged(false);
     }
   }
 }

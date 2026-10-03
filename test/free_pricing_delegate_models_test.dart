@@ -1,5 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:alkhair_mobileapp/features/delegate/data/models/price_variance_models.dart';
 import 'package:alkhair_mobileapp/features/admin/data/models/admin_models.dart';
 import 'package:alkhair_mobileapp/features/auth/data/models/user_model.dart';
 
@@ -52,60 +51,6 @@ void main() {
       });
       expect(row.isFreePricingDelegate, isFalse);
       expect(row.priceVarianceBalance, 0);
-    });
-  });
-
-  group('PriceVarianceSummaryModel.fromJson', () {
-    test('parses balance + by-loading breakdown with per-line variance', () {
-      final model = PriceVarianceSummaryModel.fromJson({
-        'price_variance_balance': 70.0,
-        'by_loading': [
-          {
-            'loading_id': 3,
-            'date': '2026-09-20',
-            'status': 'in_transit',
-            'loading_variance_total': 70.0,
-            'lines': [
-              {
-                'invoice_id': 12, 'invoice_number': 'DINV-000012',
-                'customer_name': 'عميل تجريبي', 'product_name': 'جبنة',
-                'quantity': 2, 'reference_price': 265.0, 'charged_price': 300.0, 'variance': 70.0,
-              },
-            ],
-          },
-          // A loading with zero sold lines (e.g. just picked up) — backend
-          // filters these out of by_loading entirely, but the model must
-          // still parse an empty list gracefully if one ever arrives.
-          {'loading_id': 4, 'date': '2026-09-21', 'status': 'accepted', 'loading_variance_total': 0, 'lines': []},
-        ],
-      });
-
-      expect(model.priceVarianceBalance, 70.0);
-      expect(model.byLoading, hasLength(2));
-
-      final first = model.byLoading.first;
-      expect(first.loadingId, 3);
-      expect(first.loadingVarianceTotal, 70.0);
-      expect(first.lines, hasLength(1));
-
-      final line = first.lines.first;
-      expect(line.customerName, 'عميل تجريبي');
-      expect(line.productName, 'جبنة');
-      expect(line.quantity, 2.0);
-      expect(line.referencePrice, 265.0);
-      expect(line.chargedPrice, 300.0);
-      expect(line.variance, 70.0);
-
-      expect(model.byLoading.last.lines, isEmpty);
-    });
-
-    test('parses cleanly with no loadings at all (brand-new free-pricing rep)', () {
-      final model = PriceVarianceSummaryModel.fromJson({
-        'price_variance_balance': 0,
-        'by_loading': [],
-      });
-      expect(model.priceVarianceBalance, 0);
-      expect(model.byLoading, isEmpty);
     });
   });
 

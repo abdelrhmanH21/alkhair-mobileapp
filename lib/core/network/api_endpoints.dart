@@ -29,7 +29,6 @@ class ApiEndpoints {
   static const String delegateAdvances             = '/delegate/advances';
   static const String delegateBonuses              = '/delegate/bonuses';
   static const String delegateCommissionBreakdown  = '/delegate/commission-breakdown';
-  static const String delegatePriceVarianceSummary = '/delegate/price-variance-summary';
 
   // Delegate — clients
   static const String delegateClients       = '/delegate/clients';

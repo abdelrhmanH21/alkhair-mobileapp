@@ -3,11 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import '../../../../core/di/service_locator.dart';
-import '../../../../core/security/sensitive_reveal_controller.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/app_snackbar.dart';
 import '../../../../core/utils/report_export.dart';
-import '../../../../core/widgets/masked_amount.dart';
 import '../../../admin/data/datasources/admin_remote_datasource.dart';
 import '../../../app_config/presentation/bloc/app_config_bloc.dart';
 import '../../../app_config/presentation/bloc/app_config_state.dart';
@@ -20,7 +18,6 @@ import '../bloc/request_tracker.dart';
 import '../../data/models/client_model.dart';
 import '../../data/models/report_models.dart';
 import '../widgets/client_search_field.dart';
-import '../widgets/price_variance_report_tab.dart';
 
 enum _ReportPeriod { month, week, custom }
 enum _ReportKind { region, product }
@@ -28,11 +25,7 @@ enum _ReportKind { region, product }
 /// تقارير المندوب — بيانات مبيعاته (المناطق/الأصناف) لفترة قابلة للاختيار.
 /// مصدر مصدرها الوحيد: DelegateReportController::byRegion()/byProduct()، نفس
 /// أسلوب جلب البيانات المستخدم في CommissionBreakdownPage.
-///
-/// A "مندوب حر السعر" delegate additionally gets a third tab, "تقرير التحميلات"
-/// (per-loading breakdown, biometric-locked — see PriceVarianceReportTab).
-/// It sits last in the same TabBar as the two ordinary reports and is named
-/// like one, so it reads as just another report rather than a special feature.
+/// Every delegate — "مندوب حر السعر" included — gets exactly these two tabs.
 ///
 /// Admin/manager (who reach this same page from the admin drawer, with the
 /// region/product reports aggregated company-wide) additionally get
@@ -42,11 +35,9 @@ enum _ReportKind { region, product }
 /// ledger (running balance after every row). That tab carries its own
 /// OPTIONAL date range (default: full history) instead of the shared chips.
 class DelegateReportsPage extends StatefulWidget {
-  /// Overridable for tests; defaults to the app-wide shared instance.
-  final SensitiveRevealController? revealController;
   /// Overridable for tests; defaults to the service-locator instance.
   final AdminRemoteDataSource? adminRemote;
-  const DelegateReportsPage({super.key, this.revealController, this.adminRemote});
+  const DelegateReportsPage({super.key, this.adminRemote});
 
   @override
   State<DelegateReportsPage> createState() => _DelegateReportsPageState();
@@ -55,15 +46,9 @@ class DelegateReportsPage extends StatefulWidget {
 class _DelegateReportsPageState extends State<DelegateReportsPage>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
-  late final bool _hasLockedTab;
   late final bool _isAdmin;
-  // Locked tab (free-pricing delegate only) always sits last.
-  int get _lockedTabIndex => _isAdmin ? 5 : 2;
   static const int _customerLedgerTabIndex = 4; // admin only
-  bool get _showPeriodChips =>
-      _tabController.index != _lockedTabIndex &&
-      !(_isAdmin && _tabController.index == _customerLedgerTabIndex);
-  late final SensitiveRevealController _reveal;
+  bool get _showPeriodChips => !(_isAdmin && _tabController.index == _customerLedgerTabIndex);
   int _lastTabIndex = 0;
   _ReportPeriod _period = _ReportPeriod.month;
   DateTimeRange? _customRange;
@@ -86,42 +71,25 @@ class _DelegateReportsPageState extends State<DelegateReportsPage>
   void initState() {
     super.initState();
     final authState = context.read<AuthBloc>().state;
-    _hasLockedTab = authState is AuthAuthenticated && authState.user.isFreePricingDelegate;
     _isAdmin = authState is AuthAuthenticated && authState.user.isAdmin;
-    _reveal = widget.revealController ?? sl<SensitiveRevealController>();
-    _tabController = TabController(
-        length: 2 + (_isAdmin ? 3 : 0) + (_hasLockedTab ? 1 : 0), vsync: this);
-    if (_hasLockedTab || _isAdmin) _tabController.addListener(_onTabChanged);
+    _tabController = TabController(length: 2 + (_isAdmin ? 3 : 0), vsync: this);
+    if (_isAdmin) _tabController.addListener(_onTabChanged);
     _fetchReports();
   }
 
   @override
   void dispose() {
-    if (_hasLockedTab || _isAdmin) _tabController.removeListener(_onTabChanged);
-    if (_hasLockedTab) {
-      // Leaving التقارير altogether re-masks. Deferred: lock() notifies
-      // listeners, which must not happen mid-teardown.
-      final reveal = _reveal;
-      Future.microtask(reveal.lock);
-    }
+    if (_isAdmin) _tabController.removeListener(_onTabChanged);
     _tabController.dispose();
     super.dispose();
   }
 
-  /// Selecting the protected tab immediately starts the biometric / PIN
-  /// check; moving off it re-masks straight away.
   void _onTabChanged() {
     if (_tabController.indexIsChanging) return;
     final index = _tabController.index;
     if (index == _lastTabIndex) return;
     _lastTabIndex = index;
-    setState(() {}); // the period chips are hidden on the protected / ledger tabs
-    if (!_hasLockedTab) return;
-    if (index == _lockedTabIndex) {
-      requestRevealWithFeedback(context, _reveal);
-    } else {
-      _reveal.lock();
-    }
+    setState(() {}); // the period chips are hidden on the ledger tab
   }
 
   void _fetchReports() {
@@ -260,7 +228,6 @@ class _DelegateReportsPageState extends State<DelegateReportsPage>
             if (_isAdmin) const Tab(text: 'تقرير الخزائن'),
             if (_isAdmin) const Tab(text: 'تقرير الموردين'),
             if (_isAdmin) const Tab(text: 'كشف حساب عميل'),
-            if (_hasLockedTab) const Tab(text: 'تقرير التحميلات'),
           ],
         ),
       ),
@@ -322,7 +289,6 @@ class _DelegateReportsPageState extends State<DelegateReportsPage>
                   if (_isAdmin) _SupplierReportView(rows: _supplierRows, periodLabel: _periodLabel),
                   if (_isAdmin)
                     CustomerLedgerReportView(remote: widget.adminRemote ?? sl<AdminRemoteDataSource>()),
-                  if (_hasLockedTab) PriceVarianceReportTab(revealController: _reveal),
                 ],
               ),
             ),

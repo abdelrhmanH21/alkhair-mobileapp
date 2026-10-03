@@ -77,12 +77,13 @@ class _DashboardSectionState extends State<DashboardSection> {
 
   @override
   Widget build(BuildContext context) {
-    // "مندوب حر السعر" — renders NOTHING on the home screen: no target /
-    // commission / salary cards (their salary and commission are always 0 by
-    // design, which would itself look odd) and, above all, no trace of the
-    // price-variance balance. That view lives only behind التقارير →
-    // "تقرير التحميلات" and the biometric lock (see delegate_reports_page.dart).
-    // Every OTHER delegate (the overwhelming majority) is unaffected.
+    // "مندوب حر السعر" — renders NOTHING on the home screen. These cards are
+    // the salary/commission payroll model, which doesn't apply to this rep
+    // type: base salary and commission are always 0 by design, and their
+    // penalties/advances/bonuses are booked against the price-variance
+    // balance (admin-only — the rep has no self-service view of it), so the
+    // cards would show misleading zeros and a wrong "net payable". Every
+    // OTHER delegate (the overwhelming majority) is unaffected.
     final authState = context.watch<AuthBloc>().state;
     if (authState is AuthAuthenticated && authState.user.isFreePricingDelegate) {
       return const SizedBox.shrink();

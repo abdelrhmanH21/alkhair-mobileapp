@@ -10,7 +10,6 @@ import '../../data/models/settlement_summary_model.dart';
 import '../../data/models/breakdown_models.dart';
 import '../../data/models/transaction_record_models.dart';
 import '../../data/models/report_models.dart';
-import '../../data/models/price_variance_models.dart';
 
 abstract class DelegateState extends Equatable {
   /// Echoes back the [DelegateEvent.requestId] of whichever event produced
@@ -198,12 +197,6 @@ class DelegateCommissionBreakdownLoaded extends DelegateState {
   List<Object?> get props => [days, requestId];
 }
 
-class DelegatePriceVarianceSummaryLoaded extends DelegateState {
-  final PriceVarianceSummaryModel summary;
-  const DelegatePriceVarianceSummaryLoaded(this.summary, {super.requestId});
-  @override
-  List<Object?> get props => [summary, requestId];
-}
 
 class DelegateFailure extends DelegateState {
   final String message;

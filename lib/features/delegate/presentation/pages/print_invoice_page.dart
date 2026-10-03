@@ -45,6 +45,8 @@ class _PrintInvoicePageState extends State<PrintInvoicePage> {
   List<BluetoothInfo> _devices = [];
   BluetoothInfo? _selectedDevice;
   bool _printing = false;
+  PrintStage _printStage = PrintStage.preparing;
+  double _printProgress = 0;
   bool _connected = false;
   bool _connecting = false;
 
@@ -170,15 +172,39 @@ class _PrintInvoicePageState extends State<PrintInvoicePage> {
   }
 
   Future<void> _print() async {
-    setState(() => _printing = true);
+    if (_printing) return;
+    setState(() {
+      _printing = true;
+      _printStage = PrintStage.preparing;
+      _printProgress = 0;
+    });
 
-    final data = await _buildPrintData();
+    PrintOutcome outcome;
+    try {
+      final data = await _buildPrintData();
+      if (!mounted) return;
+      // Passing the selected device lets printInvoice fall back to a full
+      // reconnect+retry if the "persistent" connection turned out to be
+      // stale (printer powered off/out of range) instead of just failing.
+      outcome = await _printer.printInvoice(
+        data,
+        device: _selectedDevice,
+        onProgress: (stage, progress) {
+          if (!mounted) return;
+          setState(() {
+            _printStage = stage;
+            _printProgress = progress;
+          });
+        },
+      );
+    } catch (e, st) {
+      // printInvoice itself never throws; this catches _buildPrintData
+      // (config/invoice data) so the button never stays stuck on "جارٍ الطباعة".
+      debugPrint('Print failed before sending: $e\n$st');
+      outcome = PrintOutcome.renderFailed;
+    }
     if (!mounted) return;
-    // Passing the selected device lets printInvoice fall back to a full
-    // reconnect+retry if the "persistent" connection turned out to be
-    // stale (printer powered off/out of range) instead of just failing.
-    final ok = await _printer.printInvoice(data, device: _selectedDevice);
-    if (!mounted) return;
+
     // Reflect whatever printInvoice's own reconnect attempt actually left
     // the connection in, so a failure that couldn't be recovered disables
     // the print button again instead of showing a stale "متصل" state.
@@ -188,15 +214,69 @@ class _PrintInvoicePageState extends State<PrintInvoicePage> {
       _printing = false;
       _connected = stillConnected;
     });
-    if (ok) {
-      AppSnackbar.showSuccess(context, 'تم الطباعة بنجاح');
-    } else {
-      AppSnackbar.showError(context, 'فشل الطباعة، تأكد من تشغيل الطابعة وقربها من الهاتف');
+    switch (outcome) {
+      case PrintOutcome.success:
+        AppSnackbar.showSuccess(context, 'تم الطباعة بنجاح');
+      case PrintOutcome.renderFailed:
+        AppSnackbar.showError(context, 'تعذر تجهيز الفاتورة للطباعة، حاول مرة أخرى');
+      case PrintOutcome.sendFailed:
+        AppSnackbar.showError(context, 'فشل الطباعة، تأكد من تشغيل الطابعة وقربها من الهاتف');
+      case PrintOutcome.interrupted:
+        AppSnackbar.showError(
+            context, 'انقطع الاتصال أثناء الطباعة وقد تكون الفاتورة طُبعت جزئياً — أعد الاتصال واطبع مرة أخرى');
     }
+  }
+
+  /// Blocks the screen while a receipt is being prepared/sent, with the
+  /// current stage and send progress, so legitimately slow work (a long
+  /// receipt over a slow Bluetooth link) never looks like a frozen app.
+  Widget _printProgressOverlay() {
+    final sending = _printStage == PrintStage.sending;
+    return Positioned.fill(
+      child: ColoredBox(
+        color: Colors.black45,
+        child: Center(
+          child: Card(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: 56,
+                    height: 56,
+                    child: CircularProgressIndicator(value: sending ? _printProgress : null),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    sending
+                        ? 'جارٍ الإرسال للطابعة... ${(_printProgress * 100).round()}%'
+                        : 'جارٍ تجهيز الفاتورة...',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    return PopScope(
+      canPop: !_printing,
+      child: Stack(
+        children: [
+          _buildScaffold(),
+          if (_printing) _printProgressOverlay(),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildScaffold() {
     return Scaffold(
       appBar: AppBar(title: const Text('طباعة الفاتورة')),
       body: _loading

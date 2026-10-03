@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:isolate';
+import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -36,7 +38,7 @@ const int _logoWidthDots = 384;
 int rasterWidthDotsForPaper(String paperWidth) => paperWidth == '80mm' ? 576 : 384;
 
 /// Point size shared by the totals-block bold lines (إجمالي المبيعات،
-/// المدفوع، etc — see the `bold` branch of _renderReceiptImage's per-line
+/// المدفوع، etc — see the `bold` branch of _renderReceiptRgba's per-line
 /// size switch) and the items/returns table's row cells (name/unit/qty/
 /// price/subtotal — see addItemsTable's cellPainter calls). A real physical
 /// print showed the item rows noticeably smaller than the totals directly
@@ -60,6 +62,123 @@ const double _qrSizeDots = 160;
 // rasterizer and the on-screen preview's logo rendering so both show the
 // exact same monochrome conversion.
 const int _blackThreshold = 160;
+
+/// Rows per ESC/POS "GS v 0" raster command, and so per
+/// [PrintBluetoothThermal.writeBytes] call: 24 rows = 1.7KB at 80mm.
+///
+/// Why this small: print_bluetooth_thermal 1.2.2's Android `writebytes`
+/// handler runs on the Android MAIN thread and rebuilds its ByteArray with
+/// `bytes += it.toByte()` once per byte — O(n²) copying + one allocation per
+/// byte — before a blocking socket write. Sending a whole receipt (124KB for
+/// a typical 3-item 80mm invoice, 215KB for the largest real one) in one call
+/// meant 8–24 GB of copying on the main thread: the "freeze then crash" (ANR)
+/// on tapping طباعة الفاتورة. At 1.7KB per call that's ~1.5M byte copies —
+/// negligible — and the main thread gets control back between calls.
+const int kRasterBandRows = 24;
+
+/// ESC @ (reset) + ESC 3 0 (line spacing 0). The plugin prepends a "\n" to
+/// every writeBytes call, so with one call per raster band a LF lands
+/// between every two bands; at line spacing 0 that LF feeds nothing, keeping
+/// the bands seamless.
+const List<int> _ticketPreamble = [0x1B, 0x40, 0x1B, 0x33, 0x00];
+
+/// ESC 2 (default line spacing back) + 3 blank feeds + GS V 66 3 (feed & cut).
+const List<int> _ticketTrailer = [0x1B, 0x32, 0x0A, 0x0A, 0x0A, 0x1D, 0x56, 0x42, 0x03];
+
+/// Whether an RGBA8 pixel should print/render as a black dot once composited onto
+/// a plain white receipt background.
+///
+/// The logo source PNGs here are genuinely transparent (verified directly
+/// against the uploaded `receipt_settings.company_logo`/`company_logo_color`
+/// files), but a transparent pixel's leftover RGB channel values are
+/// whatever the exporting tool happened to leave behind — commonly
+/// (0,0,0), but not always (one of these logos' transparent palette entry
+/// is a dark green (71,112,76)). Thresholding `pixel.luminance` directly,
+/// as this used to, ignored `pixel.a` entirely: any transparent pixel
+/// whose incidental RGB was merely dark (luminance below
+/// [_blackThreshold]) — which covers most of a logo's transparent
+/// background — printed as solid black, regardless of the logo's actual
+/// visible color. Alpha-compositing onto white FIRST, then thresholding
+/// the *result*, is the correct fix: a fully transparent pixel always
+/// composites to pure white (never black) no matter what color garbage
+/// its RGB channels hold, and partially-transparent edge pixels fade
+/// smoothly toward white instead of a hard on/off cutoff.
+bool _isDarkRgba8(int r, int g, int b, int a) {
+  final alpha = a / 255;
+  final luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+  return luminance * alpha + 255 * (1 - alpha) < _blackThreshold;
+}
+
+/// Thresholds a raw RGBA8 receipt bitmap to 1-bit and encodes it as one
+/// ESC/POS "GS v 0" raster command per [bandRows]-row band (1 bit per
+/// pixel, MSB first; set bit = black dot). Pure function on plain bytes so
+/// it can run in a background isolate — on the UI isolate this loop (it used
+/// to go through package:image's per-pixel Pixel objects) froze the screen
+/// for ~0.15–0.45s on a desktop CPU, several times that on a low-end phone.
+@visibleForTesting
+List<Uint8List> encodeRasterBands(Uint8List rgba, int width, int height,
+    {int bandRows = kRasterBandRows}) {
+  final widthBytes = (width + 7) >> 3;
+  final bands = <Uint8List>[];
+  for (var y0 = 0; y0 < height; y0 += bandRows) {
+    final h = math.min(bandRows, height - y0);
+    final cmd = Uint8List(8 + widthBytes * h)
+      ..setAll(0, [
+        0x1D, 0x76, 0x30, 0x00,
+        widthBytes & 0xFF, (widthBytes >> 8) & 0xFF,
+        h & 0xFF, (h >> 8) & 0xFF,
+      ]);
+    var rowStart = 8;
+    for (var y = y0; y < y0 + h; y++) {
+      var p = y * width * 4;
+      for (var x = 0; x < width; x++, p += 4) {
+        if (_isDarkRgba8(rgba[p], rgba[p + 1], rgba[p + 2], rgba[p + 3])) {
+          cmd[rowStart + (x >> 3)] |= 0x80 >> (x & 7);
+        }
+      }
+      rowStart += widthBytes;
+    }
+    bands.add(cmd);
+  }
+  return bands;
+}
+
+/// Decodes the logo and scales it DOWN to at most [maxWidth] — never up:
+/// at 203dpi one source pixel already maps to one printer dot, so
+/// upscaling (the real 300px logo used to be stretched to 576 dots on 80mm
+/// paper: a 72mm-tall square, a third of a typical receipt's raster data)
+/// adds dots without adding detail. Returns RGBA8 bytes. Isolate-safe.
+({Uint8List rgba, int width, int height})? _decodeLogo(Uint8List bytes, int maxWidth) {
+  final decoded = img.decodeImage(bytes);
+  if (decoded == null) return null;
+  final resized =
+      decoded.width > maxWidth ? img.copyResize(decoded, width: maxWidth) : decoded;
+  final rgba8 = resized.convert(format: img.Format.uint8, numChannels: 4);
+  return (
+    rgba: rgba8.getBytes(order: img.ChannelOrder.rgba),
+    width: rgba8.width,
+    height: rgba8.height,
+  );
+}
+
+/// How a [BluetoothPrinterService.printInvoice] attempt ended — specific
+/// enough for the UI to say what actually went wrong.
+enum PrintOutcome {
+  success,
+
+  /// Building the receipt bitmap/ticket failed — nothing was sent.
+  renderFailed,
+
+  /// Nothing reached the printer (even after a reconnect attempt).
+  sendFailed,
+
+  /// The link dropped part-way through: part of the receipt printed. Not
+  /// retried automatically, so a retry never prints a duplicate half-receipt.
+  interrupted,
+}
+
+/// Progress of a [BluetoothPrinterService.printInvoice] call, for the UI.
+enum PrintStage { preparing, sending }
 
 enum ReceiptAlign { left, center, right }
 
@@ -329,7 +448,7 @@ List<String> _wrapText(String text, int maxWidth) {
   return lines;
 }
 
-/// One already-measured piece of [BluetoothPrinterService._renderReceiptImage]'s
+/// One already-measured piece of [BluetoothPrinterService._renderReceiptRgba]'s
 /// layout: its final height, and a callback that paints it onto the receipt
 /// [Canvas] at a given `y`. Building the whole layout as a list of these
 /// first (each already knows its own height from a completed [TextPainter]
@@ -344,6 +463,14 @@ class _ReceiptDrawOp {
 }
 
 class BluetoothPrinterService {
+  /// Test-only replacement for the receipt's Cairo (google_fonts) text
+  /// style, so [printInvoice] can be exercised without a network font fetch.
+  final TextStyle Function({required double size, required bool bold})? _debugStyleBuilder;
+
+  BluetoothPrinterService({
+    @visibleForTesting TextStyle Function({required double size, required bool bold})? debugStyleBuilder,
+  }) : _debugStyleBuilder = debugStyleBuilder;
+
   /// Bluetooth Classic (SPP) connect can legitimately take a few seconds on
   /// a real thermal printer — long enough that a short timeout would read
   /// as an intermittent failure, but bounded so an unreachable printer
@@ -452,49 +579,75 @@ class BluetoothPrinterService {
     return result;
   }
 
+  /// Upper bound per [kRasterBandRows]-sized chunk write — generous for
+  /// ~1.7KB even on a slow SPP link, while a dead link still fails fast.
+  static const _chunkWriteTimeout = Duration(seconds: 10);
+
   /// Prints [data] over whatever connection is already live. When [device]
-  /// is supplied and the write fails — the "persistent" connection turning
-  /// out to be stale (printer turned off/out of range mid-session) — falls
-  /// back to the full reconnect-and-retry flow instead of just failing
-  /// silently, then retries the SAME already-rendered ticket once (no need
-  /// to re-render the receipt bitmap just because the printer needed a
-  /// fresh handshake).
-  Future<bool> printInvoice(InvoicePrintData data, {BluetoothInfo? device}) async {
-    final List<int> ticket;
+  /// is supplied and NOTHING could be written — the "persistent" connection
+  /// turning out to be stale (printer turned off/out of range mid-session) —
+  /// falls back to the full reconnect flow and resends the SAME
+  /// already-built ticket once. Never throws: every failure maps to a
+  /// [PrintOutcome].
+  Future<PrintOutcome> printInvoice(
+    InvoicePrintData data, {
+    BluetoothInfo? device,
+    void Function(PrintStage stage, double progress)? onProgress,
+  }) async {
+    onProgress?.call(PrintStage.preparing, 0);
+    final List<Uint8List> ticket;
     try {
       ticket = await _buildTicket(data);
-    } catch (e) {
-      debugPrint('Print render error: $e');
-      return false;
+    } catch (e, st) {
+      debugPrint('Print render error: $e\n$st');
+      return PrintOutcome.renderFailed;
     }
 
-    if (await _writeTicket(ticket)) return true;
-    if (device == null) return false;
+    var written = await _writeTicket(ticket, onProgress);
+    if (written == ticket.length) return PrintOutcome.success;
+    if (written > 0) return PrintOutcome.interrupted;
+    if (device == null) return PrintOutcome.sendFailed;
 
     debugPrint('Print write failed on presumed-live connection, retrying with full reconnect');
     final reconnect = await connect(device.macAdress);
     _connectedDevice = reconnect.success ? device : null;
-    if (!reconnect.success) return false;
-    return _writeTicket(ticket);
+    if (!reconnect.success) return PrintOutcome.sendFailed;
+    written = await _writeTicket(ticket, onProgress);
+    if (written == ticket.length) return PrintOutcome.success;
+    return written > 0 ? PrintOutcome.interrupted : PrintOutcome.sendFailed;
   }
 
-  Future<bool> _writeTicket(List<int> ticket) async {
-    try {
-      // Same defensive timeout as connect()/disconnect() — a receipt bitmap
-      // is a much larger payload than a bare connect handshake, so this
-      // gets more headroom.
-      return await PrintBluetoothThermal.writeBytes(ticket).timeout(const Duration(seconds: 25));
-    } catch (e) {
-      debugPrint('Print error: $e');
-      return false;
+  /// Sends [ticket] one chunk per writeBytes call, each awaited before the
+  /// next (see [kRasterBandRows] for why). Returns how many chunks were
+  /// fully written — `ticket.length` on success.
+  Future<int> _writeTicket(
+    List<Uint8List> ticket,
+    void Function(PrintStage stage, double progress)? onProgress,
+  ) async {
+    for (var i = 0; i < ticket.length; i++) {
+      bool ok;
+      try {
+        // A plain List<int>, NOT the Uint8List itself: the platform channel
+        // would deliver a Uint8List to Android as byte[], and the plugin's
+        // `call.arguments as List<Int>` cast throws on that.
+        ok = await PrintBluetoothThermal.writeBytes(List<int>.of(ticket[i]))
+            .timeout(_chunkWriteTimeout);
+      } catch (e) {
+        debugPrint('Print error on chunk $i/${ticket.length}: $e');
+        ok = false;
+      }
+      if (!ok) return i;
+      onProgress?.call(PrintStage.sending, (i + 1) / ticket.length);
     }
+    return ticket.length;
   }
 
   /// Builds the full print ticket. The *entire* receipt — logo, header,
   /// invoice info, items table, totals, footer — is rendered once as a
-  /// single bitmap ([_renderReceiptImage]) and sent as one or more ESC/POS
+  /// single bitmap ([_renderReceiptRgba]) and sent as one or more ESC/POS
   /// raster-image commands, instead of the raw ESC/POS text commands this
-  /// used to send line-by-line.
+  /// used to send line-by-line. Returned as separate chunks — preamble, one
+  /// per raster band, trailer — each meant for its own writeBytes call.
   ///
   /// Why: a real physical print showed the logo rendering fine (it already
   /// went through this bitmap path) but every line of Arabic *text* printing
@@ -506,51 +659,56 @@ class BluetoothPrinterService {
   /// correctly on-screen in InvoicePreviewPage) and sending the result as
   /// pixels sidesteps that entirely — the printer never has to interpret a
   /// single Arabic character.
-  Future<List<int>> _buildTicket(InvoicePrintData d) async {
-    final List<int> bytes = [];
-    void addBytes(List<int> b) => bytes.addAll(b);
-    void line(String text) => addBytes([...text.codeUnits, 0x0A]);
-
-    // Initialize printer
-    addBytes([0x1B, 0x40]);
-
-    final receiptImage = await _renderReceiptImage(d);
-    addBytes(_toChunkedRasterCommands(receiptImage));
-
-    line('');
-    line('');
-    line('');
-
-    // Feed and cut: GS V 66 3
-    addBytes([0x1D, 0x56, 0x42, 0x03]);
-
-    return bytes;
+  Future<List<Uint8List>> _buildTicket(
+    InvoicePrintData d, {
+    TextStyle Function({required double size, required bool bold})? styleBuilder,
+  }) async {
+    final receipt = await _renderReceiptRgba(d, styleBuilder: styleBuilder ?? _debugStyleBuilder);
+    // 1-bit threshold + raster encoding off the UI isolate. Top-level
+    // function + plain bytes only: the closure must not capture `this`
+    // (its ui.Image logo cache can't cross isolates).
+    final rgba = receipt.rgba, w = receipt.width, h = receipt.height;
+    final bands = await Isolate.run(() => encodeRasterBands(rgba, w, h));
+    return [
+      Uint8List.fromList(_ticketPreamble),
+      ...bands,
+      Uint8List.fromList(_ticketTrailer),
+    ];
   }
 
-  /// Test-only seam onto [_renderReceiptImage] — kept private/underscored
+  @visibleForTesting
+  Future<List<Uint8List>> buildTicketForTest(
+    InvoicePrintData d, {
+    TextStyle Function({required double size, required bool bold})? styleBuilder,
+  }) =>
+      _buildTicket(d, styleBuilder: styleBuilder);
+
+  /// Test-only seam onto [_renderReceiptRgba] — kept private/underscored
   /// internally so nothing outside this file relies on the rendering
   /// pipeline's shape, but exposed for a widget test to exercise the real
   /// Canvas/TextPainter layout code (privacy in Dart is per-file, so a test
   /// file in test/ genuinely cannot call a leading-underscore member here).
   /// [styleBuilder] lets a test skip google_fonts' network font fetch
-  /// entirely (see _renderReceiptImage's own doc comment) — omit it to test
+  /// entirely (see _renderReceiptRgba's own doc comment) — omit it to test
   /// against the real Cairo font.
   @visibleForTesting
   Future<img.Image> renderReceiptImageForTest(
     InvoicePrintData d, {
     TextStyle Function({required double size, required bool bold})? styleBuilder,
-  }) =>
-      _renderReceiptImage(d, styleBuilder: styleBuilder);
+  }) async {
+    final r = await _renderReceiptRgba(d, styleBuilder: styleBuilder);
+    return img.Image.fromBytes(
+        width: r.width, height: r.height, bytes: r.rgba.buffer, numChannels: 4);
+  }
 
   /// Renders [d]'s full receipt — via [buildReceiptPlan], the same content
   /// plan the on-screen preview (InvoicePreviewPage/ReceiptPreviewCard)
-  /// renders from — onto a single white-background RGBA image at
-  /// [_logoWidthDots] width (the same safe width already used for the
-  /// logo). Text is laid out/painted with Flutter's own TextPainter (Cairo,
+  /// renders from — onto a single white-background bitmap at
+  /// [InvoicePrintData.paperWidthDots] width, returned as raw RGBA8 bytes.
+  /// Text is laid out/painted with Flutter's own TextPainter (Cairo,
   /// matching the app's theme font), so Arabic shaping/joining is correct;
-  /// [_toChunkedRasterCommands] later thresholds the whole image (text,
-  /// logo and all) to 1-bit black/white for the printer, exactly like the
-  /// logo-only path already did.
+  /// [encodeRasterBands] later thresholds the whole image (text, logo and
+  /// all) to 1-bit black/white for the printer.
   ///
   /// The items/returns table is special-cased exactly like
   /// invoice_preview_page.dart's ReceiptPreviewCard does: buildReceiptPlan()
@@ -559,7 +717,7 @@ class BluetoothPrinterService {
   /// wrapped/shaped text, so a proper table is drawn directly from
   /// d.salesItems/d.returnedItems instead, and every raw printer-formatted
   /// item line buildReceiptPlan() emitted for that span is skipped.
-  Future<img.Image> _renderReceiptImage(
+  Future<({Uint8List rgba, int width, int height})> _renderReceiptRgba(
     InvoicePrintData d, {
     TextStyle Function({required double size, required bool bold})? styleBuilder,
   }) async {
@@ -626,14 +784,15 @@ class BluetoothPrinterService {
       final cacheKey = '$logoUrl@${width.toInt()}';
       var uiImage = _logoImageCache[cacheKey];
       if (uiImage == null) {
-        final resized = await _fetchAndResizeLogo(logoUrl, width: width.toInt());
-        if (resized == null) return;
-        uiImage = await _decodeUiImage(resized);
+        final logo = await _fetchAndDecodeLogo(logoUrl, maxWidth: width.toInt());
+        if (logo == null) return;
+        uiImage = await _decodeUiImage(logo.rgba, logo.width, logo.height);
         _logoImageCache[cacheKey] = uiImage;
       }
       final h = uiImage.height.toDouble();
+      final x = ((width - uiImage.width) / 2).floorToDouble();
       ops.add(_ReceiptDrawOp(
-          h + 12, (canvas, y) => canvas.drawImage(uiImage!, Offset(0, y), Paint())));
+          h + 12, (canvas, y) => canvas.drawImage(uiImage!, Offset(x, y), Paint())));
     }
 
     Future<void> addQr(String qrData) async {
@@ -771,13 +930,11 @@ class BluetoothPrinterService {
     }
     final picture = recorder.endRecording();
     final uiImage = await picture.toImage(width.toInt(), totalHeight);
+    picture.dispose();
     final byteData = await uiImage.toByteData(format: ui.ImageByteFormat.rawRgba);
-    return img.Image.fromBytes(
-      width: width.toInt(),
-      height: totalHeight,
-      bytes: byteData!.buffer,
-      numChannels: 4,
-    );
+    uiImage.dispose();
+    if (byteData == null) throw StateError('receipt bitmap readback failed');
+    return (rgba: byteData.buffer.asUint8List(), width: width.toInt(), height: totalHeight);
   }
 
   /// Decoded+resized receipt logo, keyed by `'$logoUrl@$widthDots'` — the
@@ -805,36 +962,13 @@ class BluetoothPrinterService {
     return image;
   }
 
-  /// Decodes an [img.Image] (already-resized logo pixels) into a [ui.Image]
-  /// so it can be drawn onto the receipt [Canvas] with `drawImage` —
-  /// avoids a PNG-encode/decode round trip since [img.Image.getBytes] can
-  /// hand back raw RGBA directly.
-  Future<ui.Image> _decodeUiImage(img.Image image) {
+  /// Turns already-resized raw RGBA8 logo pixels into a [ui.Image] so it can
+  /// be drawn onto the receipt [Canvas] with `drawImage` — avoids a
+  /// PNG-encode/decode round trip.
+  Future<ui.Image> _decodeUiImage(Uint8List rgba, int width, int height) {
     final completer = Completer<ui.Image>();
-    ui.decodeImageFromPixels(
-      image.getBytes(order: img.ChannelOrder.rgba),
-      image.width,
-      image.height,
-      ui.PixelFormat.rgba8888,
-      completer.complete,
-    );
+    ui.decodeImageFromPixels(rgba, width, height, ui.PixelFormat.rgba8888, completer.complete);
     return completer.future;
-  }
-
-  /// Thresholds [image] to 1-bit black/white (via [_isDarkOnWhite], the same
-  /// alpha-aware check the logo path uses) and slices it into horizontal
-  /// bands before ESC/POS-encoding each one via [_toRasterCommand] — a
-  /// single GS-v-0 command for a whole multi-hundred-dot-tall receipt risks
-  /// overrunning a thermal printer's print buffer, so this sends it as
-  /// several shorter raster commands instead, back to back.
-  List<int> _toChunkedRasterCommands(img.Image image, {int bandHeight = 200}) {
-    final bytes = <int>[];
-    for (var y = 0; y < image.height; y += bandHeight) {
-      final h = (y + bandHeight <= image.height) ? bandHeight : image.height - y;
-      final band = img.copyCrop(image, x: 0, y: y, width: image.width, height: h);
-      bytes.addAll(_toRasterCommand(band));
-    }
-    return bytes;
   }
 
   /// Fetches the receipt logo (network URL or inline `data:` URI). Returns
@@ -857,77 +991,38 @@ class BluetoothPrinterService {
     }
   }
 
-  Future<img.Image?> _fetchAndResizeLogo(String logoUrl, {int width = _logoWidthDots}) async {
+  /// Fetch, then decode + downscale in a background isolate (a large
+  /// uploaded logo would otherwise decode on the UI isolate). Null on any
+  /// failure, so a bad logo never blocks the rest of the receipt.
+  Future<({Uint8List rgba, int width, int height})?> _fetchAndDecodeLogo(String logoUrl,
+      {int maxWidth = _logoWidthDots}) async {
     final bytes = await _fetchLogoBytes(logoUrl);
     if (bytes == null) return null;
-    final decoded = img.decodeImage(bytes);
-    if (decoded == null) return null;
-    return img.copyResize(decoded, width: width);
+    try {
+      return await Isolate.run(() => _decodeLogo(bytes, maxWidth));
+    } catch (e) {
+      debugPrint('Logo decode failed: $e');
+      return null;
+    }
   }
 
   /// Same fetch → resize → 1-bit threshold pipeline as the real print path,
   /// re-encoded as a PNG for on-screen preview, so the preview shows exactly
   /// what the printer will produce rather than the original color logo.
   Future<Uint8List?> renderLogoPreviewPng(String logoUrl) async {
-    final resized = await _fetchAndResizeLogo(logoUrl);
-    if (resized == null) return null;
-    final mono = img.Image(width: resized.width, height: resized.height);
-    for (var y = 0; y < resized.height; y++) {
-      for (var x = 0; x < resized.width; x++) {
-        final v = _isDarkOnWhite(resized.getPixel(x, y)) ? 0 : 255;
-        mono.setPixelRgb(x, y, v, v, v);
-      }
-    }
-    return Uint8List.fromList(img.encodePng(mono));
-  }
-
-  /// Encodes an [image] as an ESC/POS "GS v 0" raster bit image command
-  /// (1 bit per pixel, MSB first; a set bit prints as a black dot).
-  List<int> _toRasterCommand(img.Image image) {
-    final widthBytes = (image.width + 7) ~/ 8;
-    final data = <int>[];
-
-    for (var y = 0; y < image.height; y++) {
-      final row = List<int>.filled(widthBytes, 0);
-      for (var x = 0; x < image.width; x++) {
-        if (_isDarkOnWhite(image.getPixel(x, y))) {
-          row[x >> 3] |= (0x80 >> (x & 7));
+    final logo = await _fetchAndDecodeLogo(logoUrl);
+    if (logo == null) return null;
+    final rgba = logo.rgba, w = logo.width, h = logo.height;
+    return Isolate.run(() {
+      final mono = img.Image(width: w, height: h);
+      for (var y = 0, p = 0; y < h; y++) {
+        for (var x = 0; x < w; x++, p += 4) {
+          final v = _isDarkRgba8(rgba[p], rgba[p + 1], rgba[p + 2], rgba[p + 3]) ? 0 : 255;
+          mono.setPixelRgb(x, y, v, v, v);
         }
       }
-      data.addAll(row);
-    }
-
-    return [
-      0x1D, 0x76, 0x30, 0x00,
-      widthBytes & 0xFF, (widthBytes >> 8) & 0xFF,
-      image.height & 0xFF, (image.height >> 8) & 0xFF,
-      ...data,
-    ];
-  }
-
-  /// Whether [pixel] should print/render as a black dot once composited onto
-  /// a plain white receipt background.
-  ///
-  /// The logo source PNGs here are genuinely transparent (verified directly
-  /// against the uploaded `receipt_settings.company_logo`/`company_logo_color`
-  /// files), but a transparent pixel's leftover RGB channel values are
-  /// whatever the exporting tool happened to leave behind — commonly
-  /// (0,0,0), but not always (one of these logos' transparent palette entry
-  /// is a dark green (71,112,76)). Thresholding `pixel.luminance` directly,
-  /// as this used to, ignored `pixel.a` entirely: any transparent pixel
-  /// whose incidental RGB was merely dark (luminance below
-  /// [_blackThreshold]) — which covers most of a logo's transparent
-  /// background — printed as solid black, regardless of the logo's actual
-  /// visible color. Alpha-compositing onto white FIRST, then thresholding
-  /// the *result*, is the correct fix: a fully transparent pixel always
-  /// composites to pure white (never black) no matter what color garbage
-  /// its RGB channels hold, and partially-transparent edge pixels fade
-  /// smoothly toward white instead of a hard on/off cutoff.
-  bool _isDarkOnWhite(img.Pixel pixel) {
-    final maxVal = pixel.maxChannelValue;
-    final alpha = pixel.a / maxVal;
-    final compositedLuminance = pixel.luminance * alpha + maxVal * (1 - alpha);
-    return compositedLuminance < _blackThreshold;
+      return Uint8List.fromList(img.encodePng(mono));
+    });
   }
 }
 

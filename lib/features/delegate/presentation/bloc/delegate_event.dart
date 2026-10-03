@@ -151,9 +151,6 @@ class DelegateBonusesFetched extends DelegateEvent {}
 
 class DelegateCommissionBreakdownFetched extends DelegateEvent {}
 
-/// "مندوب حر السعر" self-service dashboard replacement fetch.
-class DelegatePriceVarianceSummaryFetched extends DelegateEvent {}
-
 class DelegateExpenseSubmitted extends DelegateEvent {
   final double amount;
   final String description;

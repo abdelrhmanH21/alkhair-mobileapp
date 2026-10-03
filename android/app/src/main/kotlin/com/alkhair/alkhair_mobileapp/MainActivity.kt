@@ -1,7 +1,5 @@
 package com.alkhair.alkhair_mobileapp
 
-import io.flutter.embedding.android.FlutterFragmentActivity
+import io.flutter.embedding.android.FlutterActivity
 
-// FlutterFragmentActivity (not FlutterActivity): local_auth's BiometricPrompt
-// needs a FragmentActivity host.
-class MainActivity : FlutterFragmentActivity()
+class MainActivity : FlutterActivity()

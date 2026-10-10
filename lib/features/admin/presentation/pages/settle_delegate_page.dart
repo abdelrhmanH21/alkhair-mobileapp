@@ -6,6 +6,7 @@ import '../bloc/admin_bloc.dart';
 import '../bloc/admin_event.dart';
 import '../bloc/admin_state.dart';
 import '../../data/models/admin_models.dart';
+import '../../../../core/utils/number_input.dart';
 
 class SettleDelegatePage extends StatefulWidget {
   final DelegateModel delegate;
@@ -42,7 +43,7 @@ class _SettleDelegatePageState extends State<SettleDelegatePage> {
       _showError('يجب أن يقوم المندوب بإرسال طلب تسليم أولاً.');
       return;
     }
-    final cash = double.tryParse(_cashCtrl.text);
+    final cash = parseNumber(_cashCtrl.text);
     if (cash == null) {
       _showError('يرجى إدخال مبلغ النقد المستلم.');
       return;
@@ -158,6 +159,16 @@ class _SettleDelegatePageState extends State<SettleDelegatePage> {
                         _SummaryRow('ديون جديدة',
                             _summary!.totalDebtAdded.toStringAsFixed(2),
                             color: AppTheme.danger),
+                        // What the delegate declared in تسليم — a
+                        // declaration only (blank there = 0); the amounts
+                        // entered below are what the settlement uses.
+                        if (_summary!.settlementRequestId != null) ...[
+                          const Divider(),
+                          _SummaryRow('نقدي (معلن من المندوب)',
+                              (_summary!.declaredCashAmount ?? 0).toStringAsFixed(2)),
+                          _SummaryRow('محفظة (معلن من المندوب)',
+                              (_summary!.declaredWalletAmount ?? 0).toStringAsFixed(2)),
+                        ],
                       ],
                     ),
                   ),
@@ -255,6 +266,7 @@ class _SettleDelegatePageState extends State<SettleDelegatePage> {
                           controller: _cashCtrl,
                           keyboardType: const TextInputType.numberWithOptions(
                               decimal: true),
+                          inputFormatters: numericInputFormatters,
                           textDirection: TextDirection.ltr,
                           decoration: const InputDecoration(
                             labelText: 'النقد الفعلي المستلم',
@@ -265,13 +277,14 @@ class _SettleDelegatePageState extends State<SettleDelegatePage> {
                         TextField(
                           controller: _treasuryCtrl,
                           keyboardType: TextInputType.number,
+                          inputFormatters: numericInputFormatters,
                           decoration: const InputDecoration(
                             labelText: 'رقم الخزينة (ID)',
                             prefixIcon:
                                 Icon(Icons.account_balance_outlined),
                           ),
                           onChanged: (v) =>
-                              _treasuryId = int.tryParse(v),
+                              _treasuryId = int.tryParse(normalizeDigits(v.trim())),
                         ),
                         const SizedBox(height: 10),
                         TextField(

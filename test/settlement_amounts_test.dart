@@ -27,12 +27,27 @@ void main() {
       expect(result.wallet, 75.0);
     });
 
-    test('rejects when both fields are blank — nothing to submit', () {
-      expect(() => parseSettlementAmounts('', ''), throwsFormatException);
+    test('both fields blank is a valid declaration of 0 / 0', () {
+      final result = parseSettlementAmounts('', '');
+      expect(result.cash, 0.0);
+      expect(result.wallet, 0.0);
     });
 
-    test('rejects when both resolve to zero', () {
-      expect(() => parseSettlementAmounts('0', '0'), throwsFormatException);
+    test('0 in both fields is valid', () {
+      final result = parseSettlementAmounts('0', '0');
+      expect(result.cash, 0.0);
+      expect(result.wallet, 0.0);
+    });
+
+    test('0 in one field with the other blank is valid', () {
+      expect(parseSettlementAmounts('0', '').cash, 0.0);
+      expect(parseSettlementAmounts('', '٠').wallet, 0.0);
+    });
+
+    test('Arabic-Indic / Persian digits and the Arabic decimal separator are accepted', () {
+      final result = parseSettlementAmounts('١٬٢٥٠٫٥', '۷۵');
+      expect(result.cash, 1250.5);
+      expect(result.wallet, 75.0);
     });
 
     test('rejects genuinely non-numeric cash input', () {

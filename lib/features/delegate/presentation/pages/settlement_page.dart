@@ -9,39 +9,33 @@ import '../bloc/delegate_event.dart';
 import '../bloc/delegate_state.dart';
 import '../bloc/request_tracker.dart';
 import '../../data/models/settlement_summary_model.dart';
+import '../../../../core/utils/number_input.dart';
 
 enum _ReqKind { summary, submit }
 
 typedef SettlementAmounts = ({double cash, double wallet});
 
-/// Parses & validates the settlement form's two amount fields. A blank
-/// field means "0, nothing collected via this method" — not invalid input
-/// — so a delegate with cash-only or wallet-only collections that shift can
-/// leave the other field empty. Only genuinely non-numeric input, a
-/// negative amount, or both fields resolving to 0 (nothing to submit at
-/// all) are rejected.
+/// Parses the settlement form's two amount fields. Both are optional: a
+/// blank field means 0, and 0 in either field — or in both — is a valid
+/// declaration (it is only a declaration; the admin enters the real amounts
+/// at confirmation, and any shortfall is computed from those). Arabic-Indic
+/// / Persian digits and the Arabic decimal separator are accepted. Only
+/// genuinely non-numeric input or a negative amount is rejected.
 ///
 /// Throws a [FormatException] whose message is the Arabic error to show;
 /// returns the parsed (cash, wallet) pair otherwise.
 SettlementAmounts parseSettlementAmounts(String cashText, String walletText) {
-  final cashTrimmed = cashText.trim();
-  final walletTrimmed = walletText.trim();
+  final cash = cashText.trim().isEmpty ? 0.0 : parseNumber(cashText);
+  final wallet = walletText.trim().isEmpty ? 0.0 : parseNumber(walletText);
 
-  if (cashTrimmed.isNotEmpty && double.tryParse(cashTrimmed) == null) {
+  if (cash == null) {
     throw const FormatException('يرجى إدخال مبلغ نقدي صحيح.');
   }
-  if (walletTrimmed.isNotEmpty && double.tryParse(walletTrimmed) == null) {
+  if (wallet == null) {
     throw const FormatException('يرجى إدخال مبلغ محفظة إلكترونية صحيح.');
   }
-
-  final cash = cashTrimmed.isEmpty ? 0.0 : double.parse(cashTrimmed);
-  final wallet = walletTrimmed.isEmpty ? 0.0 : double.parse(walletTrimmed);
-
   if (cash < 0 || wallet < 0) {
     throw const FormatException('يرجى إدخال مبالغ صحيحة للنقدي والمحفظة الإلكترونية.');
-  }
-  if (cash == 0 && wallet == 0) {
-    throw const FormatException('يرجى إدخال مبلغ نقدي أو محفظة إلكترونية على الأقل.');
   }
 
   return (cash: cash, wallet: wallet);
@@ -354,8 +348,9 @@ class _SettlementPageState extends State<SettlementPage>
                       controller: _cashCtrl,
                       keyboardType:
                           const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: numericInputFormatters,
                       decoration: const InputDecoration(
-                        labelText: 'نقدي',
+                        labelText: 'نقدي (اختياري)',
                         hintText: '0',
                         prefixIcon: Icon(Icons.payments_outlined),
                       ),
@@ -365,8 +360,9 @@ class _SettlementPageState extends State<SettlementPage>
                       controller: _walletCtrl,
                       keyboardType:
                           const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: numericInputFormatters,
                       decoration: const InputDecoration(
-                        labelText: 'محفظة إلكترونية',
+                        labelText: 'محفظة إلكترونية (اختياري)',
                         hintText: '0',
                         prefixIcon: Icon(Icons.account_balance_wallet_outlined),
                       ),

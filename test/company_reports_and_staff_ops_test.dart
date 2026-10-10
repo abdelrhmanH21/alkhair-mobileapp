@@ -1,3 +1,4 @@
+import 'package:alkhair_mobileapp/core/security/sensitive_reveal_controller.dart';
 import 'package:alkhair_mobileapp/core/utils/gps_service.dart';
 import 'package:alkhair_mobileapp/core/utils/push_notification_service.dart';
 import 'package:alkhair_mobileapp/features/admin/data/datasources/admin_remote_datasource.dart';
@@ -79,6 +80,11 @@ class _FakeAdminRemote implements AdminRemoteDataSource {
   Never noSuchMethod(Invocation i) => throw UnimplementedError('${i.memberName}');
 }
 
+class _NoAuth implements DeviceAuthenticator {
+  @override
+  Future<DeviceAuthOutcome> authenticate(String reason) async => DeviceAuthOutcome.failed;
+}
+
 Future<void> _pump(WidgetTester tester, {required String role, required _FakeAdminRemote remote}) async {
   final auth = AuthBloc(
     _FakeLogin(),
@@ -91,9 +97,11 @@ Future<void> _pump(WidgetTester tester, {required String role, required _FakeAdm
   auth.add(AuthSessionRestoreRequested());
   await auth.stream.firstWhere((s) => s.runtimeType.toString() == 'AuthAuthenticated');
   final delegate = DelegateBloc(_FakeRepo(), _FakeGps());
+  final reveal = SensitiveRevealController(_NoAuth());
   addTearDown(() async {
     await tester.pumpWidget(const SizedBox());
     await tester.pump();
+    reveal.dispose();
     await delegate.close();
     await auth.close();
   });
@@ -104,7 +112,7 @@ Future<void> _pump(WidgetTester tester, {required String role, required _FakeAdm
         BlocProvider<AuthBloc>.value(value: auth),
         BlocProvider<DelegateBloc>.value(value: delegate),
       ],
-      child: DelegateReportsPage(adminRemote: remote),
+      child: DelegateReportsPage(revealController: reveal, adminRemote: remote),
     ),
   ));
   await tester.pump();

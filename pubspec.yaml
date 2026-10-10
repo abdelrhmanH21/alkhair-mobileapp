@@ -73,6 +73,7 @@ dependencies:
   # see PendingActionQueue's doc comment) so it survives an app restart
   # before the delegate is back online.
   path_provider: ^2.1.4
+  local_auth: ^3.0.2
 
 dev_dependencies:
   flutter_test:

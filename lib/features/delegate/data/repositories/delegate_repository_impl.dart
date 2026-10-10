@@ -12,6 +12,7 @@ import '../models/breakdown_models.dart';
 import '../models/transaction_record_models.dart';
 import '../models/report_models.dart';
 import '../models/customer_invoice_history_model.dart';
+import '../models/price_variance_models.dart';
 import '../../../../core/utils/offline_cache_service.dart';
 import '../../domain/repositories/delegate_repository.dart';
 
@@ -290,6 +291,10 @@ class DelegateRepositoryImpl implements DelegateRepository {
   @override
   Future<List<CommissionDayModel>> getCommissionBreakdown() =>
       _remote.fetchCommissionBreakdown();
+
+  @override
+  Future<PriceVarianceSummaryModel> getPriceVarianceSummary() =>
+      _remote.fetchPriceVarianceSummary();
 
   @override
   Future<String> submitExpense({

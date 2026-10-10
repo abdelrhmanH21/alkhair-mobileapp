@@ -11,6 +11,7 @@ import '../../data/models/breakdown_models.dart';
 import '../../data/models/transaction_record_models.dart';
 import '../../data/models/report_models.dart';
 import '../../data/models/customer_invoice_history_model.dart';
+import '../../data/models/price_variance_models.dart';
 
 abstract class DelegateRepository {
   Future<LoadingModel?> getCurrentLoading();
@@ -77,6 +78,7 @@ abstract class DelegateRepository {
   Future<List<AdvanceModel>> getAdvances();
   Future<List<BonusModel>> getBonuses();
   Future<List<CommissionDayModel>> getCommissionBreakdown();
+  Future<PriceVarianceSummaryModel> getPriceVarianceSummary();
   Future<String> submitExpense({
     required double amount,
     required String description,

@@ -1,5 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- Fingerprint/face/device-credential prompt guarding the free-pricing
+         delegate's "المستحق لك" balance (local_auth). -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC"/>
     <!-- Bluetooth thermal-printer connectivity (Xprinter etc. over SPP).
          Pre-Android 12 (API < 31): BLUETOOTH/BLUETOOTH_ADMIN are normal
          permissions granted at install time; classic-Bluetooth device

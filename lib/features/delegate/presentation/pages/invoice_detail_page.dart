@@ -12,7 +12,8 @@ import '../../../../core/widgets/state_views.dart';
 import '../../../app_config/presentation/bloc/app_config_bloc.dart';
 import 'invoice_page.dart';
 import 'invoice_preview_page.dart';
-import 'print_invoice_page.dart';
+import '../../../../core/utils/printer_manager.dart';
+import '../printing/quick_print.dart';
 
 /// Full invoice preview — customer, itemized products/returns, totals.
 /// print_invoice_page.dart remains the printer-picker flow, reachable from
@@ -98,15 +99,21 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
               tooltip: 'معاينة',
               onPressed: () => _openPreview(context, invoice),
             ),
-            IconButton(
-              icon: const Icon(Icons.print_rounded),
-              tooltip: 'طباعة',
-              onPressed: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => PrintInvoicePage(invoiceId: widget.invoiceId),
-                ),
-              ),
+            // Prints straight to the saved printer (one tap); disabled
+            // while any print runs, so a double tap never prints twice.
+            ListenableBuilder(
+              listenable: sl<PrinterManager>(),
+              builder: (context, _) {
+                final printing = sl<PrinterManager>().isPrinting;
+                return IconButton(
+                  icon: printing
+                      ? const SizedBox(
+                          width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : const Icon(Icons.print_rounded),
+                  tooltip: 'طباعة',
+                  onPressed: printing ? null : () => quickPrintInvoice(context, widget.invoiceId),
+                );
+              },
             ),
           ],
         ],
@@ -156,6 +163,7 @@ class _InvoiceDetailPageState extends State<InvoiceDetailPage> {
     return ListView(
       padding: const EdgeInsets.all(12),
       children: [
+        PrintJobStatusBar(invoiceId: widget.invoiceId),
         Card(
           child: Padding(
             padding: const EdgeInsets.all(16),

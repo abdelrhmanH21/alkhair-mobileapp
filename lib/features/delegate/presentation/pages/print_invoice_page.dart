@@ -8,6 +8,8 @@ import '../../../../core/network/api_endpoints.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/app_snackbar.dart';
 import '../../../../core/utils/bluetooth_printer.dart';
+import '../../../../core/utils/printer_manager.dart';
+import '../printing/quick_print.dart';
 import '../../../app_config/presentation/bloc/app_config_bloc.dart';
 import 'invoice_preview_page.dart';
 
@@ -38,6 +40,7 @@ class PrintInvoicePage extends StatefulWidget {
 
 class _PrintInvoicePageState extends State<PrintInvoicePage> {
   final _printer = sl<BluetoothPrinterService>();
+  final _manager = sl<PrinterManager>();
   final _api     = sl<ApiClient>();
   Map<String, dynamic>? _invoiceData;
   bool _loading = true;
@@ -69,7 +72,9 @@ class _PrintInvoicePageState extends State<PrintInvoicePage> {
   /// itself verifies the connection is still actually live before deciding
   /// whether a real reconnect handshake is needed.
   Future<void> _restoreConnection() async {
-    final remembered = _printer.connectedDevice;
+    // The printer saved in "طابعتي" (persisted across restarts) first, then
+    // whatever this session last connected to.
+    final remembered = _manager.savedPrinter ?? _printer.connectedDevice;
     if (remembered == null) return;
     setState(() {
       _selectedDevice = remembered;
@@ -81,6 +86,7 @@ class _PrintInvoicePageState extends State<PrintInvoicePage> {
       _connecting = false;
       _connected = result.success;
     });
+    if (result.success) await _manager.savePrinter(remembered);
   }
 
   Future<void> _loadInvoice() async {
@@ -106,6 +112,7 @@ class _PrintInvoicePageState extends State<PrintInvoicePage> {
 
   Future<void> _discoverDevices() async {
     final devices = await _printer.discoverDevices();
+    if (!mounted) return;
     setState(() => _devices = devices);
   }
 
@@ -119,24 +126,14 @@ class _PrintInvoicePageState extends State<PrintInvoicePage> {
       _connected = result.success;
     });
     if (result.success) {
-      AppSnackbar.showSuccess(context, 'متصل بالطابعة');
+      // Remembered from now on: next time "إصدار الفاتورة" prints straight
+      // to it (see "طابعتي" / PrinterManager).
+      await _manager.savePrinter(_selectedDevice!);
+      if (!mounted) return;
+      AppSnackbar.showSuccess(context, 'متصل بالطابعة — تم حفظها كطابعتك');
       return;
     }
-    AppSnackbar.showError(context, _connectErrorMessage(result.error));
-  }
-
-  String _connectErrorMessage(PrinterConnectError? error) {
-    switch (error) {
-      case PrinterConnectError.permissionDenied:
-        return 'تأكد من صلاحيات البلوتوث في إعدادات الهاتف';
-      case PrinterConnectError.bluetoothOff:
-        return 'يرجى تفعيل البلوتوث في الهاتف';
-      case PrinterConnectError.timeout:
-        return 'انتهت مهلة الاتصال، تأكد أن الطابعة قريبة ومُشغّلة وحاول مرة أخرى';
-      case PrinterConnectError.unknown:
-      case null:
-        return 'فشل الاتصال بالطابعة، تأكد من تشغيلها وقربها من الهاتف';
-    }
+    AppSnackbar.showError(context, printerConnectErrorMessage(result.error));
   }
 
   /// Same construction print and preview both use, so they always render
@@ -151,15 +148,7 @@ class _PrintInvoicePageState extends State<PrintInvoicePage> {
     final initial = widget.initialData;
     if (initial != null) return initial;
     final config = await context.read<AppConfigBloc>().ensureLoaded();
-    return InvoicePrintData.fromInvoiceJson(
-      _invoiceData!,
-      showPhone: config?.showPhone ?? true,
-      companyName: config?.companyName ?? '',
-      headerText: config?.headerText,
-      footerText: config?.footerText,
-      logoUrl: config?.logoUrl,
-      paperWidth: config?.paperWidth ?? '80mm',
-    );
+    return delegateInvoicePrintData(_invoiceData!, config);
   }
 
   Future<void> _openPreview() async {
@@ -276,6 +265,21 @@ class _PrintInvoicePageState extends State<PrintInvoicePage> {
     );
   }
 
+  /// BluetoothInfo has no value equality, so the saved printer (rebuilt
+  /// from preferences) is matched to the discovered list by MAC — and
+  /// listed even when discovery hasn't returned it (yet).
+  List<BluetoothInfo> get _dropdownDevices {
+    final sel = _selectedDevice;
+    if (sel == null || _devices.any((d) => d.macAdress == sel.macAdress)) return _devices;
+    return [sel, ..._devices];
+  }
+
+  BluetoothInfo? get _dropdownValue {
+    final sel = _selectedDevice;
+    if (sel == null) return null;
+    return _dropdownDevices.firstWhere((d) => d.macAdress == sel.macAdress);
+  }
+
   Widget _buildScaffold() {
     return Scaffold(
       appBar: AppBar(title: const Text('طباعة الفاتورة')),
@@ -351,9 +355,12 @@ class _PrintInvoicePageState extends State<PrintInvoicePage> {
                     children: [
                       Expanded(
                         child: DropdownButtonFormField<BluetoothInfo>(
-                          initialValue: _selectedDevice,
+                          // Re-created when the selection is set from code
+                          // (the saved printer) — initialValue is read once.
+                          key: ValueKey(_selectedDevice?.macAdress),
+                          initialValue: _dropdownValue,
                           hint: const Text('اختر طابعة'),
-                          items: _devices
+                          items: _dropdownDevices
                               .map((d) => DropdownMenuItem(
                                     value: d,
                                     child: Text(d.name,

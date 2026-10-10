@@ -32,6 +32,11 @@
 	     balance (local_auth); falls back to the device passcode. -->
 	<key>NSFaceIDUsageDescription</key>
 	<string>يستخدم التطبيق Face ID لحماية عرض مستحقاتك وفروقات الأسعار.</string>
+	<!-- Bluetooth thermal printer (print_bluetooth_thermal uses CoreBluetooth
+	     on iOS). Without this key iOS terminates the app the first time
+	     Bluetooth is touched (the print / طابعتي screens). -->
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>يستخدم التطبيق البلوتوث للاتصال بطابعة الفواتير.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>يحتاج التطبيق للوصول إلى الكاميرا لالتقاط صورة إثبات المصروف أو إرفاقها بملاحظة.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

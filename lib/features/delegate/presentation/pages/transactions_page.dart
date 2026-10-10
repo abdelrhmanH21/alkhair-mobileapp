@@ -18,6 +18,7 @@ import '../widgets/client_search_field.dart';
 import '../widgets/add_client_sheet.dart';
 import '../widgets/photo_attachment_field.dart';
 import '../../../../core/utils/number_input.dart';
+import 'my_printer_page.dart';
 
 /// عمليات tab (renamed from معاملات — display text only, route/file names
 /// unchanged): three lightweight route-side actions that don't belong to
@@ -262,6 +263,18 @@ class _TransactionsPageState extends State<TransactionsPage> {
               subtitle: 'شكوى أو ملاحظة تُرسَل لإدارة النظام',
               enabled: true,
               onTap: () => _openNoteSheet(context),
+            ),
+            const SizedBox(height: 12),
+            _ActionCard(
+              icon: Icons.print_outlined,
+              color: AppTheme.primary,
+              title: 'طابعتي',
+              subtitle: 'الطابعة المحفوظة، الاتصال، والطباعة التلقائية',
+              enabled: true,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const MyPrinterPage()),
+              ),
             ),
             const SizedBox(height: 24),
             Text('مصروفات الوردية', style: Theme.of(context).textTheme.titleMedium),

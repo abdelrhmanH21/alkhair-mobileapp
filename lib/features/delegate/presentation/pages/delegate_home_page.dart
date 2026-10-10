@@ -4,6 +4,7 @@ import '../../../../core/di/service_locator.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/app_snackbar.dart';
 import '../../../../core/utils/pending_action_queue.dart';
+import '../../../../core/utils/printer_manager.dart';
 import '../../../../core/widgets/app_logo.dart';
 import '../../../../core/widgets/state_views.dart';
 import '../../../app_config/presentation/bloc/app_config_bloc.dart';
@@ -69,12 +70,15 @@ class _DelegateHomePageState extends State<DelegateHomePage> with WidgetsBinding
     // (idempotent — didChangeDependencies runs again on inherited changes).
     _sync ??= DelegateSyncScope.of(context, listen: false);
     _sync!.start();
+    // Keep the saved printer connected in the background (silent).
+    if (sl.isRegistered<PrinterManager>()) sl<PrinterManager>().startAutoConnect();
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _sync?.stop();
+    if (sl.isRegistered<PrinterManager>()) sl<PrinterManager>().stopAutoConnect();
     super.dispose();
   }
 

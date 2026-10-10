@@ -491,6 +491,26 @@ class BluetoothPrinterService {
     return statuses.values.every((s) => s.isGranted);
   }
 
+  /// Status-only check (never shows the OS prompt) — for the silent
+  /// background auto-connect, which must not pop a permission dialog when
+  /// a delegate screen merely appears.
+  Future<bool> hasBluetoothPermission() async {
+    try {
+      return await ph.Permission.bluetoothConnect.isGranted &&
+          await ph.Permission.bluetoothScan.isGranted;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> get isBluetoothEnabled async {
+    try {
+      return await PrintBluetoothThermal.bluetoothEnabled.timeout(_connectTimeout);
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<List<BluetoothInfo>> discoverDevices() async {
     if (!await ensureBluetoothPermission()) return [];
     try {

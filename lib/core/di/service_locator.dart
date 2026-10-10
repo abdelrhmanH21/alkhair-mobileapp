@@ -9,6 +9,7 @@ import '../utils/push_notification_service.dart';
 import '../utils/offline_cache_service.dart';
 import '../utils/connectivity_service.dart';
 import '../utils/pending_action_queue.dart';
+import '../utils/printer_manager.dart';
 import '../security/sensitive_reveal_controller.dart';
 
 import '../../features/app_config/data/datasources/app_config_local_datasource.dart';
@@ -45,6 +46,7 @@ Future<void> setupServiceLocator() async {
 
   final prefs = await SharedPreferences.getInstance();
   sl.registerLazySingleton<OfflineCacheService>(() => OfflineCacheService(prefs));
+  sl.registerLazySingleton<PrinterManager>(() => PrinterManager(sl(), prefs));
 
   final connectivity = ConnectivityService();
   await connectivity.initialize();

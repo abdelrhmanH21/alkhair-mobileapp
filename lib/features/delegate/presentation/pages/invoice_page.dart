@@ -25,10 +25,11 @@ import '../widgets/add_client_sheet.dart';
 import '../widgets/client_search_field.dart';
 import 'invoice_history_page.dart';
 import 'truck_stock_page.dart';
-import 'print_invoice_page.dart';
 import 'dashboard_page.dart';
 import 'customer_invoice_history_page.dart';
 import '../../../../core/utils/number_input.dart';
+import '../../../../core/utils/printer_manager.dart';
+import '../printing/quick_print.dart';
 
 /// Also doubles as the edit form for an already-submitted invoice while its
 /// shift is still active (see DelegateInvoiceController::update()) — pass
@@ -509,13 +510,16 @@ class _InvoicePageState extends State<InvoicePage> {
                 ? 'تم حفظ الفاتورة بنجاح — تم سداد ${invoice.debtReduction.toStringAsFixed(2)} جنيه من دين العميل السابق.'
                 : 'تم حفظ الفاتورة بنجاح',
           );
-          // Offer print
-          Navigator.push(
-            ctx,
-            MaterialPageRoute(
-              builder: (_) => PrintInvoicePage(invoiceId: invoice.id),
-            ),
-          );
+          // One-tap printing: the invoice is saved at this point; printing
+          // is a separate, non-blocking step that can fail and be retried
+          // without ever resubmitting (see PrinterManager).
+          final printers = sl<PrinterManager>();
+          if (!printers.hasSavedPrinter) {
+            // First time only: pick the printer once; it's remembered.
+            openPrinterPicker(ctx, invoice.id);
+          } else if (printers.autoPrint) {
+            quickPrintInvoice(ctx, invoice.id);
+          }
         }
         if (state is DelegateInvoiceUpdatedState) {
           if (_tracker.resolve(state.requestId) == null) return;
@@ -544,6 +548,9 @@ class _InvoicePageState extends State<InvoicePage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            // جاري الطباعة… / تمت الطباعة / إعادة الطباعة + اختيار طابعة —
+            // for the invoice just issued (non-blocking).
+            if (!_isEditing) const PrintJobStatusBar(),
             // Customer is fixed once an invoice exists — the backend never
             // lets an edit move an invoice to a different customer — so
             // edit mode shows a plain read-only card instead of the

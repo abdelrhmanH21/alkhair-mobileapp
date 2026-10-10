@@ -5,6 +5,7 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/app_snackbar.dart';
 import '../../data/datasources/admin_remote_datasource.dart';
 import '../../data/models/admin_models.dart';
+import '../../../../core/utils/number_input.dart';
 
 /// "إضافة منتجات لتحميلة نشطة" (Part 5) — a mid-shift top-up to a delegate's
 /// already-accepted/in_transit loading, distinct from [CreateLoadingPage]'s
@@ -114,7 +115,7 @@ class _AddLoadingItemsPageState extends State<AddLoadingItemsPage> {
     final itemsPayload = _items
         .map((e) => {
               'product_id': e.selectedProduct!.id,
-              'quantity': double.parse(e.qtyCtrl.text.trim()),
+              'quantity': parseNumber(e.qtyCtrl.text)!,
             })
         .toList();
 
@@ -342,11 +343,12 @@ class _ProductItemRowState extends State<_ProductItemRow> {
                 controller: widget.entry.qtyCtrl,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 inputFormatters: [
+                  const ArabicNumberInputFormatter(),
                   FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,3}')),
                 ],
                 validator: (v) {
                   if (v == null || v.isEmpty) return 'أدخل الكمية';
-                  final qty = double.tryParse(v);
+                  final qty = parseNumber(v);
                   if (qty == null || qty <= 0) return 'كمية غير صحيحة';
                   return null;
                 },

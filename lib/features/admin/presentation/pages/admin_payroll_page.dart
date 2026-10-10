@@ -8,6 +8,7 @@ import '../../../../core/widgets/state_views.dart';
 import '../../data/datasources/admin_remote_datasource.dart';
 import '../../data/models/admin_models.dart';
 import '../../../delegate/data/models/breakdown_models.dart';
+import '../../../../core/utils/number_input.dart';
 
 /// العمالة — الأهداف الشهرية والرواتب الشهرية لكل مندوبي المبيعات، تعادل
 /// تبويبي الويب "الأهداف الشهرية"/"الرواتب الشهرية". المصدر:
@@ -905,7 +906,7 @@ class _ReferencePricesTabState extends State<_ReferencePricesTab> {
 
   Future<void> _save() async {
     final product = _selectedProduct;
-    final price = double.tryParse(_priceCtrl.text);
+    final price = parseNumber(_priceCtrl.text);
     if (product == null || price == null || price < 0) {
       AppSnackbar.showError(context, 'يرجى اختيار منتج وإدخال سعر صحيح.');
       return;
@@ -972,6 +973,7 @@ class _ReferencePricesTabState extends State<_ReferencePricesTab> {
                 child: TextField(
                   controller: _priceCtrl,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: numericInputFormatters,
                   decoration: const InputDecoration(labelText: 'السعر المرجعي', isDense: true),
                 ),
               ),
@@ -1293,7 +1295,7 @@ class _PayoutFormSheetState extends State<_PayoutFormSheet> {
   }
 
   void _submit() {
-    final amount = double.tryParse(_amountCtrl.text);
+    final amount = parseNumber(_amountCtrl.text);
     if (amount == null || amount <= 0) {
       AppSnackbar.showError(context, 'يرجى إدخال مبلغ صحيح.');
       return;
@@ -1323,6 +1325,7 @@ class _PayoutFormSheetState extends State<_PayoutFormSheet> {
           TextField(
             controller: _amountCtrl,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: numericInputFormatters,
             decoration: const InputDecoration(labelText: 'المبلغ'),
           ),
           const SizedBox(height: 10),
@@ -1383,7 +1386,7 @@ class _EditTargetSheetState extends State<_EditTargetSheet> {
       await widget.remote.setRepTarget(
         repId: widget.rep.repId,
         month: widget.month,
-        targetAmount: double.parse(_amountCtrl.text.trim()),
+        targetAmount: parseNumber(_amountCtrl.text)!,
       );
       if (!mounted) return;
       Navigator.of(context).pop(true);
@@ -1423,9 +1426,10 @@ class _EditTargetSheetState extends State<_EditTargetSheet> {
               TextFormField(
                 controller: _amountCtrl,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: numericInputFormatters,
                 decoration: const InputDecoration(labelText: 'الهدف الشهري'),
                 validator: (v) {
-                  final amount = double.tryParse(v ?? '');
+                  final amount = parseNumber(v);
                   if (amount == null || amount < 0) return 'قيمة غير صحيحة';
                   return null;
                 },
@@ -1495,7 +1499,7 @@ class _EditCommissionOverrideSheetState extends State<_EditCommissionOverrideShe
       await widget.remote.setCommissionOverride(
         repId: widget.repId,
         month: widget.month,
-        amount: double.parse(_amountCtrl.text.trim()),
+        amount: parseNumber(_amountCtrl.text)!,
         notes: _notesCtrl.text.trim(),
       );
       if (!mounted) return;
@@ -1554,9 +1558,10 @@ class _EditCommissionOverrideSheetState extends State<_EditCommissionOverrideShe
               TextFormField(
                 controller: _amountCtrl,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: numericInputFormatters,
                 decoration: const InputDecoration(labelText: 'العمولة المكتسبة (ج.م)'),
                 validator: (v) {
-                  final amount = double.tryParse(v ?? '');
+                  final amount = parseNumber(v);
                   if (amount == null || amount < 0) return 'قيمة غير صحيحة';
                   return null;
                 },

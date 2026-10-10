@@ -15,6 +15,7 @@ import '../models/customer_invoice_history_model.dart';
 import '../models/price_variance_models.dart';
 import '../../../../core/utils/offline_cache_service.dart';
 import '../../domain/repositories/delegate_repository.dart';
+import '../../../../core/utils/number_input.dart';
 
 /// Cache keys for the read endpoints Phase 1 offline support covers — see
 /// OfflineCacheService. A delegate only ever has one active loading at a
@@ -120,10 +121,11 @@ class DelegateRepositoryImpl implements DelegateRepository {
       // options (nothing ever cached) does this rethrow.
       final cached = getCachedCustomerList();
       if (cached.isEmpty) rethrow;
-      final q = query.trim().toLowerCase();
+      final q = normalizeDigits(query.trim().toLowerCase());
       if (q.isEmpty) return cached;
       return cached
-          .where((c) => c.name.toLowerCase().contains(q) || c.phone.contains(q))
+          .where((c) =>
+              normalizeDigits(c.name.toLowerCase()).contains(q) || normalizeDigits(c.phone).contains(q))
           .toList();
     }
   }

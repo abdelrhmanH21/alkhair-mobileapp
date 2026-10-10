@@ -17,6 +17,7 @@ import '../../data/models/transaction_record_models.dart';
 import '../widgets/client_search_field.dart';
 import '../widgets/add_client_sheet.dart';
 import '../widgets/photo_attachment_field.dart';
+import '../../../../core/utils/number_input.dart';
 
 /// عمليات tab (renamed from معاملات — display text only, route/file names
 /// unchanged): three lightweight route-side actions that don't belong to
@@ -442,7 +443,7 @@ class _ExpenseFormSheetState extends State<_ExpenseFormSheet> {
   }
 
   void _submit() {
-    final amount = double.tryParse(_amountCtrl.text);
+    final amount = parseNumber(_amountCtrl.text);
     if (amount == null || amount <= 0) {
       AppSnackbar.showError(context, 'يرجى إدخال مبلغ صحيح.');
       return;
@@ -537,6 +538,7 @@ class _ExpenseFormSheetState extends State<_ExpenseFormSheet> {
             TextField(
               controller: _amountCtrl,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: numericInputFormatters,
               decoration: const InputDecoration(
                 labelText: 'المبلغ',
                 hintText: '0',
@@ -616,7 +618,7 @@ class _ExpenseEditSheetState extends State<_ExpenseEditSheet> {
   }
 
   void _submit() {
-    final amount = double.tryParse(_amountCtrl.text);
+    final amount = parseNumber(_amountCtrl.text);
     if (amount == null || amount <= 0) {
       AppSnackbar.showError(context, 'يرجى إدخال مبلغ صحيح.');
       return;
@@ -666,6 +668,7 @@ class _ExpenseEditSheetState extends State<_ExpenseEditSheet> {
             TextField(
               controller: _amountCtrl,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: numericInputFormatters,
               decoration: const InputDecoration(
                 labelText: 'المبلغ',
                 prefixIcon: Icon(Icons.payments_outlined),
@@ -762,7 +765,7 @@ class _CollectionFormSheetState extends State<_CollectionFormSheet> {
       AppSnackbar.showError(context, 'يرجى اختيار عميل أولاً.');
       return;
     }
-    final amount = double.tryParse(_amountCtrl.text);
+    final amount = parseNumber(_amountCtrl.text);
     if (amount == null || amount <= 0) {
       AppSnackbar.showError(context, 'يرجى إدخال مبلغ صحيح.');
       return;
@@ -887,6 +890,7 @@ class _CollectionFormSheetState extends State<_CollectionFormSheet> {
             TextField(
               controller: _amountCtrl,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: numericInputFormatters,
               decoration: const InputDecoration(
                 labelText: 'المبلغ المحصّل',
                 hintText: '0',
@@ -968,7 +972,7 @@ class _CollectionEditSheetState extends State<_CollectionEditSheet> {
   }
 
   void _submit() {
-    final amount = double.tryParse(_amountCtrl.text);
+    final amount = parseNumber(_amountCtrl.text);
     if (amount == null || amount <= 0) {
       AppSnackbar.showError(context, 'يرجى إدخال مبلغ صحيح.');
       return;
@@ -1015,6 +1019,7 @@ class _CollectionEditSheetState extends State<_CollectionEditSheet> {
             TextField(
               controller: _amountCtrl,
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: numericInputFormatters,
               decoration: const InputDecoration(
                 labelText: 'المبلغ المحصّل',
                 prefixIcon: Icon(Icons.payments_outlined),

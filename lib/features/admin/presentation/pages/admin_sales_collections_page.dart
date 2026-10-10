@@ -13,6 +13,7 @@ import '../../../delegate/presentation/bloc/delegate_bloc.dart';
 import '../../../delegate/presentation/widgets/add_client_sheet.dart';
 import '../../../delegate/presentation/widgets/client_search_field.dart';
 import '../../../delegate/presentation/pages/invoice_detail_page.dart';
+import '../../../../core/utils/number_input.dart';
 
 /// المبيعات والتحصيلات — قائمة موحدة لفواتير الويب وتطبيق المندوب (نفس
 /// GET /sales/combined التي تستخدمها شاشة الويب "المبيعات")، بالإضافة إلى
@@ -600,7 +601,7 @@ class AdminCollectionFormSheetState extends State<AdminCollectionFormSheet> {
       AppSnackbar.showError(context, 'يرجى اختيار عميل أولاً.');
       return;
     }
-    final amount = double.tryParse(_amountCtrl.text);
+    final amount = parseNumber(_amountCtrl.text);
     if (amount == null || amount <= 0) {
       AppSnackbar.showError(context, 'يرجى إدخال مبلغ صحيح.');
       return;
@@ -662,6 +663,7 @@ class AdminCollectionFormSheetState extends State<AdminCollectionFormSheet> {
           TextField(
             controller: _amountCtrl,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: numericInputFormatters,
             decoration: const InputDecoration(labelText: 'المبلغ المحصّل', hintText: '0'),
           ),
           const SizedBox(height: 12),

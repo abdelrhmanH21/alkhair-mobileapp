@@ -6,6 +6,7 @@ import '../../../../core/utils/app_snackbar.dart';
 import '../../../../core/widgets/state_views.dart';
 import '../../data/datasources/admin_remote_datasource.dart';
 import '../../data/models/admin_models.dart';
+import '../../../../core/utils/number_input.dart';
 
 /// "تعديل سعر" — pick a product (wholesale price) or a raw material (cost
 /// price) from a searchable list, confirm the change, submit to
@@ -127,6 +128,7 @@ class _AdminPriceEditPageState extends State<AdminPriceEditPage>
               autofocus: true,
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: numericInputFormatters,
               decoration: const InputDecoration(labelText: 'السعر الجديد'),
             ),
           ],
@@ -137,7 +139,7 @@ class _AdminPriceEditPageState extends State<AdminPriceEditPage>
               child: const Text('إلغاء')),
           ElevatedButton(
             onPressed: () {
-              final price = double.tryParse(ctrl.text);
+              final price = parseNumber(ctrl.text);
               if (price == null || price < 0) {
                 AppSnackbar.showError(dialogCtx, 'يرجى إدخال سعر صحيح.');
                 return;
@@ -172,11 +174,12 @@ class _AdminPriceEditPageState extends State<AdminPriceEditPage>
 
   @override
   Widget build(BuildContext context) {
+    final search = normalizeDigits(_search.toLowerCase());
     final filteredProducts = _products
-        .where((p) => p.name.toLowerCase().contains(_search.toLowerCase()))
+        .where((p) => normalizeDigits(p.name.toLowerCase()).contains(search))
         .toList();
     final filteredMaterials = _rawMaterials
-        .where((m) => m.name.toLowerCase().contains(_search.toLowerCase()))
+        .where((m) => normalizeDigits(m.name.toLowerCase()).contains(search))
         .toList();
 
     return Scaffold(

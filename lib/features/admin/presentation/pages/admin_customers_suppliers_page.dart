@@ -13,6 +13,7 @@ import '../../data/datasources/admin_remote_datasource.dart';
 import '../../data/models/admin_models.dart';
 import 'customer_statement_page.dart';
 import 'supplier_statement_page.dart';
+import '../../../../core/utils/number_input.dart';
 
 /// العملاء / الموردون / مناطق التوزيع — three standalone list+detail
 /// sections with full CRUD, each reusing the exact same backend
@@ -374,7 +375,7 @@ class _CustomerEditSheetState extends State<_CustomerEditSheet> {
       await widget.remote.updateCustomer(
         id: widget.customer.id,
         name: _nameCtrl.text.trim(),
-        phone: _phoneCtrl.text.trim(),
+        phone: normalizeDigits(_phoneCtrl.text.trim()),
         customerRegionId: _selectedRegion?.id,
       );
       if (!mounted) return;
@@ -422,6 +423,7 @@ class _CustomerEditSheetState extends State<_CustomerEditSheet> {
             TextFormField(
               controller: _phoneCtrl,
               keyboardType: TextInputType.phone,
+              inputFormatters: numericInputFormatters,
               textDirection: TextDirection.ltr,
               decoration: const InputDecoration(labelText: 'رقم الهاتف', prefixIcon: Icon(Icons.phone_outlined)),
             ),
@@ -698,15 +700,15 @@ class _SupplierFormSheetState extends State<_SupplierFormSheet> {
         await widget.remote.updateSupplier(
           id: widget.supplier!.id,
           name: _nameCtrl.text.trim(),
-          phone: _phoneCtrl.text.trim(),
+          phone: normalizeDigits(_phoneCtrl.text.trim()),
           updateLinkedCustomer: true,
           linkedCustomerId: _linkEnabled ? _linkedCustomerId : null,
         );
       } else {
         await widget.remote.createSupplier(
           name: _nameCtrl.text.trim(),
-          phone: _phoneCtrl.text.trim(),
-          balance: double.tryParse(_balanceCtrl.text),
+          phone: normalizeDigits(_phoneCtrl.text.trim()),
+          balance: parseNumber(_balanceCtrl.text),
         );
       }
       if (!mounted) return;
@@ -859,6 +861,7 @@ class _SupplierFormSheetState extends State<_SupplierFormSheet> {
             TextFormField(
               controller: _phoneCtrl,
               keyboardType: TextInputType.phone,
+              inputFormatters: numericInputFormatters,
               textDirection: TextDirection.ltr,
               decoration: const InputDecoration(labelText: 'رقم الهاتف', prefixIcon: Icon(Icons.phone_outlined)),
             ),
@@ -867,6 +870,7 @@ class _SupplierFormSheetState extends State<_SupplierFormSheet> {
               TextFormField(
                 controller: _balanceCtrl,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: numericInputFormatters,
                 textDirection: TextDirection.ltr,
                 decoration: const InputDecoration(
                     labelText: 'رصيد افتتاحي مستحق', prefixIcon: Icon(Icons.account_balance_wallet_outlined)),

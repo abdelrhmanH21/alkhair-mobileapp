@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import '../utils/number_input.dart';
 import 'api_endpoints.dart';
 
 class ApiClient {
@@ -20,6 +21,7 @@ class ApiClient {
           },
         )) {
     _dio.interceptors.add(_AuthInterceptor(_storage, _tokenKey));
+    _dio.interceptors.add(DigitNormalizingInterceptor());
     _dio.interceptors.add(LogInterceptor(
       requestBody: true,
       responseBody: true,
@@ -64,6 +66,31 @@ class _AuthInterceptor extends Interceptor {
     }
     if (token != null) {
       options.headers['Authorization'] = 'Bearer $token';
+    }
+    handler.next(options);
+  }
+}
+
+/// Last pass before anything leaves the app: numeric values typed (or pasted,
+/// or queued offline) with Arabic-Indic/Persian digits go out as Latin, and
+/// query parameters (every search box) get Latin digits. Free text is never
+/// rewritten — see normalizeNumericPayload().
+class DigitNormalizingInterceptor extends Interceptor {
+  @override
+  void onRequest(RequestOptions options, RequestInterceptorHandler handler) {
+    final data = options.data;
+    if (data is FormData) {
+      for (var i = 0; i < data.fields.length; i++) {
+        final field = data.fields[i];
+        final normalized = normalizeNumericPayload(field.value, field.key) as String;
+        if (normalized != field.value) data.fields[i] = MapEntry(field.key, normalized);
+      }
+    } else if (data is Map || data is List) {
+      options.data = normalizeNumericPayload(data);
+    }
+    if (options.queryParameters.isNotEmpty) {
+      options.queryParameters = options.queryParameters
+          .map((k, v) => MapEntry(k, v is String ? normalizeDigits(v) : v));
     }
     handler.next(options);
   }

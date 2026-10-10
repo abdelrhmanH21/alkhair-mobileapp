@@ -16,6 +16,7 @@ import '../../../delegate/presentation/widgets/add_client_sheet.dart';
 import '../../../delegate/presentation/widgets/client_search_field.dart';
 import '../../data/datasources/admin_remote_datasource.dart';
 import '../../data/models/admin_models.dart';
+import '../../../../core/utils/number_input.dart';
 
 /// Maps an admin-sale submission result onto the same [InvoicePrintData]
 /// shape delegate invoices use, so it can go through the exact same
@@ -133,7 +134,7 @@ class _AdminSalePageState extends State<AdminSalePage> {
   }
 
   double get _total => _items.fold(0.0, (s, i) => s + i.subtotal);
-  double get _cashReceived => double.tryParse(_cashCtrl.text) ?? 0;
+  double get _cashReceived => parseNumber(_cashCtrl.text) ?? 0;
   double get _remainingDebt =>
       (_total - _cashReceived).clamp(0, double.infinity);
 
@@ -419,6 +420,7 @@ class _AdminSalePageState extends State<AdminSalePage> {
                       controller: _cashCtrl,
                       keyboardType:
                           const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: numericInputFormatters,
                       decoration: const InputDecoration(
                           labelText: 'النقد المستلم', hintText: '0'),
                       onChanged: (_) => setState(() {}),
@@ -516,9 +518,9 @@ class _ProductPickerSheetState extends State<_ProductPickerSheet> {
   void _confirmAdd() {
     final product = _selected;
     if (product == null) return;
-    final qty = double.tryParse(_qtyCtrl.text) ?? 0;
+    final qty = parseNumber(_qtyCtrl.text) ?? 0;
     if (qty <= 0) return;
-    final price = double.tryParse(_priceCtrl.text);
+    final price = parseNumber(_priceCtrl.text);
     if (price == null || price < _minAllowed) {
       setState(() => _priceError =
           'الحد الأدنى: ${_minAllowed.toStringAsFixed(2)} (خصم حتى ${widget.maxDiscountPct.toStringAsFixed(0)}%) — لا يوجد حد أقصى للزيادة');
@@ -598,6 +600,7 @@ class _ProductPickerSheetState extends State<_ProductPickerSheet> {
                       controller: _qtyCtrl,
                       keyboardType:
                           const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: numericInputFormatters,
                       textAlign: TextAlign.center,
                     ),
                   ),
@@ -616,6 +619,7 @@ class _ProductPickerSheetState extends State<_ProductPickerSheet> {
                       controller: _priceCtrl,
                       keyboardType:
                           const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: numericInputFormatters,
                       textAlign: TextAlign.center,
                       onChanged: (_) {
                         if (_priceError != null)

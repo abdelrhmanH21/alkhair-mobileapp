@@ -7,6 +7,7 @@ import '../../../../core/utils/app_snackbar.dart';
 import '../../../../core/widgets/state_views.dart';
 import '../../data/datasources/admin_remote_datasource.dart';
 import '../../data/models/admin_models.dart';
+import '../../../../core/utils/number_input.dart';
 
 /// "استلام إنتاج تام" — mirrors the web's ProductionReceivingPage.tsx:
 /// pick an in-progress batch, enter the actual output quantity + warehouse
@@ -157,13 +158,13 @@ class _ReceiveProductionPageState extends State<ReceiveProductionPage> {
       return;
     }
     final hasOutput = _outputEntries
-        .any((e) => (double.tryParse(e.actualCtrl.text) ?? 0) > 0);
+        .any((e) => (parseNumber(e.actualCtrl.text) ?? 0) > 0);
     if (!hasOutput) {
       AppSnackbar.showError(context, 'أدخل كمية فعلية لناتج واحد على الأقل');
       return;
     }
     final missingWarehouse = _outputEntries.any((e) =>
-        (double.tryParse(e.actualCtrl.text) ?? 0) > 0 &&
+        (parseNumber(e.actualCtrl.text) ?? 0) > 0 &&
         e.warehouseId == null &&
         !e.output.isByproduct);
     if (missingWarehouse) {
@@ -171,7 +172,7 @@ class _ReceiveProductionPageState extends State<ReceiveProductionPage> {
       return;
     }
     if (_packagingEntries
-        .any((e) => (double.tryParse(e.qtyCtrl.text) ?? 0) <= 0)) {
+        .any((e) => (parseNumber(e.qtyCtrl.text) ?? 0) <= 0)) {
       AppSnackbar.showError(
           context, 'أدخل الكمية المستخدمة لكل مادة تعبئة أو احذفها');
       return;
@@ -181,8 +182,8 @@ class _ReceiveProductionPageState extends State<ReceiveProductionPage> {
     try {
       await _remote.completeProductionBatch(
         batchId: _batchDetail!.id,
-        overheadFixed: double.tryParse(_overheadFixedCtrl.text),
-        overheadVariable: double.tryParse(_overheadVariableCtrl.text),
+        overheadFixed: parseNumber(_overheadFixedCtrl.text),
+        overheadVariable: parseNumber(_overheadVariableCtrl.text),
         outputs: _outputEntries
             .map((e) => {
                   'manufacturing_order_output_id': e.output.id,
@@ -342,6 +343,7 @@ class _ReceiveProductionPageState extends State<ReceiveProductionPage> {
                                             keyboardType: const TextInputType
                                                 .numberWithOptions(
                                                 decimal: true),
+                                            inputFormatters: numericInputFormatters,
                                             decoration: const InputDecoration(
                                                 labelText: 'الكمية الفعلية *',
                                                 isDense: true),
@@ -390,7 +392,7 @@ class _ReceiveProductionPageState extends State<ReceiveProductionPage> {
                                 fontSize: 11, color: AppTheme.textMuted)),
                         const SizedBox(height: 6),
                         ..._packagingEntries.map((entry) {
-                          final qty = double.tryParse(entry.qtyCtrl.text) ?? 0;
+                          final qty = parseNumber(entry.qtyCtrl.text) ?? 0;
                           final over = qty > entry.material.currentStock;
                           return Card(
                             child: Padding(
@@ -424,6 +426,7 @@ class _ReceiveProductionPageState extends State<ReceiveProductionPage> {
                                       controller: entry.qtyCtrl,
                                       keyboardType: const TextInputType
                                           .numberWithOptions(decimal: true),
+                                      inputFormatters: numericInputFormatters,
                                       decoration: const InputDecoration(
                                           labelText: 'الكمية المستخدمة',
                                           isDense: true),
@@ -455,6 +458,7 @@ class _ReceiveProductionPageState extends State<ReceiveProductionPage> {
                               keyboardType:
                                   const TextInputType.numberWithOptions(
                                       decimal: true),
+                              inputFormatters: numericInputFormatters,
                               decoration: const InputDecoration(
                                   labelText: 'تكاليف ثابتة'),
                             ),
@@ -464,6 +468,7 @@ class _ReceiveProductionPageState extends State<ReceiveProductionPage> {
                               keyboardType:
                                   const TextInputType.numberWithOptions(
                                       decimal: true),
+                              inputFormatters: numericInputFormatters,
                               decoration: const InputDecoration(
                                   labelText: 'تكاليف متغيرة (لكل وحدة)'),
                             ),
@@ -534,10 +539,10 @@ class _PackagingPickerSheetState extends State<_PackagingPickerSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final q = _query.trim();
+    final q = normalizeDigits(_query.trim());
     final list = q.isEmpty
         ? widget.rawMaterials
-        : widget.rawMaterials.where((rm) => rm.name.contains(q)).toList();
+        : widget.rawMaterials.where((rm) => normalizeDigits(rm.name).contains(q)).toList();
     return Padding(
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom,

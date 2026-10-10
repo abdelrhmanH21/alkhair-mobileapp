@@ -6,6 +6,7 @@ import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/app_snackbar.dart';
 import '../../data/datasources/admin_remote_datasource.dart';
 import '../../data/models/admin_models.dart';
+import '../../../../core/utils/number_input.dart';
 
 class _PurchaseLineItem {
   final bool isRawMaterial;
@@ -138,7 +139,7 @@ class _AdminPurchasePageState extends State<AdminPurchasePage> {
       AppSnackbar.showError(context, 'يرجى اختيار الخزينة.');
       return;
     }
-    final paid = double.tryParse(_paidCtrl.text) ?? 0;
+    final paid = parseNumber(_paidCtrl.text) ?? 0;
 
     setState(() => _submitting = true);
     try {
@@ -259,6 +260,7 @@ class _AdminPurchasePageState extends State<AdminPurchasePage> {
                 TextField(
                   controller: _paidCtrl,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: numericInputFormatters,
                   decoration: const InputDecoration(labelText: 'المبلغ المدفوع', hintText: '0'),
                 ),
                 const SizedBox(height: 12),
@@ -326,8 +328,8 @@ class _PurchaseItemPickerSheetState extends State<_PurchaseItemPickerSheet>
   }
 
   void _confirmAdd() {
-    final qty = double.tryParse(_qtyCtrl.text) ?? 0;
-    final price = double.tryParse(_priceCtrl.text) ?? 0;
+    final qty = parseNumber(_qtyCtrl.text) ?? 0;
+    final price = parseNumber(_priceCtrl.text) ?? 0;
     if (qty <= 0 || price < 0) return;
 
     if (_tabController.index == 0) {
@@ -430,6 +432,7 @@ class _PurchaseItemPickerSheetState extends State<_PurchaseItemPickerSheet>
                     child: TextField(
                       controller: _qtyCtrl,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: numericInputFormatters,
                       decoration: const InputDecoration(labelText: 'الكمية', isDense: true),
                     ),
                   ),
@@ -438,6 +441,7 @@ class _PurchaseItemPickerSheetState extends State<_PurchaseItemPickerSheet>
                     child: TextField(
                       controller: _priceCtrl,
                       keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: numericInputFormatters,
                       decoration: const InputDecoration(labelText: 'سعر الوحدة', isDense: true),
                     ),
                   ),

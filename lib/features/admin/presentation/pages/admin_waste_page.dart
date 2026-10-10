@@ -6,6 +6,7 @@ import '../../../../core/utils/app_snackbar.dart';
 import '../../../../core/widgets/state_views.dart';
 import '../../data/datasources/admin_remote_datasource.dart';
 import '../../data/models/admin_models.dart';
+import '../../../../core/utils/number_input.dart';
 
 /// "تسجيل هالك" — submits to POST /v1/mobile/admin/waste (new WasteRecord
 /// model on the backend). Deducts the entered quantity directly from the
@@ -86,7 +87,7 @@ class _AdminWastePageState extends State<AdminWastePage> {
       AppSnackbar.showError(context, 'يرجى اختيار المخزن.');
       return;
     }
-    final qty = double.tryParse(_qtyCtrl.text);
+    final qty = parseNumber(_qtyCtrl.text);
     if (qty == null || qty <= 0) {
       AppSnackbar.showError(context, 'يرجى إدخال كمية صحيحة.');
       return;
@@ -202,6 +203,7 @@ class _AdminWastePageState extends State<AdminWastePage> {
                       controller: _qtyCtrl,
                       keyboardType:
                           const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: numericInputFormatters,
                       decoration: const InputDecoration(
                           labelText: 'الكمية', hintText: '0'),
                     ),

@@ -6,6 +6,7 @@ import '../../../../core/utils/app_snackbar.dart';
 import '../../../../core/widgets/state_views.dart';
 import '../../data/datasources/admin_remote_datasource.dart';
 import '../../data/models/admin_models.dart';
+import '../../../../core/utils/number_input.dart';
 
 /// "عمليات العمالة" — admin quick-action to record a جزاء/سلفة/مكافأة
 /// against any staff member (sales rep or production worker, per the
@@ -71,11 +72,12 @@ class _StaffOperationsPageState extends State<StaffOperationsPage> {
   }
 
   List<StaffModel> get _filteredStaff {
-    final query = _searchCtrl.text.trim();
+    final query = normalizeDigits(_searchCtrl.text.trim());
     if (query.isEmpty) return _allStaff;
     return _allStaff
         .where((s) =>
-            s.name.contains(query) || (s.phone?.contains(query) ?? false))
+            normalizeDigits(s.name).contains(query) ||
+            (s.phone != null && normalizeDigits(s.phone!).contains(query)))
         .toList();
   }
 
@@ -85,7 +87,7 @@ class _StaffOperationsPageState extends State<StaffOperationsPage> {
       AppSnackbar.showError(context, 'يرجى اختيار موظف.');
       return;
     }
-    final amount = double.tryParse(_amountCtrl.text);
+    final amount = parseNumber(_amountCtrl.text);
     if (amount == null || amount <= 0) {
       AppSnackbar.showError(context, 'يرجى إدخال مبلغ صحيح.');
       return;
@@ -240,6 +242,7 @@ class _StaffOperationsPageState extends State<StaffOperationsPage> {
                         controller: _amountCtrl,
                         keyboardType: const TextInputType.numberWithOptions(
                             decimal: true),
+                        inputFormatters: numericInputFormatters,
                         decoration: const InputDecoration(
                             labelText: 'المبلغ', hintText: '0'),
                       ),

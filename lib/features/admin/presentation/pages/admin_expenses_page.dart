@@ -8,6 +8,7 @@ import '../../../../core/utils/app_snackbar.dart';
 import '../../../../core/widgets/state_views.dart';
 import '../../data/datasources/admin_remote_datasource.dart';
 import '../../data/models/admin_models.dart';
+import '../../../../core/utils/number_input.dart';
 
 /// المصروفات والخزائن — يعرض بيانات ExpenseController/TreasuryController
 /// كما هي (نفس المسارات التي تستخدمها واجهة الويب)، دون المرور عبر
@@ -450,7 +451,7 @@ class _NewExpenseSheetState extends State<_NewExpenseSheet> {
         categoryId: _selectedCategory?.id,
         treasuryId: _selectedTreasury!.id,
         description: _descCtrl.text.trim(),
-        amount: double.parse(_amountCtrl.text.trim()),
+        amount: parseNumber(_amountCtrl.text)!,
         expenseDate: DateFormat('yyyy-MM-dd').format(_date),
         notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
       );
@@ -516,9 +517,10 @@ class _NewExpenseSheetState extends State<_NewExpenseSheet> {
                           controller: _amountCtrl,
                           keyboardType:
                               const TextInputType.numberWithOptions(decimal: true),
+                          inputFormatters: numericInputFormatters,
                           decoration: const InputDecoration(labelText: 'المبلغ'),
                           validator: (v) {
-                            final amount = double.tryParse(v ?? '');
+                            final amount = parseNumber(v);
                             if (amount == null || amount <= 0) return 'مبلغ غير صحيح';
                             return null;
                           },

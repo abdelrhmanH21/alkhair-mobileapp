@@ -7,6 +7,7 @@ import '../../../../core/utils/app_snackbar.dart';
 import '../../../../core/widgets/state_views.dart';
 import '../../data/datasources/admin_remote_datasource.dart';
 import '../../data/models/admin_models.dart';
+import '../../../../core/utils/number_input.dart';
 
 /// "عملية جرد" — mirrors the web "جرد التصنيع"/"جرد اللبن" page's 4 tabs
 /// (JardPage.tsx) exactly: جرد المخازن / جرد الخزائن / جرد المديونيات /
@@ -194,7 +195,7 @@ class _WarehouseCountTabState extends State<_WarehouseCountTab> {
     for (final item in _items) {
       final text = _counts[_keyFor(item)]?.text ?? '';
       if (text.isEmpty) continue;
-      final qty = double.tryParse(text);
+      final qty = parseNumber(text);
       if (qty == null) continue;
       counts.add({
         'item_type': item.itemType,
@@ -311,6 +312,7 @@ class _WarehouseCountTabState extends State<_WarehouseCountTab> {
                         controller: _counts[_keyFor(item)],
                         keyboardType:
                             const TextInputType.numberWithOptions(decimal: true),
+                        inputFormatters: numericInputFormatters,
                         textAlign: TextAlign.center,
                         decoration: const InputDecoration(
                             labelText: 'الفعلي', isDense: true),
@@ -459,7 +461,7 @@ class _VaultAuditTabState extends State<_VaultAuditTab> {
 
   double? get _variance {
     if (_selectedTreasury == null) return null;
-    final phys = double.tryParse(_balanceCtrl.text);
+    final phys = parseNumber(_balanceCtrl.text);
     if (phys == null) return null;
     return phys - _selectedTreasury!.balance;
   }
@@ -470,7 +472,7 @@ class _VaultAuditTabState extends State<_VaultAuditTab> {
       AppSnackbar.showError(context, 'يرجى اختيار الخزينة.');
       return;
     }
-    final phys = double.tryParse(_balanceCtrl.text);
+    final phys = parseNumber(_balanceCtrl.text);
     if (phys == null) {
       AppSnackbar.showError(context, 'أدخل الرصيد الفعلي.');
       return;
@@ -536,6 +538,7 @@ class _VaultAuditTabState extends State<_VaultAuditTab> {
           TextField(
             controller: _balanceCtrl,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: numericInputFormatters,
             decoration: const InputDecoration(labelText: 'الرصيد الفعلي (العد اليدوي)'),
           ),
           if (variance != null) ...[
@@ -708,7 +711,7 @@ class _DebtAuditTabState extends State<_DebtAuditTab> {
   double? get _variance {
     final selected = _selected;
     if (selected == null) return null;
-    final phys = double.tryParse(_balanceCtrl.text);
+    final phys = parseNumber(_balanceCtrl.text);
     if (phys == null) return null;
     return phys - selected.balance;
   }
@@ -719,7 +722,7 @@ class _DebtAuditTabState extends State<_DebtAuditTab> {
       AppSnackbar.showError(context, 'يرجى اختيار ${widget.entityLabel}.');
       return;
     }
-    final phys = double.tryParse(_balanceCtrl.text);
+    final phys = parseNumber(_balanceCtrl.text);
     if (phys == null) {
       AppSnackbar.showError(context, 'أدخل الرصيد الفعلي.');
       return;
@@ -800,6 +803,7 @@ class _DebtAuditTabState extends State<_DebtAuditTab> {
           TextField(
             controller: _balanceCtrl,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: numericInputFormatters,
             decoration: const InputDecoration(labelText: 'الرصيد الفعلي (الجرد الورقي)'),
           ),
           if (variance != null) ...[

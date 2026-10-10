@@ -11,6 +11,7 @@ import '../../../app_config/presentation/bloc/app_config_bloc.dart';
 import '../../../app_config/presentation/bloc/app_config_state.dart';
 import '../../data/datasources/admin_remote_datasource.dart';
 import '../../data/models/admin_models.dart';
+import '../../../../core/utils/number_input.dart';
 
 final _fmt = DateFormat('yyyy-MM-dd');
 
@@ -535,8 +536,8 @@ class _GoodsFormSheetState extends State<_GoodsFormSheet> {
 
   void _addItem() {
     final product = _selectedProduct;
-    final qty = double.tryParse(_qtyCtrl.text);
-    final price = double.tryParse(_priceCtrl.text);
+    final qty = parseNumber(_qtyCtrl.text);
+    final price = parseNumber(_priceCtrl.text);
     if (product == null || qty == null || qty <= 0 || price == null || price < 0) {
       AppSnackbar.showError(context, 'يرجى اختيار منتج وإدخال كمية وسعر صحيحين.');
       return;
@@ -606,6 +607,7 @@ class _GoodsFormSheetState extends State<_GoodsFormSheet> {
                       child: TextField(
                         controller: _qtyCtrl,
                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        inputFormatters: numericInputFormatters,
                         decoration: const InputDecoration(labelText: 'الكمية'),
                       ),
                     ),
@@ -614,6 +616,7 @@ class _GoodsFormSheetState extends State<_GoodsFormSheet> {
                       child: TextField(
                         controller: _priceCtrl,
                         keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        inputFormatters: numericInputFormatters,
                         decoration: const InputDecoration(labelText: 'السعر'),
                       ),
                     ),
@@ -708,7 +711,7 @@ class _PaymentFormSheetState extends State<_PaymentFormSheet> {
   }
 
   void _submit() {
-    final amount = double.tryParse(_amountCtrl.text);
+    final amount = parseNumber(_amountCtrl.text);
     if (amount == null || amount <= 0) {
       AppSnackbar.showError(context, 'يرجى إدخال مبلغ صحيح.');
       return;
@@ -747,6 +750,7 @@ class _PaymentFormSheetState extends State<_PaymentFormSheet> {
           TextField(
             controller: _amountCtrl,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: numericInputFormatters,
             decoration: const InputDecoration(labelText: 'المبلغ'),
           ),
           const SizedBox(height: 10),

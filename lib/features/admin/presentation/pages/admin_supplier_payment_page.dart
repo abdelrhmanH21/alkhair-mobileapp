@@ -5,6 +5,7 @@ import '../../../../core/utils/app_snackbar.dart';
 import '../../../../core/widgets/state_views.dart';
 import '../../data/datasources/admin_remote_datasource.dart';
 import '../../data/models/admin_models.dart';
+import '../../../../core/utils/number_input.dart';
 
 /// "عملية سداد لمورد" — submits to POST /v1/mobile/admin/supplier-payment,
 /// which reuses PaymentCollection (type=payment) — the exact same model
@@ -77,7 +78,7 @@ class _AdminSupplierPaymentPageState extends State<AdminSupplierPaymentPage> {
       AppSnackbar.showError(context, 'يرجى اختيار المورد.');
       return;
     }
-    final amount = double.tryParse(_amountCtrl.text);
+    final amount = parseNumber(_amountCtrl.text);
     if (amount == null || amount <= 0) {
       AppSnackbar.showError(context, 'يرجى إدخال مبلغ صحيح.');
       return;
@@ -140,6 +141,7 @@ class _AdminSupplierPaymentPageState extends State<AdminSupplierPaymentPage> {
                       controller: _amountCtrl,
                       keyboardType:
                           const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: numericInputFormatters,
                       decoration: const InputDecoration(
                           labelText: 'المبلغ المسدَّد', hintText: '0'),
                     ),

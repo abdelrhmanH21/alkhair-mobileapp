@@ -28,6 +28,7 @@ import 'truck_stock_page.dart';
 import 'print_invoice_page.dart';
 import 'dashboard_page.dart';
 import 'customer_invoice_history_page.dart';
+import '../../../../core/utils/number_input.dart';
 
 /// Also doubles as the edit form for an already-submitted invoice while its
 /// shift is still active (see DelegateInvoiceController::update()) — pass
@@ -217,7 +218,7 @@ class _InvoicePageState extends State<InvoicePage> {
       .where((r) => r.refundMethod == 'in_kind_replacement')
       .fold(0.0, (s, r) => s + (r.replacementSubtotal ?? 0));
 
-  double get _discountAmount => double.tryParse(_discountCtrl.text) ?? 0;
+  double get _discountAmount => parseNumber(_discountCtrl.text) ?? 0;
 
   double get _maxDiscountPct {
     final state = context.read<AppConfigBloc>().state;
@@ -237,7 +238,7 @@ class _InvoicePageState extends State<InvoicePage> {
         replacementItemsTotal: _replacementItemsTotal,
       );
 
-  double get _cashReceived => double.tryParse(_cashCtrl.text) ?? 0;
+  double get _cashReceived => parseNumber(_cashCtrl.text) ?? 0;
 
   double get _remainingDebt =>
       (_netTotal - _cashReceived).clamp(0, double.infinity);
@@ -808,7 +809,7 @@ class _SaleItemRow extends StatelessWidget {
                         : 'كمية',
                     initialValue: item.quantity.toString(),
                     onChanged: (v) {
-                      final qty = double.tryParse(v) ?? 0;
+                      final qty = parseNumber(v) ?? 0;
                       item.quantity = qty.clamp(0, item.maxQty);
                       onChange();
                     },
@@ -959,7 +960,7 @@ class _ReturnItemRowState extends State<_ReturnItemRow> {
                     label: 'كمية',
                     initialValue: widget.item.quantity.toString(),
                     onChanged: (v) {
-                      widget.item.quantity = double.tryParse(v) ?? 0;
+                      widget.item.quantity = parseNumber(v) ?? 0;
                       widget.onChange();
                     },
                   ),
@@ -1073,6 +1074,7 @@ class _TotalsCard extends StatelessWidget {
                       controller: discountCtrl,
                       keyboardType:
                           const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: numericInputFormatters,
                       textDirection: TextDirection.ltr,
                       textAlign: TextAlign.center,
                       decoration: InputDecoration(
@@ -1100,6 +1102,7 @@ class _TotalsCard extends StatelessWidget {
                       controller: cashCtrl,
                       keyboardType:
                           const TextInputType.numberWithOptions(decimal: true),
+                      inputFormatters: numericInputFormatters,
                       textDirection: TextDirection.ltr,
                       textAlign: TextAlign.center,
                       decoration: const InputDecoration(
@@ -1246,12 +1249,12 @@ class _SellableProductPickerSheetState
   void _confirmAdd() {
     final product = _selected;
     if (product == null) return;
-    final qty = (double.tryParse(_qtyCtrl.text) ?? 0)
+    final qty = (parseNumber(_qtyCtrl.text) ?? 0)
         .clamp(0, product.availableQty)
         .toDouble();
     if (qty <= 0) return;
 
-    final price = double.tryParse(_priceCtrl.text);
+    final price = parseNumber(_priceCtrl.text);
     if (price == null || price < _minAllowedPrice) {
       setState(() => _priceError =
           'الحد الأدنى: ${_minAllowedPrice.toStringAsFixed(2)} (خصم حتى ${_maxDiscountPct.toStringAsFixed(0)}%) — لا يوجد حد أقصى للزيادة');
@@ -1370,6 +1373,7 @@ class _SellableProductPickerSheetState
                           controller: _qtyCtrl,
                           keyboardType: const TextInputType.numberWithOptions(
                               decimal: true),
+                          inputFormatters: numericInputFormatters,
                           textAlign: TextAlign.center,
                           textDirection: TextDirection.ltr,
                         ),
@@ -1390,6 +1394,7 @@ class _SellableProductPickerSheetState
                           controller: _priceCtrl,
                           keyboardType: const TextInputType.numberWithOptions(
                               decimal: true),
+                          inputFormatters: numericInputFormatters,
                           textAlign: TextAlign.center,
                           textDirection: TextDirection.ltr,
                           onChanged: (_) {
@@ -1507,7 +1512,7 @@ class _ReturnProductPickerSheetState extends State<_ReturnProductPickerSheet> {
   void _confirmAdd() {
     final product = _selected;
     if (product == null) return;
-    final qty = double.tryParse(_qtyCtrl.text) ?? 0;
+    final qty = parseNumber(_qtyCtrl.text) ?? 0;
     if (qty <= 0) return;
 
     if (_refundMethod == 'in_kind_replacement' && _replacementProductId == null) {
@@ -1616,6 +1621,7 @@ class _ReturnProductPickerSheetState extends State<_ReturnProductPickerSheet> {
                           controller: _qtyCtrl,
                           keyboardType: const TextInputType.numberWithOptions(
                               decimal: true),
+                          inputFormatters: numericInputFormatters,
                           textAlign: TextAlign.center,
                           textDirection: TextDirection.ltr,
                         ),
@@ -1765,6 +1771,7 @@ class _SmallNumberField extends StatelessWidget {
   Widget build(BuildContext context) => TextFormField(
         initialValue: initialValue,
         keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        inputFormatters: numericInputFormatters,
         textDirection: TextDirection.ltr,
         textAlign: TextAlign.center,
         style: const TextStyle(fontSize: 12),

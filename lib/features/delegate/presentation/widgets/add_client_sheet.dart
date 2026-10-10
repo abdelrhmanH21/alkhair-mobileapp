@@ -7,6 +7,7 @@ import '../bloc/delegate_state.dart';
 import '../bloc/request_tracker.dart';
 import '../../data/models/client_model.dart';
 import '../../data/models/customer_region_model.dart';
+import '../../../../core/utils/number_input.dart';
 
 enum _AddClientReq { regions, create }
 
@@ -55,9 +56,9 @@ class _AddClientSheetState extends State<AddClientSheet> {
     if (!_formKey.currentState!.validate()) return;
     final event = DelegateClientCreated(
       name: _nameCtrl.text.trim(),
-      phone: _phoneCtrl.text.trim(),
+      phone: normalizeDigits(_phoneCtrl.text.trim()),
       customerRegionId: _selectedRegion?.id,
-      initialBalance: double.tryParse(_balanceCtrl.text),
+      initialBalance: parseNumber(_balanceCtrl.text),
     );
     _tracker.start(event.requestId, _AddClientReq.create);
     context.read<DelegateBloc>().add(event);
@@ -130,6 +131,7 @@ class _AddClientSheetState extends State<AddClientSheet> {
               TextFormField(
                 controller: _phoneCtrl,
                 keyboardType: TextInputType.phone,
+                inputFormatters: numericInputFormatters,
                 textDirection: TextDirection.ltr,
                 decoration: const InputDecoration(
                     labelText: 'رقم الهاتف *',
@@ -158,6 +160,7 @@ class _AddClientSheetState extends State<AddClientSheet> {
               TextFormField(
                 controller: _balanceCtrl,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: numericInputFormatters,
                 textDirection: TextDirection.ltr,
                 decoration: const InputDecoration(
                     labelText: 'رصيد افتتاحي مستحق',

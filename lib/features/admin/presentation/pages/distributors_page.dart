@@ -6,6 +6,7 @@ import '../../../../core/widgets/state_views.dart';
 import '../../data/datasources/admin_remote_datasource.dart';
 import '../../data/models/admin_models.dart';
 import 'distributor_detail_page.dart';
+import '../../../../core/utils/number_input.dart';
 
 /// "الموزعون" — admin-only (no delegate mobile-app usage), reached from the
 /// العمليات sub-menu. List of distributors + running_balance, with a "+" to
@@ -172,7 +173,7 @@ class _AddDistributorSheetState extends State<_AddDistributorSheet> {
     try {
       final distributor = await sl<AdminRemoteDataSource>().createDistributor(
         name: _nameCtrl.text.trim(),
-        phone: _phoneCtrl.text.trim().isEmpty ? null : _phoneCtrl.text.trim(),
+        phone: normalizeDigits(_phoneCtrl.text.trim()).isEmpty ? null : normalizeDigits(_phoneCtrl.text.trim()),
         notes: _notesCtrl.text.trim().isEmpty ? null : _notesCtrl.text.trim(),
       );
       widget.onAdded(distributor);
@@ -205,6 +206,7 @@ class _AddDistributorSheetState extends State<_AddDistributorSheet> {
           TextField(
               controller: _phoneCtrl,
               keyboardType: TextInputType.phone,
+              inputFormatters: numericInputFormatters,
               decoration: const InputDecoration(labelText: 'الهاتف (اختياري)')),
           const SizedBox(height: 10),
           TextField(

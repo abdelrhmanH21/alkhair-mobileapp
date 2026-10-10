@@ -6,6 +6,7 @@ import '../../../../core/utils/app_snackbar.dart';
 import '../../../../core/widgets/state_views.dart';
 import '../../data/datasources/admin_remote_datasource.dart';
 import '../../data/models/admin_models.dart';
+import '../../../../core/utils/number_input.dart';
 
 /// "بدء تشغيلة جديدة" — mirrors the web's MaterialIssuancePage.tsx exactly:
 /// pick a category → recipe, enter consumed material quantities (deducted
@@ -173,7 +174,7 @@ class _StartProductionPageState extends State<StartProductionPage> {
     final activeInputs = _inputRows
         .where((r) =>
             r._qtyCtrl.text.isNotEmpty &&
-            (double.tryParse(r._qtyCtrl.text) ?? 0) > 0)
+            (parseNumber(r._qtyCtrl.text) ?? 0) > 0)
         .toList();
     if (activeInputs.isEmpty) {
       AppSnackbar.showError(context, 'أدخل كمية واحدة على الأقل للمكونات');
@@ -182,7 +183,7 @@ class _StartProductionPageState extends State<StartProductionPage> {
     final overStock = activeInputs.where((r) =>
         r.recipeInput.inputType == 'raw_material' &&
         r.recipeInput.currentStock != null &&
-        (double.tryParse(r._qtyCtrl.text) ?? 0) > r.recipeInput.currentStock!);
+        (parseNumber(r._qtyCtrl.text) ?? 0) > r.recipeInput.currentStock!);
     if (overStock.isNotEmpty) {
       AppSnackbar.showError(context,
           'مخزون غير كافٍ: ${overStock.map((r) => r.recipeInput.name).join('، ')}');
@@ -193,12 +194,12 @@ class _StartProductionPageState extends State<StartProductionPage> {
         .where((r) =>
             r.productId != null &&
             r.warehouseId != null &&
-            (double.tryParse(r.qtyCtrl.text) ?? 0) > 0)
+            (parseNumber(r.qtyCtrl.text) ?? 0) > 0)
         .toList();
 
     setState(() => _submitting = true);
     try {
-      final expenseAmount = double.tryParse(_expenseCtrl.text) ?? 0;
+      final expenseAmount = parseNumber(_expenseCtrl.text) ?? 0;
       final batchNumber = await _remote.startProductionBatch(
         recipeId: _selectedRecipe!.id,
         categoryId: _categoryId,
@@ -358,12 +359,13 @@ class _StartProductionPageState extends State<StartProductionPage> {
                           controller: _expenseCtrl,
                           keyboardType: const TextInputType.numberWithOptions(
                               decimal: true),
+                          inputFormatters: numericInputFormatters,
                           decoration: const InputDecoration(
                               labelText: 'مصروفات إضافية للتشغيلة (اختياري)',
                               hintText: '0.00'),
                           onChanged: (_) => setState(() {}),
                         ),
-                        if ((double.tryParse(_expenseCtrl.text) ?? 0) > 0 &&
+                        if ((parseNumber(_expenseCtrl.text) ?? 0) > 0 &&
                             _treasuries.isNotEmpty) ...[
                           const SizedBox(height: 8),
                           DropdownButtonFormField<int>(
@@ -388,7 +390,7 @@ class _StartProductionPageState extends State<StartProductionPage> {
                                 fontSize: 11, color: AppTheme.textMuted)),
                         const SizedBox(height: 8),
                         ..._inputRows.map((row) {
-                          final qty = double.tryParse(row._qtyCtrl.text) ?? 0;
+                          final qty = parseNumber(row._qtyCtrl.text) ?? 0;
                           final warn = row.recipeInput.currentStock != null &&
                               qty > row.recipeInput.currentStock!;
                           return Card(
@@ -429,6 +431,7 @@ class _StartProductionPageState extends State<StartProductionPage> {
                                       keyboardType:
                                           const TextInputType.numberWithOptions(
                                               decimal: true),
+                                      inputFormatters: numericInputFormatters,
                                       textAlign: TextAlign.center,
                                       onChanged: (_) => setState(() {}),
                                       decoration:
@@ -500,6 +503,7 @@ class _StartProductionPageState extends State<StartProductionPage> {
                                             keyboardType: const TextInputType
                                                 .numberWithOptions(
                                                 decimal: true),
+                                            inputFormatters: numericInputFormatters,
                                             textAlign: TextAlign.center,
                                             decoration: const InputDecoration(
                                                 labelText: 'كمية',

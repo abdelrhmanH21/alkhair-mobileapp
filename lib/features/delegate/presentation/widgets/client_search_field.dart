@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../data/models/client_model.dart';
+import '../../../../core/utils/number_input.dart';
 
 /// Shared customer search/select field: text input with live results
 /// dropdown, a selected-client summary card (showing outstanding debt), and
@@ -67,7 +68,7 @@ class ClientSearchField extends StatelessWidget {
                         : null,
                   ),
                   onChanged: (v) {
-                    if (v.isEmpty || v.length >= 2) onSearch(v);
+                    if (v.isEmpty || v.length >= 2) onSearch(normalizeDigits(v));
                   },
                 ),
               ),

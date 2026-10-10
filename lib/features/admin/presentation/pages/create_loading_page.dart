@@ -8,6 +8,7 @@ import '../../data/models/admin_models.dart';
 import '../bloc/admin_bloc.dart';
 import '../bloc/admin_event.dart';
 import '../bloc/admin_state.dart';
+import '../../../../core/utils/number_input.dart';
 
 class CreateLoadingPage extends StatefulWidget {
   const CreateLoadingPage({super.key});
@@ -83,7 +84,7 @@ class _CreateLoadingPageState extends State<CreateLoadingPage> {
     final itemsPayload = _items
         .map((e) => {
               'product_id': e.selectedProduct!.id,
-              'quantity': double.parse(e.qtyCtrl.text.trim()),
+              'quantity': parseNumber(e.qtyCtrl.text)!,
             })
         .toList();
 
@@ -534,11 +535,12 @@ class _ProductItemRowState extends State<_ProductItemRow> {
                 keyboardType:
                     const TextInputType.numberWithOptions(decimal: true),
                 inputFormatters: [
+                  const ArabicNumberInputFormatter(),
                   FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,3}')),
                 ],
                 validator: (v) {
                   if (v == null || v.isEmpty) return 'أدخل الكمية';
-                  final qty = double.tryParse(v);
+                  final qty = parseNumber(v);
                   if (qty == null || qty <= 0) return 'كمية غير صحيحة';
                   return null;
                 },

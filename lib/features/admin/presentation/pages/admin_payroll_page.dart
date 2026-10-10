@@ -80,6 +80,7 @@ class _AdminPayrollPageState extends State<AdminPayrollPage> {
                   : RefreshIndicator(
                       onRefresh: _load,
                       child: ListView.builder(
+                        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
                         padding: const EdgeInsets.all(12),
                         itemCount: _rows.length,
                         itemBuilder: (_, i) => _RepCard(rep: _rows[i], onTap: () => _openRep(_rows[i])),
@@ -599,6 +600,7 @@ class _CommissionBreakdownTabState extends State<_CommissionBreakdownTab> {
           child: Text('لا توجد مبيعات هذا الشهر.', style: TextStyle(color: AppTheme.textMuted)));
     }
     return ListView.builder(
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       padding: const EdgeInsets.all(12),
       itemCount: _rows!.length,
       itemBuilder: (_, i) {
@@ -656,6 +658,7 @@ class _RepPenaltiesTabState extends State<_RepPenaltiesTab> {
           child: Text('لا توجد جزاءات هذا الشهر.', style: TextStyle(color: AppTheme.textMuted)));
     }
     return ListView.builder(
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       padding: const EdgeInsets.all(12),
       itemCount: _rows!.length,
       itemBuilder: (_, i) {
@@ -713,6 +716,7 @@ class _RepAdvancesTabState extends State<_RepAdvancesTab> {
           child: Text('لا توجد سلف هذا الشهر.', style: TextStyle(color: AppTheme.textMuted)));
     }
     return ListView.builder(
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       padding: const EdgeInsets.all(12),
       itemCount: _rows!.length,
       itemBuilder: (_, i) {
@@ -817,6 +821,7 @@ class _RepBonusesTabState extends State<_RepBonusesTab> {
           child: Text('لا توجد مكافآت هذا الشهر.', style: TextStyle(color: AppTheme.textMuted)));
     }
     return ListView.builder(
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       padding: const EdgeInsets.all(12),
       itemCount: _rows!.length,
       itemBuilder: (_, i) {
@@ -993,6 +998,7 @@ class _ReferencePricesTabState extends State<_ReferencePricesTab> {
               ? const Center(
                   child: Text('لا توجد أسعار مرجعية بعد.', style: TextStyle(color: AppTheme.textMuted)))
               : ListView.builder(
+                  keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
                   padding: const EdgeInsets.all(12),
                   itemCount: _rows!.length,
                   itemBuilder: (_, i) {
@@ -1146,6 +1152,7 @@ class _PriceVarianceTabState extends State<_PriceVarianceTab> {
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.all(12),
         children: [
           Container(
@@ -1412,6 +1419,7 @@ class _EditTargetSheetState extends State<_EditTargetSheet> {
         top: 16,
       ),
       child: SingleChildScrollView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         child: Form(
           key: _formKey,
           child: Column(
@@ -1544,6 +1552,7 @@ class _EditCommissionOverrideSheetState extends State<_EditCommissionOverrideShe
         top: 16,
       ),
       child: SingleChildScrollView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         child: Form(
           key: _formKey,
           child: Column(

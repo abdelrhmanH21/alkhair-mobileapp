@@ -186,6 +186,7 @@ class _AdminPurchasePageState extends State<AdminPurchasePage> {
       body: _loadingRefData
           ? const Center(child: CircularProgressIndicator())
           : ListView(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               padding: const EdgeInsets.all(16),
               children: [
                 DropdownButtonFormField<int>(
@@ -382,6 +383,7 @@ class _PurchaseItemPickerSheetState extends State<_PurchaseItemPickerSheet>
                 controller: _tabController,
                 children: [
                   ListView.separated(
+                    keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
                     itemCount: widget.rawMaterials.length,
                     separatorBuilder: (_, __) => const Divider(height: 1),
                     itemBuilder: (_, i) {
@@ -398,6 +400,7 @@ class _PurchaseItemPickerSheetState extends State<_PurchaseItemPickerSheet>
                     },
                   ),
                   ListView.separated(
+                    keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
                     itemCount: widget.products.length,
                     separatorBuilder: (_, __) => const Divider(height: 1),
                     itemBuilder: (_, i) {

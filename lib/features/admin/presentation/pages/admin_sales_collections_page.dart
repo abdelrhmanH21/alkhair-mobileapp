@@ -242,6 +242,7 @@ class _SalesTabState extends State<_SalesTab> {
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView.builder(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.all(12),
         itemCount: _rows.length + 1,
         itemBuilder: (_, i) {
@@ -442,6 +443,7 @@ class _CollectionsTabState extends State<_CollectionsTab> {
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView.builder(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.all(12),
         itemCount: _rows.length + 2,
         itemBuilder: (_, i) {

@@ -201,6 +201,7 @@ class _FormBody extends StatelessWidget {
   Widget build(BuildContext context) => Form(
         key: formKey,
         child: ListView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           padding: const EdgeInsets.all(16),
           children: [
             // ── Delegate picker ───────────────────────────────────────────

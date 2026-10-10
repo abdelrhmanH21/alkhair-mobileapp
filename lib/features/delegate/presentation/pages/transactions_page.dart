@@ -214,6 +214,7 @@ class _TransactionsPageState extends State<TransactionsPage> {
           }
         },
         child: ListView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           padding: const EdgeInsets.all(16),
           children: [
             if (!widget.hasActiveLoading)

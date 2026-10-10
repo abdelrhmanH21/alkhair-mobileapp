@@ -320,6 +320,7 @@ class _AdminSalePageState extends State<AdminSalePage> {
           : _error != null
               ? AppErrorView(message: _error!, onRetry: _loadRefData)
               : ListView(
+                  keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
                   padding: const EdgeInsets.all(16),
                   children: [
                     ClientSearchField(
@@ -563,6 +564,7 @@ class _ProductPickerSheetState extends State<_ProductPickerSheet> {
             ),
             Expanded(
               child: ListView.separated(
+                keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
                 itemCount: widget.products.length,
                 separatorBuilder: (_, __) => const Divider(height: 1),
                 itemBuilder: (_, i) {

@@ -239,6 +239,7 @@ class _ProductList extends StatelessWidget {
               style: TextStyle(color: AppTheme.textMuted)));
     }
     return ListView.builder(
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       padding: const EdgeInsets.all(12),
       itemCount: products.length,
       itemBuilder: (_, i) {
@@ -276,6 +277,7 @@ class _RawMaterialList extends StatelessWidget {
               style: TextStyle(color: AppTheme.textMuted)));
     }
     return ListView.builder(
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       padding: const EdgeInsets.all(12),
       itemCount: materials.length,
       itemBuilder: (_, i) {

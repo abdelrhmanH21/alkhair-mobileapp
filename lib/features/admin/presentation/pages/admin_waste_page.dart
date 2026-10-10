@@ -135,6 +135,7 @@ class _AdminWastePageState extends State<AdminWastePage> {
           : _error != null
               ? AppErrorView(message: _error!, onRetry: _loadRefData)
               : ListView(
+                  keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
                   padding: const EdgeInsets.all(16),
                   children: [
                     Row(

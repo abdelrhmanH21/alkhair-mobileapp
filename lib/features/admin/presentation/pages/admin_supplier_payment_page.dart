@@ -123,6 +123,7 @@ class _AdminSupplierPaymentPageState extends State<AdminSupplierPaymentPage> {
           : _error != null
               ? AppErrorView(message: _error!, onRetry: _loadRefData)
               : ListView(
+                  keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
                   padding: const EdgeInsets.all(16),
                   children: [
                     DropdownButtonFormField<int>(

@@ -246,6 +246,7 @@ class _CustomersTabState extends State<_CustomersTab> {
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView.builder(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0).copyWith(bottom: 80),
         itemCount: _customers.length + 1,
         itemBuilder: (_, i) {
@@ -588,6 +589,7 @@ class _SuppliersTabState extends State<_SuppliersTab> {
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView.builder(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 0).copyWith(bottom: 80),
         itemCount: _suppliers.length + 1,
         itemBuilder: (_, i) {
@@ -985,6 +987,7 @@ class _CustomerPickerSheetState extends State<_CustomerPickerSheet> {
                       ? const Center(
                           child: Text('اكتب للبحث عن عميل', style: TextStyle(color: AppTheme.textMuted)))
                       : ListView.builder(
+                          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
                           itemCount: _results.length,
                           itemBuilder: (_, i) {
                             final c = _results[i];
@@ -1077,6 +1080,7 @@ class _RegionsTabState extends State<_RegionsTab> {
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView.builder(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8).copyWith(bottom: 80),
         itemCount: _regions.length,
         itemBuilder: (_, i) {

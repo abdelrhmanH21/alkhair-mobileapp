@@ -133,6 +133,7 @@ class _StaffOperationsPageState extends State<StaffOperationsPage> {
           : _error != null
               ? AppErrorView(message: _error!, onRetry: _loadStaff)
               : ListView(
+                  keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
                   padding: const EdgeInsets.all(16),
                   children: [
                     if (_selectedStaff == null) ...[

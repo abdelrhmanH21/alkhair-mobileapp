@@ -86,6 +86,7 @@ class _DistributorsPageState extends State<DistributorsPage> {
                   : RefreshIndicator(
                       onRefresh: _load,
                       child: ListView.separated(
+                        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
                         padding: const EdgeInsets.all(12),
                         itemCount: _distributors.length,
                         separatorBuilder: (_, __) => const SizedBox(height: 8),

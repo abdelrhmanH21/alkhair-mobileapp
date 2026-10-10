@@ -271,6 +271,7 @@ class _StartProductionPageState extends State<StartProductionPage> {
               : RefreshIndicator(
                   onRefresh: _loadRefData,
                   child: ListView(
+                    keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
                     padding: const EdgeInsets.all(16),
                     children: [
                       if (_lastBatchNumber != null)

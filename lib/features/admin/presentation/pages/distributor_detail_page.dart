@@ -311,6 +311,7 @@ class _DistributorDetailPageState extends State<DistributorDetailPage> {
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.all(14),
         children: [
           Container(
@@ -588,6 +589,7 @@ class _GoodsFormSheetState extends State<_GoodsFormSheet> {
             const SizedBox(height: 10),
             Expanded(
               child: ListView(
+                keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
                 children: [
                   DropdownButtonFormField<SimpleProductModel>(
                     initialValue: _selectedProduct,

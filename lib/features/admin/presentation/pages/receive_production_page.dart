@@ -235,6 +235,7 @@ class _ReceiveProductionPageState extends State<ReceiveProductionPage> {
               : RefreshIndicator(
                   onRefresh: _loadLists,
                   child: ListView(
+                    keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
                     padding: const EdgeInsets.all(16),
                     children: [
                       if (_lastCompletedBatch != null)
@@ -570,6 +571,7 @@ class _PackagingPickerSheetState extends State<_PackagingPickerSheet> {
                       child: Text('لا توجد نتائج',
                           style: TextStyle(color: AppTheme.textMuted)))
                   : ListView.separated(
+                      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
                       itemCount: list.length,
                       separatorBuilder: (_, __) => const Divider(height: 1),
                       itemBuilder: (_, i) {

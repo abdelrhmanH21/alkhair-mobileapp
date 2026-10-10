@@ -130,6 +130,7 @@ class _SettleDelegatePageState extends State<SettleDelegatePage> {
                 child: Text('لم يتم تحميل ملخص الوردية'));
           }
           return SingleChildScrollView(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
             padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,

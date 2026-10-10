@@ -214,6 +214,7 @@ class _ExpensesTabState extends State<_ExpensesTab> {
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView.builder(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.all(12),
         itemCount: _expenses.length + 1,
         itemBuilder: (_, i) {
@@ -498,6 +499,7 @@ class _NewExpenseSheetState extends State<_NewExpenseSheet> {
                   child: AppErrorView(message: _loadError!, onRetry: _loadOptions),
                 )
               : SingleChildScrollView(
+                  keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
                   child: Form(
                     key: _formKey,
                     child: Column(
@@ -635,6 +637,7 @@ class _TreasuriesTabState extends State<_TreasuriesTab> {
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.all(12),
         children: [
           Card(

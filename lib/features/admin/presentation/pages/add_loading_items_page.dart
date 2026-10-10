@@ -163,6 +163,7 @@ class _AddLoadingItemsPageState extends State<AddLoadingItemsPage> {
     return Form(
       key: _formKey,
       child: ListView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.all(16),
         children: [
           const _SectionHeader(title: 'المندوب (تحميلة نشطة فقط)', icon: Icons.person_rounded),

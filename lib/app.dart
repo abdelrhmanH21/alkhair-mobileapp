@@ -26,6 +26,21 @@ import 'features/admin/presentation/pages/admin_dashboard_page.dart';
 /// message listener) show a SnackBar on whatever screen is currently active.
 final GlobalKey<NavigatorState> appNavigatorKey = GlobalKey<NavigatorState>();
 
+/// MaterialApp.builder: wraps the whole Navigator (every route, bottom
+/// sheet and dialog) once. Public so widget tests mount the exact same root.
+///  - DismissKeyboardOnTap: tap outside a text field closes the keyboard
+///    (pointer-level — see its doc comment for why the old gesture-based
+///    version failed on devices);
+///  - NumericKeyboardDoneBar: "تم" above iOS number/phone pads.
+Widget alKhairAppBuilder(BuildContext context, Widget? child) => DismissKeyboardOnTap(
+      child: NumericKeyboardDoneBar(
+        child: Directionality(
+          textDirection: TextDirection.rtl,
+          child: child ?? const SizedBox.shrink(),
+        ),
+      ),
+    );
+
 class AlKhairApp extends StatelessWidget {
   const AlKhairApp({super.key});
 
@@ -77,16 +92,7 @@ class AlKhairApp extends StatelessWidget {
             GlobalWidgetsLocalizations.delegate,
             GlobalCupertinoLocalizations.delegate,
           ],
-          // DismissKeyboardOnTap wraps the whole Navigator here (once, at
-          // the root) instead of being repeated per-Scaffold — see its own
-          // doc comment for why that's enough to also reach bottom sheets
-          // and dialogs without swallowing taps meant for fields/buttons.
-          builder: (ctx, child) => DismissKeyboardOnTap(
-            child: Directionality(
-              textDirection: TextDirection.rtl,
-              child: child ?? const SizedBox.shrink(),
-            ),
-          ),
+          builder: alKhairAppBuilder,
           home: const _RootNavigator(),
         ),
         ),

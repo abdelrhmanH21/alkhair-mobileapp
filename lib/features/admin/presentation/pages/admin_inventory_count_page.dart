@@ -263,6 +263,7 @@ class _WarehouseCountTabState extends State<_WarehouseCountTab> {
       return AppErrorView(message: _warehousesError!, onRetry: _loadWarehouses);
     }
     return ListView(
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       padding: const EdgeInsets.all(16),
       children: [
         DropdownButtonFormField<int>(
@@ -517,6 +518,7 @@ class _VaultAuditTabState extends State<_VaultAuditTab> {
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.all(16),
         children: [
           DropdownButtonFormField<TreasuryModel>(
@@ -761,6 +763,7 @@ class _DebtAuditTabState extends State<_DebtAuditTab> {
   Widget build(BuildContext context) {
     final variance = _variance;
     return ListView(
+      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
       padding: const EdgeInsets.all(16),
       children: [
         if (_selected == null) ...[

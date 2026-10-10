@@ -544,6 +544,7 @@ class _InvoicePageState extends State<InvoicePage> {
         }
       },
       child: SingleChildScrollView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         padding: const EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1337,6 +1338,7 @@ class _SellableProductPickerSheetState
                 else
                   Expanded(
                     child: ListView.separated(
+                      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
                       itemCount: _products.length,
                       separatorBuilder: (_, __) => const Divider(height: 1),
                       itemBuilder: (_, i) {
@@ -1590,6 +1592,7 @@ class _ReturnProductPickerSheetState extends State<_ReturnProductPickerSheet> {
                 else
                   Expanded(
                     child: ListView.separated(
+                      keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
                       itemCount: _products.length,
                       separatorBuilder: (_, __) => const Divider(height: 1),
                       itemBuilder: (_, i) {

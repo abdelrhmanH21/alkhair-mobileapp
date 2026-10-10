@@ -16,9 +16,11 @@ class ClientSearchField extends StatelessWidget {
   final ClientModel? selectedClient;
   final void Function(String) onSearch;
   final void Function(ClientModel) onSelect;
+
   /// Null hides the "add new client" FAB (e.g. read-only pickers such as
   /// the كشف حساب عميل report).
   final VoidCallback? onAddNew;
+
   /// Opens سجل الفواتير السابقة for a client. Optional — callers that don't
   /// need this entry point (e.g. the معاملات tab's collection form) simply
   /// omit it and no history icon is shown.
@@ -101,10 +103,8 @@ class ClientSearchField extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(selectedClient!.name,
-                            style: const TextStyle(fontWeight: FontWeight.bold)),
-                        Text(selectedClient!.phone,
-                            style: const TextStyle(fontSize: 12, color: AppTheme.textMuted)),
+                        Text(selectedClient!.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                        Text(selectedClient!.phone, style: const TextStyle(fontSize: 12, color: AppTheme.textMuted)),
                       ],
                     ),
                   ),
@@ -124,69 +124,71 @@ class ClientSearchField extends StatelessWidget {
                       ),
                       child: Text(
                         'دين: ${selectedClient!.balance.toStringAsFixed(2)}',
-                        style: const TextStyle(
-                            color: AppTheme.danger,
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold),
+                        style: const TextStyle(color: AppTheme.danger, fontSize: 11, fontWeight: FontWeight.bold),
                       ),
                     ),
                 ],
               ),
             ),
-          if (results.isNotEmpty)
-            Container(
-              constraints: const BoxConstraints(maxHeight: 180),
-              margin: const EdgeInsets.only(top: 8),
-              decoration: BoxDecoration(
-                color: AppTheme.cardBg,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: const [BoxShadow(color: AppTheme.shadowColor, blurRadius: 10)],
-              ),
-              // Own Material so the ListTiles' ink splashes aren't hidden
-              // behind this container's background.
-              child: Material(
-                type: MaterialType.transparency,
-                child: ListView.separated(
-                  shrinkWrap: true,
-                  itemCount: results.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1),
-                  itemBuilder: (_, i) {
-                    final c = results[i];
-                    return ListTile(
-                      dense: true,
-                      leading: const Icon(Icons.person_outline, size: 20),
-                      title: Text(c.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-                      subtitle: Text(c.phone,
-                          style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (c.balance > 0)
-                            Padding(
-                              padding: const EdgeInsets.only(left: 4),
-                              child: Text(
-                                '${c.balance.toStringAsFixed(0)} دين',
-                                style: const TextStyle(
-                                    color: AppTheme.danger, fontSize: 11),
-                              ),
+          // Suggestions only while the field has focus: a tap outside (which
+          // unfocuses — see DismissKeyboardOnTap) or any other focus loss
+          // closes the list instead of leaving it hanging over the form.
+          ListenableBuilder(
+            listenable: focusNode,
+            builder: (context, _) => !(focusNode.hasFocus && results.isNotEmpty)
+                ? const SizedBox.shrink()
+                : Container(
+                    constraints: const BoxConstraints(maxHeight: 180),
+                    margin: const EdgeInsets.only(top: 8),
+                    decoration: BoxDecoration(
+                      color: AppTheme.cardBg,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: const [BoxShadow(color: AppTheme.shadowColor, blurRadius: 10)],
+                    ),
+                    // Own Material so the ListTiles' ink splashes aren't hidden
+                    // behind this container's background.
+                    child: Material(
+                      type: MaterialType.transparency,
+                      child: ListView.separated(
+                        shrinkWrap: true,
+                        itemCount: results.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (_, i) {
+                          final c = results[i];
+                          return ListTile(
+                            dense: true,
+                            leading: const Icon(Icons.person_outline, size: 20),
+                            title: Text(c.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                            subtitle: Text(c.phone, style: const TextStyle(fontSize: 11, color: AppTheme.textMuted)),
+                            trailing: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (c.balance > 0)
+                                  Padding(
+                                    padding: const EdgeInsets.only(left: 4),
+                                    child: Text(
+                                      '${c.balance.toStringAsFixed(0)} دين',
+                                      style: const TextStyle(color: AppTheme.danger, fontSize: 11),
+                                    ),
+                                  ),
+                                if (onViewHistory != null)
+                                  IconButton(
+                                    icon: const Icon(Icons.history, size: 18),
+                                    tooltip: 'عرض السجل',
+                                    visualDensity: VisualDensity.compact,
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(),
+                                    onPressed: () => onViewHistory!(c),
+                                  ),
+                              ],
                             ),
-                          if (onViewHistory != null)
-                            IconButton(
-                              icon: const Icon(Icons.history, size: 18),
-                              tooltip: 'عرض السجل',
-                              visualDensity: VisualDensity.compact,
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(),
-                              onPressed: () => onViewHistory!(c),
-                            ),
-                        ],
+                            onTap: () => onSelect(c),
+                          );
+                        },
                       ),
-                      onTap: () => onSelect(c),
-                    );
-                  },
-                ),
-              ),
-            ),
+                    ),
+                  ),
+          ),
         ],
       );
 }

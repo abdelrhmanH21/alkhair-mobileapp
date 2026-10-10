@@ -329,6 +329,7 @@ class _SettlementPageState extends State<SettlementPage>
     return RefreshIndicator(
       onRefresh: () async => _fetchSummary(),
       child: SingleChildScrollView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(12),
         child: Column(

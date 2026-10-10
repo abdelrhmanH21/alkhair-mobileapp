@@ -10,6 +10,7 @@ import 'package:alkhair_mobileapp/features/delegate/data/models/loading_model.da
 import 'package:alkhair_mobileapp/features/delegate/domain/repositories/delegate_repository.dart';
 import 'package:alkhair_mobileapp/features/delegate/presentation/bloc/delegate_bloc.dart';
 import 'package:alkhair_mobileapp/features/delegate/presentation/pages/loading_page.dart';
+import 'package:alkhair_mobileapp/features/delegate/presentation/sync/delegate_sync_service.dart';
 
 /// The exact JSON shape the production confirm endpoint returned before the
 /// backend fix (captured from the live DB): `created_by` is the raw FK
@@ -90,7 +91,10 @@ Future<(DelegateBloc, _ScriptedConfirmRepository)> _pumpPage(
       BlocProvider<DelegateBloc>.value(value: bloc),
       BlocProvider<AppConfigBloc>.value(value: appConfigBloc),
     ],
-    child: const MaterialApp(home: LoadingPage()),
+    child: DelegateSyncScope(
+      service: DelegateSyncService(repo),
+      child: const MaterialApp(home: LoadingPage()),
+    ),
   ));
   await tester.pump();
   await tester.pump();

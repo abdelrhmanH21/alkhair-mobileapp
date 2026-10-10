@@ -14,6 +14,7 @@ import '../pages/penalties_page.dart';
 import '../pages/advances_page.dart';
 import '../pages/bonuses_page.dart';
 import '../pages/commission_breakdown_page.dart';
+import '../sync/delegate_sync_service.dart';
 
 /// Reusable delegate-performance dashboard. Self-contained: dispatches its own
 /// fetch and owns its own loading/error/data lifecycle, so it can be dropped
@@ -26,7 +27,8 @@ class DashboardSection extends StatefulWidget {
   State<DashboardSection> createState() => _DashboardSectionState();
 }
 
-class _DashboardSectionState extends State<DashboardSection> {
+class _DashboardSectionState extends State<DashboardSection>
+    with DelegateSyncRefetchMixin<DashboardSection> {
   DashboardModel? _dashboard;
   String? _errorMessage;
   bool _retrying = false;
@@ -61,6 +63,16 @@ class _DashboardSectionState extends State<DashboardSection> {
       _dashboard = cached;
       _isCachedFallback = true;
     }
+    _dispatchFetch();
+  }
+
+  /// Sales/returns move the month's totals — refresh silently (the cached
+  /// card stays on screen while it loads).
+  @override
+  void onDelegateStateChanged() {
+    final authState = context.read<AuthBloc>().state;
+    if (authState is AuthAuthenticated && authState.user.isFreePricingDelegate) return;
+    if (_tracker.hasPending(true)) return;
     _dispatchFetch();
   }
 

@@ -4,7 +4,6 @@ import '../../../../core/di/service_locator.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/app_snackbar.dart';
 import '../../../../core/utils/pending_action_queue.dart';
-import '../../../../core/utils/polling_mixin.dart';
 import '../../../../core/widgets/app_logo.dart';
 import '../../../../core/widgets/state_views.dart';
 import '../../../app_config/presentation/bloc/app_config_bloc.dart';
@@ -14,11 +13,9 @@ import '../../../auth/presentation/bloc/auth_event.dart';
 import '../../../auth/presentation/bloc/auth_state.dart';
 import '../../data/sync/delegate_sync_engine.dart';
 import '../bloc/delegate_bloc.dart';
-import '../bloc/delegate_event.dart';
-import '../bloc/delegate_state.dart';
-import '../bloc/request_tracker.dart';
 import '../../data/models/loading_model.dart';
 import '../widgets/dashboard_section.dart';
+import '../sync/delegate_sync_service.dart';
 import 'invoice_page.dart';
 import 'truck_stock_page.dart';
 import 'invoice_history_page.dart';
@@ -41,7 +38,10 @@ class DelegateHomePage extends StatefulWidget {
 
 class _DelegateHomePageState extends State<DelegateHomePage> with WidgetsBindingObserver {
   int _tab = 0;
-  LoadingModel? _loading;
+  // Loading/stock/settlement state lives in the shared DelegateSyncService
+  // (see docs/delegate-state-flow.md) — this page no longer keeps a private
+  // copy of the loading that only its own home-tab fetch could update.
+  DelegateSyncService? _sync;
   // SettlementPage lives inside an IndexedStack that builds every tab once
   // and keeps it alive for the whole session, so its initState() fetch only
   // ever runs at home-page mount — typically before any sales exist yet.
@@ -63,8 +63,18 @@ class _DelegateHomePageState extends State<DelegateHomePage> with WidgetsBinding
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // A delegate is signed in from here on: start the shared sync loop
+    // (idempotent — didChangeDependencies runs again on inherited changes).
+    _sync ??= DelegateSyncScope.of(context, listen: false);
+    _sync!.start();
+  }
+
+  @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _sync?.stop();
     super.dispose();
   }
 
@@ -74,24 +84,30 @@ class _DelegateHomePageState extends State<DelegateHomePage> with WidgetsBinding
     // regaining signal) is exactly when queued actions should attempt to
     // sync, without waiting for the connectivity-restored stream event
     // alone (which may have already fired while the app was backgrounded
-    // and gone unobserved).
+    // and gone unobserved). (DelegateSyncService resyncs state on resume
+    // by itself.)
     if (state == AppLifecycleState.resumed) {
       sl<DelegateSyncEngine>().syncNow();
     }
   }
 
-  bool get _canSell => _loading?.isActiveForSales == true;
-  bool get _hasActiveLoading => _loading != null;
-
   void _goToSell() => _selectTab(1);
 
   void _selectTab(int i) {
-    if (i == 1 && !_canSell) {
-      AppSnackbar.showInfo(context, 'لا توجد تحميلة نشطة حالياً — لا يمكنك البيع الآن.');
+    final sync = _sync!;
+    // A tab becoming visible is a sync trigger in its own right.
+    sync.refreshNow();
+    if (i == 1 && !sync.canSell) {
+      AppSnackbar.showInfo(context, _cannotSellMessage(sync.lifecycle));
       return;
     }
-    if (i == 4 && !_hasActiveLoading) {
-      AppSnackbar.showInfo(context, 'لا توجد تحميلة نشطة حالياً — لا يوجد ما يمكن تسليمه.');
+    if (i == 4 && !sync.hasActiveLoading) {
+      AppSnackbar.showInfo(
+        context,
+        sync.lifecycle == DelegateLifecycle.unknown
+            ? 'جاري التحقق من حالة الشحنة…'
+            : 'لا توجد شحنة نشطة حالياً — لا يوجد ما يمكن تسليمه.',
+      );
       return;
     }
     setState(() {
@@ -101,6 +117,15 @@ class _DelegateHomePageState extends State<DelegateHomePage> with WidgetsBinding
       if (i == 5) _transactionsRefreshTick++;
     });
   }
+
+  static String _cannotSellMessage(DelegateLifecycle lifecycle) => switch (lifecycle) {
+        DelegateLifecycle.unknown => 'جاري التحقق من حالة الشحنة…',
+        DelegateLifecycle.pendingPickup => 'عندك شحنة جديدة بانتظار الاستلام — أكّد الاستلام أولاً لتبدأ البيع.',
+        DelegateLifecycle.completed => 'تم إنهاء الجولة — لا يمكن البيع بعد الآن.',
+        DelegateLifecycle.settlementRequested => 'بانتظار تأكيد التسليم من الإدارة.',
+        DelegateLifecycle.settled => 'تمت تسوية الشحنة — لا توجد شحنة جديدة حالياً.',
+        _ => 'لا توجد شحنة نشطة حالياً — لا يمكنك البيع الآن.',
+      };
 
   // Unlike tabs 1/4, معاملات (index 5) is NOT gated at the tab-switch level:
   // TransactionsPage itself shows a persistent banner + disables its action
@@ -131,6 +156,9 @@ class _DelegateHomePageState extends State<DelegateHomePage> with WidgetsBinding
   Widget build(BuildContext context) {
     final authState = context.watch<AuthBloc>().state;
     final userName = authState is AuthAuthenticated ? authState.user.name : '';
+    final sync = DelegateSyncScope.of(context);
+    final canSell = sync.canSell;
+    final hasActiveLoading = sync.hasActiveLoading;
 
     return Scaffold(
       appBar: AppBar(
@@ -205,7 +233,7 @@ class _DelegateHomePageState extends State<DelegateHomePage> with WidgetsBinding
           ),
           NavigationDestination(
             icon: Icon(Icons.point_of_sale_outlined,
-                color: _canSell ? null : Colors.grey.shade400),
+                color: canSell ? null : Colors.grey.shade400),
             selectedIcon: const Icon(Icons.point_of_sale),
             label: 'البيع',
           ),
@@ -221,7 +249,7 @@ class _DelegateHomePageState extends State<DelegateHomePage> with WidgetsBinding
           ),
           NavigationDestination(
             icon: Icon(Icons.assignment_turned_in_outlined,
-                color: _hasActiveLoading ? null : Colors.grey.shade400),
+                color: hasActiveLoading ? null : Colors.grey.shade400),
             selectedIcon: const Icon(Icons.assignment_turned_in),
             label: 'تسليم',
           ),
@@ -240,23 +268,20 @@ class _DelegateHomePageState extends State<DelegateHomePage> with WidgetsBinding
         index: _tab,
         children: [
           for (final (i, tab) in [
-          _HomeTab(
-            onGoToSell: _goToSell,
-            onLoadingChanged: (l) => setState(() => _loading = l),
-          ),
+          _HomeTab(onGoToSell: _goToSell),
           BlocProvider.value(value: context.read<DelegateBloc>(), child: const InvoicePage()),
           BlocProvider.value(value: context.read<DelegateBloc>(), child: const TruckStockPage()),
           BlocProvider.value(
               value: context.read<DelegateBloc>(),
               child: InvoiceHistoryPage(
-                  refreshTick: _invoiceHistoryRefreshTick, hasActiveLoading: _canSell)),
+                  refreshTick: _invoiceHistoryRefreshTick, hasActiveLoading: canSell)),
           BlocProvider.value(
               value: context.read<DelegateBloc>(),
               child: SettlementPage(refreshTick: _settlementRefreshTick)),
           BlocProvider.value(
               value: context.read<DelegateBloc>(),
               child: TransactionsPage(
-                  hasActiveLoading: _canSell, refreshTick: _transactionsRefreshTick)),
+                  hasActiveLoading: canSell, refreshTick: _transactionsRefreshTick)),
           ].indexed)
             TickerMode(enabled: i == _tab, child: tab),
         ],
@@ -267,121 +292,35 @@ class _DelegateHomePageState extends State<DelegateHomePage> with WidgetsBinding
 
 // ─── Home tab: dashboard + current-shipment status ──────────────────────────
 
-class _HomeTab extends StatefulWidget {
+class _HomeTab extends StatelessWidget {
   final VoidCallback onGoToSell;
-  final ValueChanged<LoadingModel?> onLoadingChanged;
-  const _HomeTab({required this.onGoToSell, required this.onLoadingChanged});
+  const _HomeTab({required this.onGoToSell});
 
-  @override
-  State<_HomeTab> createState() => _HomeTabState();
-}
-
-enum _FetchKind { explicit, poll }
-
-class _HomeTabState extends State<_HomeTab> with PollingMixin<_HomeTab> {
-  LoadingModel? _loading;
-  String? _loadingError;
-  bool _hasLoadingResult = false;
-  // True while `_loading` is last-known data from OfflineCacheService rather
-  // than a confirmed-fresh fetch — drives the calm offline banner instead of
-  // the red AppErrorView when the refresh underneath it fails.
-  bool _isCachedFallback = false;
-
-  // Tracks THIS widget's own outstanding DelegateLoadingFetched() dispatches
-  // by requestId, tagged as explicit vs. silent-poll — replaces the old
-  // _fetchInFlight/_pollInFlight bools. Because every state now echoes back
-  // the requestId of the event that produced it (see request_tracker.dart),
-  // a DelegateLoadingLoaded/DelegateFailure meant for some other listener on
-  // the shared DelegateBloc (e.g. DashboardSection's own dashboard fetch, or
-  // SettlementPage's own poll 404ing with "لا توجد وردية نشطة حاليًا" —
-  // both mounted forever alongside this tab in DelegateHomePage's
-  // IndexedStack) can never be misattributed here, regardless of dispatch
-  // order — so unlike before, this fetch no longer needs to wait for
-  // DashboardSection's fetch to settle first; both can run in parallel.
-  final _tracker = RequestTracker<_FetchKind>();
-
-  @override
-  void initState() {
-    super.initState();
-    final cached = context.read<DelegateBloc>().getCachedLoading();
-    if (cached != null) {
-      _loading = cached;
-      _hasLoadingResult = true;
-      _isCachedFallback = true;
-      widget.onLoadingChanged(cached);
-    }
-    _fetchLoading();
-    startPolling();
-  }
-
-  @override
-  void dispose() {
-    stopPolling();
-    super.dispose();
-  }
-
-  @override
-  void onPoll() {
-    // Never overlap with an explicit fetch/poll already in flight — whichever
-    // is running will settle this card's state on its own.
-    if (_tracker.hasPending(_FetchKind.explicit) || _tracker.hasPending(_FetchKind.poll)) {
-      return;
-    }
-    final event = DelegateLoadingFetched();
-    _tracker.start(event.requestId, _FetchKind.poll);
-    context.read<DelegateBloc>().add(event);
-  }
-
-  void _fetchLoading() {
-    final event = DelegateLoadingFetched();
-    _tracker.start(event.requestId, _FetchKind.explicit);
-    setState(() => _loadingError = null);
-    context.read<DelegateBloc>().add(event);
-  }
+  void _openDetails(BuildContext context) => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => BlocProvider.value(
+            value: context.read<DelegateBloc>(),
+            child: const LoadingPage(),
+          ),
+        ),
+      );
 
   @override
   Widget build(BuildContext context) {
-    return BlocListener<DelegateBloc, DelegateState>(
-      listener: (_, state) {
-        if (state is DelegateLoadingLoaded) {
-          final kind = _tracker.resolve(state.requestId);
-          if (kind == null) return; // not ours
-          setState(() {
-            _loading = state.loading;
-            _loadingError = null;
-            _hasLoadingResult = true;
-            _isCachedFallback = false;
-          });
-          widget.onLoadingChanged(state.loading);
-        } else if (state is DelegateFailure) {
-          final kind = _tracker.resolve(state.requestId);
-          if (kind == null) return; // not ours
-          if (_loading != null) {
-            // Cached/last-known shipment card is still on screen — the
-            // offline banner covers a failed refresh here, never a red
-            // error view replacing real (if stale) data.
-            setState(() {});
-          } else if (kind == _FetchKind.explicit) {
-            setState(() {
-              _loadingError = state.message;
-              _hasLoadingResult = true;
-            });
-          } else {
-            // A silent poll tick failed with no good data to protect —
-            // safe to show/update the error.
-            setState(() {
-              _loadingError = state.message;
-              _hasLoadingResult = true;
-            });
-          }
-        }
-      },
+    // Rebuilds whenever the shared sync state changes — no private fetch,
+    // no private poller, no private cache read on this tab any more.
+    final sync = DelegateSyncScope.of(context);
+    return RefreshIndicator(
+      // Fallback only — the state updates by itself.
+      onRefresh: () => sync.refreshNow(force: true),
       child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            OfflineDataBanner(show: _isCachedFallback),
+            OfflineDataBanner(show: sync.activeLoading != null && sync.isShowingStaleData),
             const DashboardSection(),
             const SizedBox(height: 4),
             Padding(
@@ -389,7 +328,7 @@ class _HomeTabState extends State<_HomeTab> with PollingMixin<_HomeTab> {
               child: Text('الشحنة الحالية', style: Theme.of(context).textTheme.titleMedium),
             ),
             const SizedBox(height: 8),
-            _buildShipmentCard(context),
+            _buildShipmentCard(context, sync),
             const SizedBox(height: 12),
             _ReportsEntryCard(
               onTap: () => Navigator.push(
@@ -409,67 +348,154 @@ class _HomeTabState extends State<_HomeTab> with PollingMixin<_HomeTab> {
     );
   }
 
-  Widget _buildShipmentCard(BuildContext context) {
-    if (!_hasLoadingResult && _loadingError == null) {
-      return const Card(
-        child: Padding(
-          padding: EdgeInsets.all(20),
-          child: Center(child: CircularProgressIndicator()),
-        ),
-      );
+  Widget _buildShipmentCard(BuildContext context, DelegateSyncService sync) {
+    final loading = sync.activeLoading;
+    switch (sync.lifecycle) {
+      case DelegateLifecycle.unknown:
+        // Never "no shipment" before the server has said so.
+        if (sync.lastSyncFailed) {
+          return Card(
+            child: AppErrorView(
+              title: 'تعذر تحميل حالة الشحنة',
+              message: 'تحقق من الاتصال بالإنترنت ثم أعد المحاولة.',
+              onRetry: () => sync.refreshNow(force: true),
+            ),
+          );
+        }
+        return const Card(
+          key: Key('shipment-skeleton'),
+          child: Padding(
+            padding: EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                AppSkeletonBox(height: 18, width: 180),
+                SizedBox(height: 10),
+                AppSkeletonBox(height: 14, width: 120),
+                SizedBox(height: 14),
+                AppSkeletonBox(height: 40),
+              ],
+            ),
+          ),
+        );
+      case DelegateLifecycle.none:
+        return _NoShipmentCard(
+          title: 'لا توجد شحنة',
+          subtitle: 'سيتم تعيين شحنة لك من الإدارة عند الحاجة.',
+          onRefresh: () => sync.refreshNow(force: true),
+        );
+      case DelegateLifecycle.settled:
+        return _NoShipmentCard(
+          title: 'تمت تسوية الشحنة',
+          subtitle: 'لا توجد شحنة جديدة حالياً — ستظهر هنا تلقائياً عند تعيينها.',
+          icon: Icons.verified_outlined,
+          onRefresh: () => sync.refreshNow(force: true),
+        );
+      case DelegateLifecycle.pendingPickup:
+      case DelegateLifecycle.accepted:
+      case DelegateLifecycle.inTransit:
+      case DelegateLifecycle.completed:
+      case DelegateLifecycle.settlementRequested:
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (sync.lifecycle == DelegateLifecycle.pendingPickup)
+              _StateNotice(
+                key: const Key('notice-pending-pickup'),
+                icon: Icons.local_shipping_outlined,
+                text: 'عندك شحنة جديدة بانتظار الاستلام',
+                actionLabel: 'مراجعة وتأكيد الاستلام',
+                onAction: () => _openDetails(context),
+              ),
+            if (sync.lifecycle == DelegateLifecycle.settlementRequested)
+              const _StateNotice(
+                key: Key('notice-settlement-requested'),
+                icon: Icons.hourglass_top_rounded,
+                text: 'بانتظار تأكيد التسليم من الإدارة',
+              ),
+            _ShipmentSummaryCard(
+              loading: loading!,
+              onGoToSell: onGoToSell,
+              onRefresh: () => sync.refreshNow(force: true),
+            ),
+          ],
+        );
     }
+  }
+}
 
-    if (_loadingError != null) {
-      return Card(
-        child: AppErrorView(
-          title: 'تعذر تحميل حالة التحميلة',
-          message: _loadingError!,
-          onRetry: _fetchLoading,
-        ),
-      );
-    }
+class _NoShipmentCard extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final VoidCallback onRefresh;
+  const _NoShipmentCard({
+    required this.title,
+    required this.subtitle,
+    required this.onRefresh,
+    this.icon = Icons.inbox_outlined,
+  });
 
-    final loading = _loading;
-    if (loading == null) {
-      return Card(
+  @override
+  Widget build(BuildContext context) => Card(
         child: Padding(
           padding: const EdgeInsets.all(18),
           child: Row(
             children: [
-              Icon(Icons.inbox_outlined, color: Colors.grey.shade500, size: 32),
+              Icon(icon, color: Colors.grey.shade500, size: 32),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('لا توجد تحميلة نشطة حاليًا',
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleMedium
-                            ?.copyWith(color: Colors.black87)),
+                    Text(title,
+                        style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Colors.black87)),
                     const SizedBox(height: 2),
-                    Text('سيتم تعيين تحميلة لك من المدير عند الحاجة.',
-                        style: Theme.of(context).textTheme.bodyMedium),
+                    Text(subtitle, style: Theme.of(context).textTheme.bodyMedium),
                   ],
                 ),
               ),
               IconButton(
                 icon: const Icon(Icons.refresh_rounded),
                 tooltip: 'تحديث',
-                onPressed: _fetchLoading,
+                onPressed: onRefresh,
               ),
             ],
           ),
         ),
       );
-    }
+}
 
-    return _ShipmentSummaryCard(
-      loading: loading,
-      onGoToSell: widget.onGoToSell,
-      onRefresh: _fetchLoading,
-    );
-  }
+/// A one-line state banner above the shipment card (same visual language as
+/// the pending top-up notice inside it).
+class _StateNotice extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+  const _StateNotice({super.key, required this.icon, required this.text, this.actionLabel, this.onAction});
+
+  @override
+  Widget build(BuildContext context) => Container(
+        margin: const EdgeInsets.only(bottom: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: AppTheme.accent.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppTheme.accent.withValues(alpha: 0.4)),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: AppTheme.accent, size: 20),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(text, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+            ),
+            if (actionLabel != null)
+              TextButton(onPressed: onAction, child: Text(actionLabel!)),
+          ],
+        ),
+      );
 }
 
 // ─── Reports entry point ─────────────────────────────────────────────────────

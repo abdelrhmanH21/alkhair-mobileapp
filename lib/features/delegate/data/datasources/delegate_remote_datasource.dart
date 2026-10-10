@@ -15,9 +15,11 @@ import '../models/transaction_record_models.dart';
 import '../models/report_models.dart';
 import '../models/customer_invoice_history_model.dart';
 import '../models/price_variance_models.dart';
+import '../models/sync_state_model.dart';
 
 abstract class DelegateRemoteDataSource {
   Future<LoadingModel?> fetchCurrentLoading();
+  Future<SyncStateResult> fetchSyncState({String? etag});
   Future<LoadingModel> confirmLoading();
   Future<void> confirmLoadingAddition(int additionId);
   Future<List<TruckStockModel>> fetchTruckStock();
@@ -121,6 +123,24 @@ class DelegateRemoteDataSourceImpl implements DelegateRemoteDataSource {
     final data = res.data['data'];
     if (data == null) return null;
     return LoadingModel.fromJson(data as Map<String, dynamic>);
+  }
+
+  @override
+  Future<SyncStateResult> fetchSyncState({String? etag}) async {
+    final res = await _client.dio.get(
+      ApiEndpoints.delegateSyncState,
+      options: Options(
+        headers: {if (etag != null) 'If-None-Match': etag},
+        // 304 is the normal "nothing changed" answer, not an error.
+        validateStatus: (s) => s != null && ((s >= 200 && s < 300) || s == 304),
+        // Polled every few seconds: fail fast and let the next tick retry.
+        receiveTimeout: const Duration(seconds: 10),
+        sendTimeout: const Duration(seconds: 10),
+      ),
+    );
+    final newEtag = res.headers.value('etag') ?? etag;
+    if (res.statusCode == 304) return SyncStateResult.notModified(newEtag);
+    return SyncStateResult.fresh(SyncStateModel.fromJson(res.data as Map<String, dynamic>), newEtag);
   }
 
   @override

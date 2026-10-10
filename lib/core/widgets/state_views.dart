@@ -145,7 +145,8 @@ class OfflineDataBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (!show) return const SizedBox.shrink();
+    // Not registered only in isolated widget tests — nothing to report then.
+    if (!show || !sl.isRegistered<ConnectivityService>()) return const SizedBox.shrink();
     return StreamBuilder<bool>(
       stream: sl<ConnectivityService>().onStatusChanged,
       initialData: sl<ConnectivityService>().isOnline,

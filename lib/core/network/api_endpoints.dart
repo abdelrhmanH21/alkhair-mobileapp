@@ -19,6 +19,7 @@ class ApiEndpoints {
 
   // Delegate — loading
   static const String delegateLoading        = '/delegate/loading';
+  static const String delegateSyncState      = '/delegate/sync-state';
   static const String delegateLoadingConfirm = '/delegate/loading/confirm';
   static const String delegateTruckStock     = '/delegate/truck-stock';
   static const String delegateDashboard      = '/delegate/dashboard';

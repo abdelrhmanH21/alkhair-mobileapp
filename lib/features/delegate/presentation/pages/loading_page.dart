@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/app_snackbar.dart';
-import '../../../../core/utils/polling_mixin.dart';
 import '../../../../core/widgets/state_views.dart';
 import '../bloc/delegate_bloc.dart';
 import '../bloc/delegate_event.dart';
@@ -11,8 +10,9 @@ import '../bloc/request_tracker.dart';
 import '../../data/models/loading_model.dart';
 import 'invoice_page.dart';
 import 'invoice_history_page.dart';
+import '../sync/delegate_sync_service.dart';
 
-enum _RequestKind { fetch, poll, action }
+enum _RequestKind { fetch, action }
 
 class LoadingPage extends StatefulWidget {
   const LoadingPage({super.key});
@@ -21,12 +21,12 @@ class LoadingPage extends StatefulWidget {
   State<LoadingPage> createState() => _LoadingPageState();
 }
 
-class _LoadingPageState extends State<LoadingPage> with PollingMixin<LoadingPage> {
-  LoadingModel? _currentLoading;
-  // True while `_currentLoading` is last-known data from OfflineCacheService
-  // rather than a confirmed-fresh fetch — drives the calm offline banner
-  // instead of the red error view when the refresh underneath it fails.
-  bool _isCachedFallback = false;
+class _LoadingPageState extends State<LoadingPage> {
+  // The loading shown here is the shared DelegateSyncService's — kept
+  // current by its polling and by every server answer that carries the
+  // loading (this page's own fetch, confirm, status change, top-up
+  // confirm), so this page needs no private copy and no private poller.
+  LoadingModel? get _currentLoading => DelegateSyncScope.of(context, listen: false).activeLoading;
 
   // Tracks every outstanding dispatch THIS page has made — explicit fetch,
   // silent poll tick, or confirm/status-update action — by requestId. This
@@ -46,37 +46,10 @@ class _LoadingPageState extends State<LoadingPage> with PollingMixin<LoadingPage
   @override
   void initState() {
     super.initState();
-    // Set directly rather than via _fetchLoading()'s setState — calling
-    // setState before the first build is redundant (nothing to rebuild yet).
-    final delegateBloc = context.read<DelegateBloc>();
-    final cached = delegateBloc.getCachedLoading();
-    if (cached != null) {
-      _currentLoading = cached;
-      _isCachedFallback = true;
-    }
+    // Opening the details is an explicit look: fetch the full loading now
+    // (the answer lands in the shared sync state via the bloc binding).
     final event = DelegateLoadingFetched();
     _tracker.start(event.requestId, _RequestKind.fetch);
-    delegateBloc.add(event);
-    startPolling();
-  }
-
-  @override
-  void dispose() {
-    stopPolling();
-    super.dispose();
-  }
-
-  @override
-  void onPoll() {
-    // Never overlap with an explicit fetch/action already in flight —
-    // whichever is already running will settle this page's state on its own.
-    if (_tracker.hasPending(_RequestKind.fetch) ||
-        _tracker.hasPending(_RequestKind.action) ||
-        _tracker.hasPending(_RequestKind.poll)) {
-      return;
-    }
-    final event = DelegateLoadingFetched();
-    _tracker.start(event.requestId, _RequestKind.poll);
     context.read<DelegateBloc>().add(event);
   }
 
@@ -113,7 +86,7 @@ class _LoadingPageState extends State<LoadingPage> with PollingMixin<LoadingPage
         listener: (ctx, state) {
           if (state is DelegateLoadingConfirmedState) {
             if (_tracker.resolve(state.requestId) == null) return;
-            setState(() => _currentLoading = state.loading);
+            setState(() {});
             AppSnackbar.showSuccess(ctx, 'تم تأكيد الاستلام. يمكنك البدء بالبيع.');
             Navigator.of(ctx).pushReplacement(
               MaterialPageRoute(builder: (_) => const InvoicePage()),
@@ -122,7 +95,7 @@ class _LoadingPageState extends State<LoadingPage> with PollingMixin<LoadingPage
 
           if (state is DelegateLoadingStatusUpdated) {
             if (_tracker.resolve(state.requestId) == null) return;
-            setState(() => _currentLoading = state.loading);
+            setState(() {});
             final label = state.loading.isInTransit
                 ? 'تم تغيير الحالة إلى: في الطريق'
                 : 'تم إنهاء الجولة بنجاح';
@@ -131,7 +104,7 @@ class _LoadingPageState extends State<LoadingPage> with PollingMixin<LoadingPage
 
           if (state is DelegateLoadingAdditionConfirmedState) {
             if (_tracker.resolve(state.requestId) == null) return;
-            setState(() => _currentLoading = state.loading ?? _currentLoading);
+            setState(() {});
             AppSnackbar.showSuccess(ctx, 'تم تأكيد استلام المنتجات الإضافية، وتمت إضافتها لمخزون الشاحنة.');
           }
 
@@ -161,37 +134,18 @@ class _LoadingPageState extends State<LoadingPage> with PollingMixin<LoadingPage
           }
 
           if (state is DelegateLoadingLoaded) {
-            final kind = _tracker.resolve(state.requestId);
-            if (kind == null) return; // not ours — see note above
-            if (kind == _RequestKind.fetch) {
-              // No auto-navigate here: this page is now reached explicitly
-              // via "عرض التفاصيل" from DelegateHomePage, so simply fetching/
-              // displaying the loading must never redirect the user away
-              // from the details they asked to see. The confirm action
-              // still jumps to InvoicePage via DelegateLoadingConfirmedState.
-              setState(() {
-                _currentLoading = state.loading;
-                _loadError = null;
-                _isCachedFallback = false;
-              });
-            } else if (kind == _RequestKind.poll) {
-              // Silent refresh: update data with no spinner/flicker. Skip
-              // the rebuild entirely if nothing actually changed.
-              if (_currentLoading?.status != state.loading?.status ||
-                  _currentLoading?.items.length != state.loading?.items.length ||
-                  _isCachedFallback) {
-                setState(() {
-                  _currentLoading = state.loading;
-                  _isCachedFallback = false;
-                });
-              } else {
-                _currentLoading = state.loading;
-              }
-            }
+            if (_tracker.resolve(state.requestId) == null) return; // not ours
+            // No auto-navigate here: this page is reached explicitly via
+            // "عرض التفاصيل", so fetching/displaying the loading must never
+            // redirect the user away from the details they asked to see.
+            setState(() => _loadError = null);
           }
         },
         builder: (_, state) {
-          if (_tracker.hasPending(_RequestKind.fetch) && _currentLoading == null) {
+          final sync = DelegateSyncScope.of(context);
+          if (_currentLoading == null &&
+              (_tracker.hasPending(_RequestKind.fetch) || sync.lifecycle == DelegateLifecycle.unknown) &&
+              _loadError == null) {
             return const Center(child: CircularProgressIndicator());
           }
 
@@ -256,7 +210,7 @@ class _LoadingPageState extends State<LoadingPage> with PollingMixin<LoadingPage
 
           return Column(
             children: [
-              if (_isCachedFallback)
+              if (sync.isShowingStaleData)
                 const Padding(
                   padding: EdgeInsets.fromLTRB(12, 8, 12, 0),
                   child: OfflineDataBanner(show: true),

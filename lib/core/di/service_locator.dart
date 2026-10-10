@@ -28,6 +28,7 @@ import '../../features/delegate/data/repositories/delegate_repository_impl.dart'
 import '../../features/delegate/data/sync/delegate_sync_engine.dart';
 import '../../features/delegate/domain/repositories/delegate_repository.dart';
 import '../../features/delegate/presentation/bloc/delegate_bloc.dart';
+import '../../features/delegate/presentation/sync/delegate_sync_service.dart';
 
 import '../../features/admin/data/datasources/admin_remote_datasource.dart';
 import '../../features/admin/presentation/bloc/admin_bloc.dart';
@@ -74,6 +75,11 @@ Future<void> setupServiceLocator() async {
   sl.registerLazySingleton<DelegateRepository>(() => DelegateRepositoryImpl(sl(), sl()));
   sl.registerFactory<DelegateBloc>(() => DelegateBloc(sl(), sl()));
   sl.registerLazySingleton<DelegateSyncEngine>(() => DelegateSyncEngine(sl(), sl(), sl()));
+  sl.registerLazySingleton<DelegateSyncService>(() => DelegateSyncService(
+        sl(),
+        connectivity: sl(),
+        pendingQueueCount: sl<PendingActionQueue>().pendingCountNotifier,
+      ));
 
   // ── Admin feature ────────────────────────────────────────────────────────
   sl.registerLazySingleton<AdminRemoteDataSource>(() => AdminRemoteDataSourceImpl(sl()));

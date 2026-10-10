@@ -13,6 +13,7 @@ import '../models/transaction_record_models.dart';
 import '../models/report_models.dart';
 import '../models/customer_invoice_history_model.dart';
 import '../models/price_variance_models.dart';
+import '../models/sync_state_model.dart';
 import '../../../../core/utils/offline_cache_service.dart';
 import '../../domain/repositories/delegate_repository.dart';
 import '../../../../core/utils/number_input.dart';
@@ -49,6 +50,9 @@ class DelegateRepositoryImpl implements DelegateRepository {
   }
 
   @override
+  Future<SyncStateResult> getSyncState({String? etag}) => _remote.fetchSyncState(etag: etag);
+
+  @override
   LoadingModel? getCachedLoading() {
     final json = _cache.get(_kCurrentLoading) as Map<String, dynamic>?;
     if (json == null) return null;
@@ -77,8 +81,16 @@ class DelegateRepositoryImpl implements DelegateRepository {
     }
   }
 
+  // The confirm / status-change responses carry the full, fresh loading:
+  // cache them too. Before, only getCurrentLoading() wrote this slot, so the
+  // cached snapshot stayed 'pending_pickup' after a successful pickup and an
+  // offline/slow next start showed the shipment as not yet received.
   @override
-  Future<LoadingModel> confirmLoading() => _remote.confirmLoading();
+  Future<LoadingModel> confirmLoading() async {
+    final loading = await _remote.confirmLoading();
+    await _cache.set(_kCurrentLoading, loading.toJson());
+    return loading;
+  }
 
   @override
   Future<void> confirmLoadingAddition(int additionId) =>
@@ -262,8 +274,11 @@ class DelegateRepositoryImpl implements DelegateRepository {
       _remote.fetchCustomerInvoiceHistory(customerId, page: page);
 
   @override
-  Future<LoadingModel> updateLoadingStatus(int id, String status) =>
-      _remote.updateLoadingStatus(id, status);
+  Future<LoadingModel> updateLoadingStatus(int id, String status) async {
+    final loading = await _remote.updateLoadingStatus(id, status);
+    await _cache.set(_kCurrentLoading, loading.toJson());
+    return loading;
+  }
 
   @override
   Future<SettlementSummaryModel> getSettlementSummary() =>

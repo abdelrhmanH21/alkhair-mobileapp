@@ -12,9 +12,12 @@ import '../../data/models/transaction_record_models.dart';
 import '../../data/models/report_models.dart';
 import '../../data/models/customer_invoice_history_model.dart';
 import '../../data/models/price_variance_models.dart';
+import '../../data/models/sync_state_model.dart';
 
 abstract class DelegateRepository {
   Future<LoadingModel?> getCurrentLoading();
+  /// The cheap change probe DelegateSyncService polls (ETag/304).
+  Future<SyncStateResult> getSyncState({String? etag});
   Future<LoadingModel> confirmLoading();
   Future<void> confirmLoadingAddition(int additionId);
   Future<List<TruckStockModel>> getTruckStock();

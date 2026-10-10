@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/app_snackbar.dart';
-import '../../../../core/utils/polling_mixin.dart';
 import '../../../../core/widgets/state_views.dart';
 import '../bloc/delegate_bloc.dart';
 import '../bloc/delegate_event.dart';
 import '../bloc/delegate_state.dart';
 import '../bloc/request_tracker.dart';
+import '../sync/delegate_sync_service.dart';
 import '../../data/models/settlement_summary_model.dart';
 import '../../../../core/utils/number_input.dart';
 
@@ -57,7 +57,7 @@ class SettlementPage extends StatefulWidget {
 }
 
 class _SettlementPageState extends State<SettlementPage>
-    with PollingMixin<SettlementPage> {
+    with DelegateSyncRefetchMixin<SettlementPage> {
   SettlementSummaryModel? _summary;
   // Genuine fetch failures only (network/server errors) — the "no active
   // shift" 404 is a dedicated DelegateNoActiveShift state now, tracked
@@ -87,14 +87,21 @@ class _SettlementPageState extends State<SettlementPage>
   // request_tracker.dart.
   final _tracker = RequestTracker<_ReqKind>();
 
+  // No private poller any more: the shared DelegateSyncService already
+  // polls (fast, every few seconds, while a settlement request is pending)
+  // and bumps its revision when the loading / settlement request / stock
+  // moves — e.g. the admin confirming this settlement, or a new loading
+  // being assigned afterwards. This page just refetches its summary then.
   @override
   void initState() {
     super.initState();
     _fetchSummary();
-    // Runs continuously (not just while awaiting confirmation) so a new
-    // loading assigned after confirmation is also picked up automatically —
-    // PollingMixin pauses/resumes with the app foreground state on its own.
-    startPolling();
+  }
+
+  @override
+  void onDelegateStateChanged() {
+    if (_submitting) return; // don't clobber an in-flight submit
+    _fetchSummary();
   }
 
   @override
@@ -107,16 +114,9 @@ class _SettlementPageState extends State<SettlementPage>
 
   @override
   void dispose() {
-    stopPolling();
     _cashCtrl.dispose();
     _walletCtrl.dispose();
     super.dispose();
-  }
-
-  @override
-  void onPoll() {
-    if (_submitting) return; // don't clobber an in-flight submit
-    _fetchSummary();
   }
 
   void _fetchSummary() {

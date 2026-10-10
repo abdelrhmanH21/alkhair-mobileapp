@@ -17,6 +17,7 @@ import 'features/auth/presentation/pages/login_page.dart';
 
 import 'features/delegate/presentation/bloc/delegate_bloc.dart';
 import 'features/delegate/presentation/pages/delegate_home_page.dart';
+import 'features/delegate/presentation/sync/delegate_sync_service.dart';
 
 import 'features/admin/presentation/bloc/admin_bloc.dart';
 import 'features/admin/presentation/pages/admin_dashboard_page.dart';
@@ -56,7 +57,11 @@ class AlKhairApp extends StatelessWidget {
             if (ctx != null) AppSnackbar.showError(ctx, state.message);
           }
         },
-        child: MaterialApp(
+        // Above the Navigator so pushed delegate routes (loading details,
+        // truck stock, invoice edit, ...) read the same synced state.
+        child: DelegateSyncScope(
+          service: sl<DelegateSyncService>(),
+          child: MaterialApp(
           navigatorKey: appNavigatorKey,
           title: 'Alkhair Dairies',
           debugShowCheckedModeBanner: false,
@@ -83,6 +88,7 @@ class AlKhairApp extends StatelessWidget {
             ),
           ),
           home: const _RootNavigator(),
+        ),
         ),
       ),
     );

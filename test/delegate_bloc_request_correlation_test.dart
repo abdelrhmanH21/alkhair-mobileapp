@@ -12,6 +12,7 @@ import 'package:alkhair_mobileapp/features/delegate/domain/repositories/delegate
 import 'package:alkhair_mobileapp/features/delegate/presentation/bloc/delegate_bloc.dart';
 import 'package:alkhair_mobileapp/features/delegate/presentation/bloc/delegate_event.dart';
 import 'package:alkhair_mobileapp/features/delegate/presentation/pages/loading_page.dart';
+import 'package:alkhair_mobileapp/features/delegate/presentation/sync/delegate_sync_service.dart';
 
 /// Never called: LoadingPage's confirm flow navigates to InvoicePage, which
 /// reads AppConfigBloc for a price-override %, but this test never
@@ -91,7 +92,10 @@ void main() {
           BlocProvider<DelegateBloc>.value(value: bloc),
           BlocProvider<AppConfigBloc>.value(value: appConfigBloc),
         ],
-        child: const MaterialApp(home: LoadingPage()),
+        child: DelegateSyncScope(
+          service: DelegateSyncService(repo),
+          child: const MaterialApp(home: LoadingPage()),
+        ),
       ));
 
       // Let the page's own initState fetch (1st getCurrentLoading call,

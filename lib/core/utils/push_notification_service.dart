@@ -5,6 +5,8 @@ import '../../app.dart' show appNavigatorKey;
 import '../network/api_client.dart';
 import '../network/api_endpoints.dart';
 import 'app_snackbar.dart';
+import '../di/service_locator.dart';
+import '../../features/delegate/presentation/sync/delegate_sync_service.dart';
 
 /// Registers this device for Firebase Cloud Messaging and keeps the
 /// server-side fcm_token in sync. Listeners are attached once at app
@@ -35,7 +37,34 @@ class PushNotificationService {
     if (_listenersAttached) return;
     _listenersAttached = true;
     _messaging.onTokenRefresh.listen(_sendTokenToServer);
-    FirebaseMessaging.onMessage.listen(_showForegroundNotification);
+    FirebaseMessaging.onMessage.listen(_onForegroundMessage);
+    // Tapping a notification that opened the app: its state may have moved.
+    FirebaseMessaging.onMessageOpenedApp.listen(handleSyncData);
+  }
+
+  void _onForegroundMessage(RemoteMessage message) {
+    handleSyncData(message);
+    _showForegroundNotification(message);
+  }
+
+  /// FCM data messages the backend sends when an admin creates/edits/tops
+  /// up/deletes a delegate's loading or confirms their settlement
+  /// (SendDelegateSyncPush): {type, loading_id}. They carry no data of
+  /// their own — they just make DelegateSyncService sync right now instead
+  /// of on its next poll. Android only in practice: iOS has no APNs setup
+  /// (no paid Apple Developer account), so iOS relies on polling alone.
+  static const syncMessageTypes = {
+    'loading_created',
+    'loading_updated',
+    'loading_deleted',
+    'loading_addition',
+    'settlement_confirmed',
+  };
+
+  static void handleSyncData(RemoteMessage message) {
+    if (!syncMessageTypes.contains(message.data['type'])) return;
+    if (!sl.isRegistered<DelegateSyncService>()) return;
+    sl<DelegateSyncService>().refreshNow();
   }
 
   Future<void> _sendTokenToServer(String token) async {

@@ -10,6 +10,7 @@ import '../bloc/request_tracker.dart';
 import '../../data/models/invoice_model.dart';
 import 'invoice_detail_page.dart';
 import 'invoice_page.dart';
+import '../sync/delegate_sync_service.dart';
 
 class InvoiceHistoryPage extends StatefulWidget {
   /// Bumped by DelegateHomePage each time this tab is (re)selected — when
@@ -30,7 +31,8 @@ class InvoiceHistoryPage extends StatefulWidget {
   State<InvoiceHistoryPage> createState() => _InvoiceHistoryPageState();
 }
 
-class _InvoiceHistoryPageState extends State<InvoiceHistoryPage> {
+class _InvoiceHistoryPageState extends State<InvoiceHistoryPage>
+    with DelegateSyncRefetchMixin<InvoiceHistoryPage> {
   List<DelegateInvoiceModel> _invoices = [];
 
   // This tab lives forever inside DelegateHomePage's IndexedStack, sharing
@@ -50,6 +52,11 @@ class _InvoiceHistoryPageState extends State<InvoiceHistoryPage> {
     super.initState();
     _fetch();
   }
+
+  /// A sale/edit/return (from this device, the offline queue, or another
+  /// screen) moved the shared state — the list is out of date.
+  @override
+  void onDelegateStateChanged() => _fetch();
 
   @override
   void didUpdateWidget(covariant InvoiceHistoryPage oldWidget) {

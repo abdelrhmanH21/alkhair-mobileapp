@@ -1,13 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../../../core/theme/app_theme.dart';
-import '../../../../core/utils/app_snackbar.dart';
 import '../../../../core/widgets/state_views.dart';
-import '../bloc/delegate_bloc.dart';
-import '../bloc/delegate_event.dart';
-import '../bloc/delegate_state.dart';
-import '../bloc/request_tracker.dart';
 import '../../data/models/loading_model.dart';
+import '../sync/delegate_sync_service.dart';
 
 class TruckStockPage extends StatefulWidget {
   const TruckStockPage({super.key});
@@ -17,100 +12,86 @@ class TruckStockPage extends StatefulWidget {
 }
 
 class _TruckStockPageState extends State<TruckStockPage> {
-  List<TruckStockModel> _stocks = [];
-
-  // True while `_stocks` is last-known data from OfflineCacheService rather
-  // than a confirmed-fresh fetch — drives the calm offline banner instead of
-  // a red error when the refresh underneath it fails. See
-  // _SellableProductPickerSheetState's identical flag in invoice_page.dart.
-  bool _isCachedFallback = false;
-
-  // This tab lives forever inside DelegateHomePage's IndexedStack, sharing
-  // one DelegateBloc with every other tab — without this, ANY DelegateFailure
-  // from an unrelated dispatch elsewhere (e.g. _HomeTab's shipment poll)
-  // would surface here as a stray SnackBar. Tracks this page's own
-  // outstanding fetch by requestId instead.
-  final _tracker = RequestTracker<bool>();
-
-  void _fetch() {
-    final event = DelegateTruckStockFetched();
-    _tracker.start(event.requestId, true);
-    context.read<DelegateBloc>().add(event);
-  }
+  // The stock list itself lives in the shared DelegateSyncService: it is
+  // refetched whenever sync-state's stock_version moves (pickup, top-up,
+  // sale, return, invoice edit, settlement), so this tab — kept alive
+  // forever in DelegateHomePage's IndexedStack — no longer shows the
+  // snapshot from whenever it was first built.
+  List<TruckStockModel> _stocks = const [];
 
   @override
   void initState() {
     super.initState();
-    final cached = context.read<DelegateBloc>().getCachedTruckStock();
-    if (cached.isNotEmpty) {
-      _stocks = cached;
-      _isCachedFallback = true;
-    }
-    _fetch();
+    // Opened as its own route (from the sell screen) → make sure it's fresh.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) DelegateSyncScope.of(context, listen: false).refreshNow();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    final sync = DelegateSyncScope.of(context);
+    _stocks = sync.truckStock;
     return Scaffold(
       appBar: AppBar(
         title: const Text('مخزون الشاحنة'),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: _fetch,
+            tooltip: 'تحديث',
+            onPressed: () => sync.refreshNow(force: true),
           ),
         ],
       ),
-      body: BlocConsumer<DelegateBloc, DelegateState>(
-        listener: (ctx, state) {
-          if (state is DelegateTruckStockLoaded) {
-            if (_tracker.resolve(state.requestId) == null) return;
-            setState(() {
-              _stocks = state.stocks;
-              _isCachedFallback = false;
-            });
-          } else if (state is DelegateFailure) {
-            if (_tracker.resolve(state.requestId) == null) return;
-            if (_stocks.isNotEmpty) {
-              // Cached/last-known stock is still on screen — the offline
-              // banner (driven by _isCachedFallback + live connectivity)
-              // covers this, not a red error snackbar.
-              setState(() {});
-            } else {
-              AppSnackbar.showError(ctx, state.message);
-            }
-          }
-        },
-        builder: (_, state) {
-          if (state is DelegateLoading && _stocks.isEmpty) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (_stocks.isEmpty) {
-            return const Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.inventory_2_outlined, size: 64, color: Colors.grey),
-                  SizedBox(height: 12),
-                  Text('لا يوجد مخزون في الشاحنة',
-                      style: TextStyle(color: AppTheme.textMuted)),
-                ],
-              ),
-            );
-          }
-          return Column(
-            children: [
-              OfflineDataBanner(show: _isCachedFallback),
-              Expanded(child: _buildStockList()),
-            ],
-          );
-        },
+      body: RefreshIndicator(
+        onRefresh: () => sync.refreshNow(force: true),
+        child: _buildBody(sync),
       ),
+    );
+  }
+
+  Widget _buildBody(DelegateSyncService sync) {
+    if (_stocks.isEmpty) {
+      final Widget content;
+      if (!sync.hasSyncedOnce && !sync.lastSyncFailed) {
+        content = const Center(child: CircularProgressIndicator());
+      } else if (!sync.hasSyncedOnce) {
+        content = AppErrorView(
+          title: 'تعذر تحميل مخزون الشاحنة',
+          message: 'تحقق من الاتصال بالإنترنت ثم أعد المحاولة.',
+          onRetry: () => sync.refreshNow(force: true),
+        );
+      } else {
+        content = const Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.inventory_2_outlined, size: 64, color: Colors.grey),
+              SizedBox(height: 12),
+              Text('لا يوجد مخزون في الشاحنة', style: TextStyle(color: AppTheme.textMuted)),
+            ],
+          ),
+        );
+      }
+      // Scrollable so pull-to-refresh works on the empty state too.
+      return LayoutBuilder(
+        builder: (_, c) => SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: SizedBox(height: c.maxHeight, child: content),
+        ),
+      );
+    }
+    return Column(
+      children: [
+        OfflineDataBanner(show: sync.isShowingStaleData),
+        Expanded(child: _buildStockList()),
+      ],
     );
   }
 
   Widget _buildStockList() {
     return ListView.builder(
+      physics: const AlwaysScrollableScrollPhysics(),
       itemCount: _stocks.length,
       itemBuilder: (_, i) {
         final s = _stocks[i];

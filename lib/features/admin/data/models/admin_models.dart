@@ -937,9 +937,54 @@ class RecipeModel {
 // batch records the web ProductionBatchesPage/MaterialIssuancePage/
 // ProductionReceivingPage use.
 
+// batchNumber = printable lot number (YYMMDD-NN, generated at start; null
+// for runs started before it existed — shown as "—"). runNumber = internal
+// رقم التشغيلة (BATCH-2026-0042).
+
+/// "261012-03", or "—" for an old run that never had one.
+String batchNumberLabel(String? batchNumber) => batchNumber ?? '—';
+
+/// Short picker/list label: lot number when present, else the run number.
+String productionRunLabel({required int id, String? batchNumber, String? runNumber}) =>
+    batchNumber ?? runNumber ?? '#$id';
+
+/// One copy-ready coding-machine line (ManufacturingOrder::coding_lines),
+/// e.g. "PRD 12/10/26  EXP 12/04/27  B:261012-03" — one per output product.
+class ProductionCodingLineModel {
+  final int outputId;
+  final int productId;
+  final String? productName;
+  final bool isByproduct;
+  final String? expiryDate;
+  final String line;
+
+  const ProductionCodingLineModel({
+    required this.outputId,
+    required this.productId,
+    required this.productName,
+    required this.isByproduct,
+    required this.expiryDate,
+    required this.line,
+  });
+
+  factory ProductionCodingLineModel.fromJson(Map<String, dynamic> json) => ProductionCodingLineModel(
+        outputId: json['manufacturing_order_output_id'] as int,
+        productId: json['product_id'] as int,
+        productName: json['product_name'] as String?,
+        isByproduct: json['is_byproduct'] as bool? ?? false,
+        expiryDate: json['expiry_date'] as String?,
+        line: json['line'] as String? ?? '',
+      );
+}
+
+List<ProductionCodingLineModel> _codingLines(Object? raw) => (raw as List? ?? [])
+    .map((e) => ProductionCodingLineModel.fromJson(e as Map<String, dynamic>))
+    .toList();
+
 class ProductionBatchSummaryModel {
   final int id;
   final String? batchNumber;
+  final String? runNumber;
   final String? recipeName;
   final String? categoryName;
   final String status;
@@ -948,11 +993,14 @@ class ProductionBatchSummaryModel {
   const ProductionBatchSummaryModel({
     required this.id,
     required this.batchNumber,
+    this.runNumber,
     required this.recipeName,
     required this.categoryName,
     required this.status,
     required this.createdAt,
   });
+
+  String get label => productionRunLabel(id: id, batchNumber: batchNumber, runNumber: runNumber);
 
   factory ProductionBatchSummaryModel.fromJson(Map<String, dynamic> json) {
     final recipe = json['recipe'] as Map<String, dynamic>?;
@@ -960,6 +1008,7 @@ class ProductionBatchSummaryModel {
     return ProductionBatchSummaryModel(
       id: json['id'] as int,
       batchNumber: json['batch_number'] as String?,
+      runNumber: json['run_number'] as String?,
       recipeName: recipe?['name'] as String?,
       categoryName: category?['name'] as String?,
       status: json['status'] as String? ?? '',
@@ -1011,6 +1060,8 @@ class ProductionOutputModel {
   final int? warehouseId;
   final bool isByproduct;
   final double? actualQuantity;
+  /// Y-m-d, production_date + product shelf life; null = no expiry.
+  final String? expiryDate;
 
   const ProductionOutputModel({
     required this.id,
@@ -1020,6 +1071,7 @@ class ProductionOutputModel {
     required this.warehouseId,
     required this.isByproduct,
     required this.actualQuantity,
+    this.expiryDate,
   });
 
   factory ProductionOutputModel.fromJson(Map<String, dynamic> json) {
@@ -1034,6 +1086,7 @@ class ProductionOutputModel {
       isByproduct: json['is_byproduct'] as bool? ?? false,
       actualQuantity:
           json['actual_quantity'] == null ? null : _asDouble(json['actual_quantity']),
+      expiryDate: json['expiry_date'] as String?,
     );
   }
 }
@@ -1041,26 +1094,57 @@ class ProductionOutputModel {
 class ProductionBatchDetailModel {
   final int id;
   final String? batchNumber;
+  final String? runNumber;
+  /// Y-m-d pack production date; null for old runs.
+  final String? productionDate;
   final String status;
   final String? notes;
+  final String? recipeName;
+  final String? categoryName;
+  final String? labName;
+  final String? createdByName;
+  final DateTime? startedAt;
   final List<ProductionMaterialModel> materials;
   final List<ProductionOutputModel> outputs;
+  final List<ProductionCodingLineModel> codingLines;
 
   const ProductionBatchDetailModel({
     required this.id,
     required this.batchNumber,
+    this.runNumber,
+    this.productionDate,
     required this.status,
     required this.notes,
+    this.recipeName,
+    this.categoryName,
+    this.labName,
+    this.createdByName,
+    this.startedAt,
     required this.materials,
     required this.outputs,
+    this.codingLines = const [],
   });
 
-  factory ProductionBatchDetailModel.fromJson(Map<String, dynamic> json) =>
-      ProductionBatchDetailModel(
+  String get label => productionRunLabel(id: id, batchNumber: batchNumber, runNumber: runNumber);
+
+  factory ProductionBatchDetailModel.fromJson(Map<String, dynamic> json) {
+    final recipe = json['recipe'] as Map<String, dynamic>?;
+    final createdBy = json['created_by'];
+    final started = json['started_at'] as String? ?? json['created_at'] as String?;
+    return ProductionBatchDetailModel(
         id: json['id'] as int,
         batchNumber: json['batch_number'] as String?,
+        runNumber: json['run_number'] as String?,
+        productionDate: json['production_date'] as String?,
         status: json['status'] as String? ?? '',
         notes: json['notes'] as String?,
+        recipeName: recipe?['name'] as String?,
+        categoryName: (recipe?['category'] as Map<String, dynamic>?)?['name'] as String?,
+        labName: (json['lab'] as Map<String, dynamic>?)?['name'] as String?,
+        // created_by is the FK int unless createdBy was eager-loaded (same JSON key).
+        createdByName: createdBy is Map<String, dynamic> ? createdBy['name'] as String? : null,
+        startedAt: started == null ? null : parseServerDateTime(started),
+        codingLines: _codingLines(json['coding_lines']),
         materials: (json['manufacturing_materials'] as List? ?? [])
             .map((e) => ProductionMaterialModel.fromJson(e as Map<String, dynamic>))
             .toList(),
@@ -1068,6 +1152,7 @@ class ProductionBatchDetailModel {
             .map((e) => ProductionOutputModel.fromJson(e as Map<String, dynamic>))
             .toList(),
       );
+  }
 }
 
 // ─── Admin sale ("عملية بيع") ────────────────────────────────────────────────

@@ -1,0 +1,28 @@
+{
+ "data": [
+  {
+   "rank": 1,
+   "customer_id": 1,
+   "name": "سوبر ماركت النور",
+   "phone": "01001234567",
+   "region": null,
+   "balance": 2450.5,
+   "last_transaction_at": null
+  }
+ ],
+ "meta": {
+  "current_page": 1,
+  "per_page": 1,
+  "total": 2,
+  "last_page": 2,
+  "all": false,
+  "all_cap": 5000
+ },
+ "summary": {
+  "customer_count": 2,
+  "total_debt": 2830.5,
+  "credit_customer_count": 0,
+  "credit_total": 0,
+  "generated_at": "2026-10-12 09:30"
+ }
+}

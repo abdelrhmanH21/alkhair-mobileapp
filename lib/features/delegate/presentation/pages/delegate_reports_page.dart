@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -41,6 +43,9 @@ enum _ReportKind { region, product }
 /// "كشف حساب عميل": pick one customer, see their full chronological debt
 /// ledger (running balance after every row). That tab carries its own
 /// OPTIONAL date range (default: full history) instead of the shared chips.
+/// "مديونيات العملاء" (admin only, no period — balances are current) lists
+/// every customer who owes money, highest first; a row opens that
+/// customer's كشف حساب عميل, and PDF/Excel export ALL rows.
 class DelegateReportsPage extends StatefulWidget {
   /// Overridable for tests; defaults to the app-wide shared instance.
   final SensitiveRevealController? revealController;
@@ -58,11 +63,14 @@ class _DelegateReportsPageState extends State<DelegateReportsPage>
   late final bool _hasLockedTab;
   late final bool _isAdmin;
   // Locked tab (free-pricing delegate only) always sits last.
-  int get _lockedTabIndex => _isAdmin ? 5 : 2;
+  int get _lockedTabIndex => _isAdmin ? 6 : 2;
   static const int _customerLedgerTabIndex = 4; // admin only
+  static const int _customerDebtsTabIndex = 5; // admin only
   bool get _showPeriodChips =>
       _tabController.index != _lockedTabIndex &&
-      !(_isAdmin && _tabController.index == _customerLedgerTabIndex);
+      !(_isAdmin &&
+          (_tabController.index == _customerLedgerTabIndex ||
+              _tabController.index == _customerDebtsTabIndex));
   late final SensitiveRevealController _reveal;
   int _lastTabIndex = 0;
   _ReportPeriod _period = _ReportPeriod.month;
@@ -90,7 +98,7 @@ class _DelegateReportsPageState extends State<DelegateReportsPage>
     _isAdmin = authState is AuthAuthenticated && authState.user.isAdmin;
     _reveal = widget.revealController ?? sl<SensitiveRevealController>();
     _tabController = TabController(
-        length: 2 + (_isAdmin ? 3 : 0) + (_hasLockedTab ? 1 : 0), vsync: this);
+        length: 2 + (_isAdmin ? 4 : 0) + (_hasLockedTab ? 1 : 0), vsync: this);
     if (_hasLockedTab || _isAdmin) _tabController.addListener(_onTabChanged);
     _fetchReports();
   }
@@ -260,6 +268,7 @@ class _DelegateReportsPageState extends State<DelegateReportsPage>
             if (_isAdmin) const Tab(text: 'تقرير الخزائن'),
             if (_isAdmin) const Tab(text: 'تقرير الموردين'),
             if (_isAdmin) const Tab(text: 'كشف حساب عميل'),
+            if (_isAdmin) const Tab(text: 'مديونيات العملاء'),
             if (_hasLockedTab) const Tab(text: 'تقرير التحميلات'),
           ],
         ),
@@ -322,6 +331,8 @@ class _DelegateReportsPageState extends State<DelegateReportsPage>
                   if (_isAdmin) _SupplierReportView(rows: _supplierRows, periodLabel: _periodLabel),
                   if (_isAdmin)
                     CustomerLedgerReportView(remote: widget.adminRemote ?? sl<AdminRemoteDataSource>()),
+                  if (_isAdmin)
+                    CustomerDebtsReportView(remote: widget.adminRemote ?? sl<AdminRemoteDataSource>()),
                   if (_hasLockedTab) PriceVarianceReportTab(revealController: _reveal),
                 ],
               ),
@@ -677,7 +688,9 @@ String customerLedgerPeriodLabel(CustomerLedgerModel l) => l.isFullHistory
 
 class CustomerLedgerReportView extends StatefulWidget {
   final AdminRemoteDataSource remote;
-  const CustomerLedgerReportView({super.key, required this.remote});
+  /// Pre-selected customer (opened from مديونيات العملاء): loads at once.
+  final ClientModel? initialClient;
+  const CustomerLedgerReportView({super.key, required this.remote, this.initialClient});
 
   @override
   State<CustomerLedgerReportView> createState() => _CustomerLedgerReportViewState();
@@ -704,6 +717,12 @@ class _CustomerLedgerReportViewState extends State<CustomerLedgerReportView>
   void initState() {
     super.initState();
     _searchFocus.addListener(_onSearchFocusChanged);
+    final initial = widget.initialClient;
+    if (initial != null) {
+      _client = initial;
+      _searchCtrl.text = initial.name;
+      _load();
+    }
   }
 
   @override
@@ -935,10 +954,197 @@ class _CustomerLedgerRowCard extends StatelessWidget {
   }
 }
 
+// ─── مديونيات العملاء ──────────────────────────────────────────────────────────
+
+/// PDF/Excel payload for the complete customer-debts statement (all rows) —
+/// top-level so the export columns are unit-testable. Black & white,
+/// 2-decimal amounts with thousands separators, grand total at the end.
+ReportExportData customerDebtsExportData(CustomerDebtsReportModel r) {
+  final fmt = NumberFormat('#,##0.00');
+  return ReportExportData(
+    title: 'كشف مديونيات العملاء',
+    period: 'الأرصدة الحالية حتى ${r.generatedAt} — من الأعلى إلى الأقل',
+    headers: const ['#', 'العميل', 'الهاتف', 'المنطقة', 'المديونية', 'آخر حركة'],
+    rows: r.rows
+        .map((row) => [
+              '${row.rank}',
+              row.name,
+              row.phone ?? '-',
+              row.region ?? '-',
+              fmt.format(row.balance),
+              row.lastTransactionAt ?? '-',
+            ])
+        .toList(),
+    totals: ['', 'الإجمالي — ${r.customerCount} عميل', '', '', fmt.format(r.totalDebt), ''],
+    summaryLines: [
+      'عدد العملاء المدينين: ${r.customerCount}',
+      if (r.creditCustomerCount > 0)
+        'غير مشمول: ${r.creditCustomerCount} عميل برصيد دائن (${fmt.format(r.creditTotal.abs())})',
+    ],
+    monochrome: true,
+  );
+}
+
+class CustomerDebtsReportView extends StatefulWidget {
+  final AdminRemoteDataSource remote;
+  const CustomerDebtsReportView({super.key, required this.remote});
+
+  @override
+  State<CustomerDebtsReportView> createState() => _CustomerDebtsReportViewState();
+}
+
+class _CustomerDebtsReportViewState extends State<CustomerDebtsReportView>
+    with AutomaticKeepAliveClientMixin {
+  final List<CustomerDebtRowModel> _rows = [];
+  CustomerDebtsReportModel? _last;
+  bool _loading = false;
+  String? _error;
+
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPage(1);
+  }
+
+  Future<void> _loadPage(int page) async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final r = await widget.remote.fetchCustomerDebts(page: page);
+      if (!mounted) return;
+      setState(() {
+        if (page == 1) _rows.clear();
+        _rows.addAll(r.rows);
+        _last = r;
+        _loading = false;
+      });
+    } on DioException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = e.response?.data?['message'] as String? ?? 'تعذر تحميل المديونيات.';
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = 'تعذر تحميل المديونيات.';
+      });
+    }
+  }
+
+  void _openLedger(CustomerDebtRowModel row) {
+    final remote = widget.remote;
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => Scaffold(
+        appBar: AppBar(title: Text('كشف حساب — ${row.name}')),
+        body: CustomerLedgerReportView(
+          remote: remote,
+          initialClient: ClientModel(id: row.customerId, name: row.name, phone: row.phone ?? '', balance: row.balance),
+        ),
+      ),
+    ));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    final last = _last;
+    final fmt = NumberFormat('#,##0.00');
+    if (last == null) {
+      return _error != null
+          ? Center(
+              child: Column(mainAxisSize: MainAxisSize.min, children: [
+                Text(_error!, style: const TextStyle(color: AppTheme.textMuted)),
+                TextButton(onPressed: () => _loadPage(1), child: const Text('إعادة المحاولة')),
+              ]),
+            )
+          : const Center(child: CircularProgressIndicator());
+    }
+    return RefreshIndicator(
+      onRefresh: () => _loadPage(1),
+      child: ListView(
+        padding: const EdgeInsets.all(12),
+        children: [
+          _ExportButtonsRow(
+            buildData: () async =>
+                customerDebtsExportData(await widget.remote.fetchCustomerDebts(all: true)),
+          ),
+          Card(
+            color: AppTheme.danger.withValues(alpha: 0.06),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _ReportMiniStat(label: 'إجمالي المديونيات', value: fmt.format(last.totalDebt)),
+                  _ReportMiniStat(label: 'عملاء مدينون', value: '${last.customerCount}'),
+                  _ReportMiniStat(label: 'برصيد دائن (مستبعد)', value: '${last.creditCustomerCount}'),
+                ],
+              ),
+            ),
+          ),
+          if (_rows.isEmpty)
+            const Padding(
+              padding: EdgeInsets.only(top: 40),
+              child: Text('لا توجد مديونيات على العملاء.',
+                  textAlign: TextAlign.center, style: TextStyle(color: AppTheme.textMuted)),
+            ),
+          ..._rows.map((r) => Card(
+                margin: const EdgeInsets.symmetric(vertical: 3),
+                child: ListTile(
+                  onTap: () => _openLedger(r),
+                  leading: CircleAvatar(
+                    radius: 15,
+                    backgroundColor: AppTheme.primary.withValues(alpha: 0.1),
+                    child: Text('${r.rank}', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                  ),
+                  title: Text(r.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text(
+                    [r.phone, r.region, if (r.lastTransactionAt != null) 'آخر حركة ${r.lastTransactionAt}']
+                        .whereType<String>()
+                        .join(' • '),
+                    style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
+                  ),
+                  trailing: Text(fmt.format(r.balance),
+                      style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.danger)),
+                ),
+              )),
+          if (last.currentPage < last.lastPage)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : OutlinedButton(
+                      onPressed: () => _loadPage(last.currentPage + 1),
+                      child: Text('عرض المزيد (${_rows.length} من ${last.customerCount})'),
+                    ),
+            ),
+          if (_rows.isNotEmpty)
+            Card(
+              margin: const EdgeInsets.only(top: 6),
+              child: ListTile(
+                title: Text('الإجمالي — ${last.customerCount} عميل',
+                    style: const TextStyle(fontWeight: FontWeight.bold)),
+                trailing: Text(fmt.format(last.totalDebt),
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppTheme.primary)),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 // ─── Export buttons row (shared by every report tab) ──────────────────────────
 
 class _ExportButtonsRow extends StatefulWidget {
-  final ReportExportData Function() buildData;
+  final FutureOr<ReportExportData> Function() buildData;
   const _ExportButtonsRow({required this.buildData});
 
   @override
@@ -954,15 +1160,21 @@ class _ExportButtonsRowState extends State<_ExportButtonsRow> {
     return state is AppConfigLoaded ? state.config.companyName : '';
   }
 
-  String? get _logoUrl {
+  /// Black & white exports get the monochrome (receipt) logo.
+  String? _logoUrl({bool monochrome = false}) {
     final state = context.read<AppConfigBloc>().state;
-    return state is AppConfigLoaded ? (state.config.logoColorUrl ?? state.config.logoUrl) : null;
+    if (state is! AppConfigLoaded) return null;
+    return monochrome
+        ? (state.config.logoUrl ?? state.config.logoColorUrl)
+        : (state.config.logoColorUrl ?? state.config.logoUrl);
   }
 
   Future<void> _exportPdf() async {
     setState(() => _exportingPdf = true);
     try {
-      await ReportExporter.exportPdf(widget.buildData(), companyName: _companyName, logoUrl: _logoUrl);
+      final data = await widget.buildData();
+      if (!mounted) return;
+      await ReportExporter.exportPdf(data, companyName: _companyName, logoUrl: _logoUrl(monochrome: data.monochrome));
     } catch (_) {
       if (mounted) AppSnackbar.showError(context, 'تعذر إنشاء ملف PDF. حاول مرة أخرى.');
     } finally {
@@ -973,7 +1185,9 @@ class _ExportButtonsRowState extends State<_ExportButtonsRow> {
   Future<void> _exportExcel() async {
     setState(() => _exportingExcel = true);
     try {
-      await ReportExporter.exportExcel(widget.buildData(), companyName: _companyName);
+      final data = await widget.buildData();
+      if (!mounted) return;
+      await ReportExporter.exportExcel(data, companyName: _companyName);
     } catch (_) {
       if (mounted) AppSnackbar.showError(context, 'تعذر إنشاء ملف Excel. حاول مرة أخرى.');
     } finally {

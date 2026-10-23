@@ -7,6 +7,7 @@ import '../../../../core/widgets/state_views.dart';
 import '../../data/datasources/admin_remote_datasource.dart';
 import '../../data/models/admin_models.dart';
 import '../../../../core/utils/number_input.dart';
+import '../widgets/batch_number_panel.dart';
 
 /// "بدء تشغيلة جديدة" — mirrors the web's MaterialIssuancePage.tsx exactly:
 /// pick a category → recipe, enter consumed material quantities (deducted
@@ -70,7 +71,7 @@ class _StartProductionPageState extends State<StartProductionPage> {
   bool _loadingRecipes = false;
   String? _recipesError;
   bool _submitting = false;
-  String? _lastBatchNumber;
+  ProductionBatchDetailModel? _lastBatch;
 
   @override
   void initState() {
@@ -200,7 +201,7 @@ class _StartProductionPageState extends State<StartProductionPage> {
     setState(() => _submitting = true);
     try {
       final expenseAmount = parseNumber(_expenseCtrl.text) ?? 0;
-      final batchNumber = await _remote.startProductionBatch(
+      final started = await _remote.startProductionBatch(
         recipeId: _selectedRecipe!.id,
         categoryId: _categoryId,
         labId: _labId,
@@ -235,7 +236,7 @@ class _StartProductionPageState extends State<StartProductionPage> {
 
       if (!mounted) return;
       setState(() {
-        _lastBatchNumber = batchNumber;
+        _lastBatch = started;
         _submitting = false;
         _categoryId = null;
         _selectedRecipe = null;
@@ -247,7 +248,7 @@ class _StartProductionPageState extends State<StartProductionPage> {
         _expenseCtrl.clear();
         _expenseTreasuryId = null;
       });
-      AppSnackbar.showSuccess(context, 'تم فتح التشغيلة: ${batchNumber ?? ''}');
+      AppSnackbar.showSuccess(context, 'تم فتح التشغيلة: ${started.label}');
       final batches = await _remote.fetchInProgressBatches();
       if (mounted) setState(() => _recentBatches = batches);
     } on DioException catch (e) {
@@ -274,7 +275,7 @@ class _StartProductionPageState extends State<StartProductionPage> {
                     keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
                     padding: const EdgeInsets.all(16),
                     children: [
-                      if (_lastBatchNumber != null)
+                      if (_lastBatch != null)
                         Container(
                           margin: const EdgeInsets.only(bottom: 16),
                           padding: const EdgeInsets.all(14),
@@ -285,16 +286,29 @@ class _StartProductionPageState extends State<StartProductionPage> {
                                 color:
                                     AppTheme.secondary.withValues(alpha: 0.3)),
                           ),
-                          child: Row(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              const Icon(Icons.check_circle,
-                                  color: AppTheme.secondary),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  'تم فتح التشغيلة: $_lastBatchNumber — الخامات خُصمت من المخزون.',
-                                  style: const TextStyle(fontSize: 12),
-                                ),
+                              const Row(
+                                children: [
+                                  Icon(Icons.check_circle,
+                                      color: AppTheme.secondary),
+                                  SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      'تم فتح التشغيلة — الخامات خُصمت من المخزون.',
+                                      style: TextStyle(fontSize: 12),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              BatchNumberPanel(
+                                batchId: _lastBatch!.id,
+                                batchNumber: _lastBatch!.batchNumber,
+                                runNumber: _lastBatch!.runNumber,
+                                codingLines: _lastBatch!.codingLines,
+                                remote: _remote,
                               ),
                             ],
                           ),
@@ -609,7 +623,7 @@ class _StartProductionPageState extends State<StartProductionPage> {
                                 leading: const Icon(
                                     Icons.hourglass_top_outlined,
                                     color: AppTheme.accent),
-                                title: Text(b.batchNumber ?? '#${b.id}',
+                                title: Text(b.label,
                                     style: const TextStyle(
                                         fontWeight: FontWeight.bold,
                                         fontSize: 13)),

@@ -219,3 +219,77 @@ class CustomerLedgerModel {
 
   bool get isFullHistory => periodFrom == null && periodTo == null;
 }
+
+/// One row of تقرير مديونيات العملاء — CompanyReportController::customerDebts().
+/// [rank] is the position across the WHOLE list (1 = highest debt), not
+/// within the current page.
+class CustomerDebtRowModel {
+  final int rank;
+  final int customerId;
+  final String name;
+  final String? phone;
+  final String? region;
+  final double balance;
+  final String? lastTransactionAt;
+
+  const CustomerDebtRowModel({
+    required this.rank,
+    required this.customerId,
+    required this.name,
+    this.phone,
+    this.region,
+    required this.balance,
+    this.lastTransactionAt,
+  });
+
+  factory CustomerDebtRowModel.fromJson(Map<String, dynamic> json) => CustomerDebtRowModel(
+        rank: (json['rank'] as num? ?? 0).toInt(),
+        customerId: json['customer_id'] as int,
+        name: json['name'] as String? ?? '',
+        phone: json['phone'] as String?,
+        region: json['region'] as String?,
+        balance: (json['balance'] as num? ?? 0).toDouble(),
+        lastTransactionAt: json['last_transaction_at'] as String?,
+      );
+}
+
+/// A page (or, with all=1, the complete list) of customer debts. The summary
+/// always covers every debtor regardless of the page requested.
+class CustomerDebtsReportModel {
+  final List<CustomerDebtRowModel> rows;
+  final int currentPage;
+  final int lastPage;
+  final int customerCount;
+  final double totalDebt;
+  final int creditCustomerCount;
+  final double creditTotal;
+  final String generatedAt;
+
+  const CustomerDebtsReportModel({
+    required this.rows,
+    required this.currentPage,
+    required this.lastPage,
+    required this.customerCount,
+    required this.totalDebt,
+    required this.creditCustomerCount,
+    required this.creditTotal,
+    required this.generatedAt,
+  });
+
+  factory CustomerDebtsReportModel.fromJson(Map<String, dynamic> json) {
+    final meta = json['meta'] as Map<String, dynamic>? ?? const {};
+    final summary = json['summary'] as Map<String, dynamic>? ?? const {};
+    return CustomerDebtsReportModel(
+      rows: (json['data'] as List? ?? [])
+          .map((e) => CustomerDebtRowModel.fromJson(e as Map<String, dynamic>))
+          .toList(),
+      currentPage: (meta['current_page'] as num? ?? 1).toInt(),
+      lastPage: (meta['last_page'] as num? ?? 1).toInt(),
+      customerCount: (summary['customer_count'] as num? ?? 0).toInt(),
+      totalDebt: (summary['total_debt'] as num? ?? 0).toDouble(),
+      creditCustomerCount: (summary['credit_customer_count'] as num? ?? 0).toInt(),
+      creditTotal: (summary['credit_total'] as num? ?? 0).toDouble(),
+      generatedAt: summary['generated_at'] as String? ?? '',
+    );
+  }
+}

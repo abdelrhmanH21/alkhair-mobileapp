@@ -8,6 +8,7 @@ import '../../../../core/widgets/state_views.dart';
 import '../../data/datasources/admin_remote_datasource.dart';
 import '../../data/models/admin_models.dart';
 import '../../../../core/utils/number_input.dart';
+import '../widgets/batch_number_panel.dart';
 
 /// "استلام إنتاج تام" — mirrors the web's ProductionReceivingPage.tsx:
 /// pick an in-progress batch, enter the actual output quantity + warehouse
@@ -201,7 +202,7 @@ class _ReceiveProductionPageState extends State<ReceiveProductionPage> {
       );
 
       if (!mounted) return;
-      final batchNum = _batchDetail!.batchNumber ?? '#${_batchDetail!.id}';
+      final batchNum = _batchDetail!.label;
       setState(() {
         _lastCompletedBatch = batchNum;
         _submitting = false;
@@ -262,7 +263,7 @@ class _ReceiveProductionPageState extends State<ReceiveProductionPage> {
                             ],
                           ),
                         ),
-                      Text('١. اختيار رقم الباتشة الجارية',
+                      Text('١. اختيار التشغيلة الجارية (رقم الباتش)',
                           style: Theme.of(context).textTheme.titleMedium),
                       const SizedBox(height: 8),
                       if (_inProgressBatches.isEmpty)
@@ -272,12 +273,14 @@ class _ReceiveProductionPageState extends State<ReceiveProductionPage> {
                         DropdownButtonFormField<int>(
                           initialValue: _selectedBatchId,
                           decoration:
-                              const InputDecoration(labelText: 'رقم الباتشة'),
+                              const InputDecoration(labelText: 'رقم الباتش'),
+                          isExpanded: true,
                           items: _inProgressBatches
                               .map((b) => DropdownMenuItem(
                                   value: b.id,
                                   child: Text(
-                                      '${b.batchNumber ?? '#${b.id}'} — ${b.recipeName ?? '—'}')))
+                                      '${batchNumberLabel(b.batchNumber)} | ${b.runNumber ?? '#${b.id}'} — ${b.recipeName ?? '—'}',
+                                      overflow: TextOverflow.ellipsis)))
                               .toList(),
                           onChanged: (v) => v != null ? _selectBatch(v) : null,
                         ),
@@ -292,6 +295,27 @@ class _ReceiveProductionPageState extends State<ReceiveProductionPage> {
                           onRetry: () => _selectBatch(_selectedBatchId!),
                         ),
                       if (_batchDetail != null) ...[
+                        const SizedBox(height: 12),
+                        Card(
+                          child: Padding(
+                            padding: const EdgeInsets.all(12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                BatchNumberPanel(
+                                  batchId: _batchDetail!.id,
+                                  batchNumber: _batchDetail!.batchNumber,
+                                  runNumber: _batchDetail!.runNumber,
+                                  codingLines: _batchDetail!.codingLines,
+                                  remote: _remote,
+                                ),
+                                if (_batchDetail!.productionDate != null)
+                                  Text('تاريخ الإنتاج: ${_batchDetail!.productionDate}',
+                                      style: const TextStyle(fontSize: 12)),
+                              ],
+                            ),
+                          ),
+                        ),
                         const SizedBox(height: 16),
                         Text('الخامات المصروفة في المرحلة الأولى (للاطلاع)',
                             style: Theme.of(context).textTheme.titleMedium),
@@ -323,7 +347,10 @@ class _ReceiveProductionPageState extends State<ReceiveProductionPage> {
                                     Row(
                                       children: [
                                         Expanded(
-                                          child: Text(entry.output.productName,
+                                          child: Text(
+                                              entry.output.expiryDate == null
+                                                  ? entry.output.productName
+                                                  : '${entry.output.productName} — ينتهي ${entry.output.expiryDate}',
                                               style: const TextStyle(
                                                   fontWeight: FontWeight.bold,
                                                   fontSize: 13)),
@@ -505,7 +532,7 @@ class _ReceiveProductionPageState extends State<ReceiveProductionPage> {
                               child: ListTile(
                                 leading: const Icon(Icons.check_circle_outline,
                                     color: AppTheme.secondary),
-                                title: Text(b.batchNumber ?? '#${b.id}',
+                                title: Text(b.label,
                                     style: const TextStyle(
                                         fontWeight: FontWeight.bold,
                                         fontSize: 13)),

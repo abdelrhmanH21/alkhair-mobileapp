@@ -125,6 +125,8 @@ abstract class AdminRemoteDataSource {
   Future<List<TreasuryReportRowModel>> fetchTreasuryReport({String? period, String? dateFrom, String? dateTo});
   Future<List<SupplierReportRowModel>> fetchSupplierReport({String? period, String? dateFrom, String? dateTo});
   Future<CustomerLedgerModel> fetchCustomerLedger(int customerId, {String? dateFrom, String? dateTo});
+  /// تقرير مديونيات العملاء: one page, or every row with [all] (print/export).
+  Future<CustomerDebtsReportModel> fetchCustomerDebts({int page = 1, int perPage = 25, bool all = false});
   // "حذف نهائي" — hard-deletes a SalesRep with no linked User and cascades
   // every referencing table. Throws a DioException (422) if the rep DOES
   // have a linked user; the caller surfaces the server's Arabic message.
@@ -186,7 +188,7 @@ abstract class AdminRemoteDataSource {
   Future<List<ProductionBatchSummaryModel>> fetchInProgressBatches();
   Future<List<ProductionBatchSummaryModel>> fetchRecentlyCompletedBatches();
   Future<ProductionBatchDetailModel> fetchBatchDetail(int id);
-  Future<String?> startProductionBatch({
+  Future<ProductionBatchDetailModel> startProductionBatch({
     required int recipeId,
     int? categoryId,
     int? labId,
@@ -740,6 +742,15 @@ class AdminRemoteDataSourceImpl implements AdminRemoteDataSource {
   }
 
   @override
+  Future<CustomerDebtsReportModel> fetchCustomerDebts({int page = 1, int perPage = 25, bool all = false}) async {
+    final res = await _client.dio.get(
+      ApiEndpoints.adminReportCustomerDebts,
+      queryParameters: all ? {'all': 1} : {'page': page, 'per_page': perPage},
+    );
+    return CustomerDebtsReportModel.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  @override
   Future<void> forceDeleteRep(int repId) async {
     await _client.dio.delete(ApiEndpoints.salesRepForceDelete(repId));
   }
@@ -941,7 +952,7 @@ class AdminRemoteDataSourceImpl implements AdminRemoteDataSource {
   }
 
   @override
-  Future<String?> startProductionBatch({
+  Future<ProductionBatchDetailModel> startProductionBatch({
     required int recipeId,
     int? categoryId,
     int? labId,
@@ -964,8 +975,7 @@ class AdminRemoteDataSourceImpl implements AdminRemoteDataSource {
       if (additionalExpense != null && additionalExpense > 0) 'additional_expense': additionalExpense,
       if (expenseTreasuryId != null) 'expense_treasury_id': expenseTreasuryId,
     });
-    final data = res.data as Map<String, dynamic>;
-    return data['batch_number'] as String?;
+    return ProductionBatchDetailModel.fromJson(res.data as Map<String, dynamic>);
   }
 
   @override

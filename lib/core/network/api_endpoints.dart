@@ -136,6 +136,8 @@ class ApiEndpoints {
   static const String adminReportSuppliers  = '/admin/reports/suppliers';
   // كشف حساب عميل (same التقارير screen) — full chronological debt ledger
   static String adminCustomerStatement(int customerId) => '/admin/customers/$customerId/statement';
+  // تقرير مديونيات العملاء — paginated; all=1 for the complete statement
+  static const String adminReportCustomerDebts = '/admin/reports/customer-debts';
   static String adminFreePricingStatement(int repId) => '/admin/sales-reps/$repId/price-variance-statement';
   static String adminFreePricingTransaction(int repId, int transactionId) =>
       '/admin/sales-reps/$repId/price-variance-transactions/$transactionId';

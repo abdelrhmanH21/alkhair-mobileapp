@@ -19,6 +19,11 @@ class ReportExportData {
   /// Optional bold summary row rendered under the table (same column count
   /// as [headers]); pass null to omit it.
   final List<String>? totals;
+  /// Extra header lines under the period (e.g. "عدد العملاء: 39").
+  final List<String> summaryLines;
+  /// Strictly black & white (statements meant for paper) instead of the
+  /// blueGrey branded header used by the on-screen-style reports.
+  final bool monochrome;
 
   const ReportExportData({
     required this.title,
@@ -26,6 +31,33 @@ class ReportExportData {
     required this.headers,
     required this.rows,
     this.totals,
+    this.summaryLines = const [],
+    this.monochrome = false,
+  });
+}
+
+/// "بطاقة التشغيلة" — one production run's printable card: the batch number
+/// (large), dates, one coding-machine line per output, issued raw materials
+/// and packaging used. Rendered by [ReportExporter.exportBatchCardPdf].
+class BatchCardExportData {
+  final String batchNumber;
+  /// Label/value pairs: رقم التشغيلة، تاريخ الإنتاج، الوصفة، …
+  final List<List<String>> meta;
+  /// [product, expiry, received qty, coding line] per output.
+  final List<List<String>> outputRows;
+  /// [#, material, qty, unit] per issued raw material / product.
+  final List<List<String>> materialRows;
+  /// Same shape; section omitted when empty.
+  final List<List<String>> packagingRows;
+  final String? notes;
+
+  const BatchCardExportData({
+    required this.batchNumber,
+    required this.meta,
+    required this.outputRows,
+    required this.materialRows,
+    this.packagingRows = const [],
+    this.notes,
   });
 }
 
@@ -132,30 +164,42 @@ class ReportExporter {
                 style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
             pw.Text('تاريخ الإصدار: $generatedAt',
                 style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
+            for (final line in data.summaryLines)
+              pw.Text(line, style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold)),
             pw.SizedBox(height: 8),
             pw.Divider(color: PdfColors.grey400),
           ],
         ),
         build: (context) => [
+          // Header row repeats on every page (Table.headerCount); a row is
+          // never split across pages.
           pw.TableHelper.fromTextArray(
             headers: data.headers,
             data: data.rows,
-            headerStyle:
-                pw.TextStyle(fontWeight: pw.FontWeight.bold, color: PdfColors.white, fontSize: 10),
-            headerDecoration: const pw.BoxDecoration(color: PdfColors.blueGrey800),
+            headerStyle: pw.TextStyle(
+                fontWeight: pw.FontWeight.bold,
+                color: data.monochrome ? PdfColors.black : PdfColors.white,
+                fontSize: 10),
+            headerDecoration: data.monochrome
+                ? const pw.BoxDecoration(color: PdfColors.white)
+                : const pw.BoxDecoration(color: PdfColors.blueGrey800),
             cellStyle: const pw.TextStyle(fontSize: 9),
             cellAlignment: pw.Alignment.centerRight,
             headerAlignment: pw.Alignment.centerRight,
-            border: pw.TableBorder.all(color: PdfColors.grey400, width: 0.4),
+            border: data.monochrome
+                ? pw.TableBorder.all(color: PdfColors.black, width: 0.6)
+                : pw.TableBorder.all(color: PdfColors.grey400, width: 0.4),
             cellPadding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5),
-            oddRowDecoration: const pw.BoxDecoration(color: PdfColors.grey100),
+            oddRowDecoration: data.monochrome ? null : const pw.BoxDecoration(color: PdfColors.grey100),
           ),
           if (data.totals != null) ...[
             pw.SizedBox(height: 2),
             pw.Container(
               decoration: pw.BoxDecoration(
-                border: pw.Border.all(color: PdfColors.grey400, width: 0.4),
-                color: PdfColors.blueGrey50,
+                border: data.monochrome
+                    ? pw.Border.all(color: PdfColors.black, width: 1.2)
+                    : pw.Border.all(color: PdfColors.grey400, width: 0.4),
+                color: data.monochrome ? PdfColors.white : PdfColors.blueGrey50,
               ),
               padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 6),
               child: pw.Row(
@@ -304,6 +348,119 @@ class ReportExporter {
     await Printing.sharePdf(bytes: await doc.save(), filename: '${_fileSafe(data.title)}.pdf');
   }
 
+  /// "بطاقة التشغيلة" PDF — one A4 page, black & white: logo, the batch
+  /// number large, run details, outputs with expiry + coding-machine line,
+  /// issued materials and (when present) مواد التعبئة المستخدمة. Same logo
+  /// fetch and [Printing.sharePdf] plumbing as [exportPdf].
+  static Future<void> exportBatchCardPdf(
+    BatchCardExportData data, {
+    required String companyName,
+    String? logoUrl,
+  }) async {
+    final regularFont = await PdfGoogleFonts.cairoRegular();
+    final boldFont = await PdfGoogleFonts.cairoBold();
+    final logoBytes = await _fetchLogoBytes(logoUrl);
+    final printedAt = DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now());
+
+    final border = pw.TableBorder.all(color: PdfColors.black, width: 0.6);
+    pw.Widget table(List<String> headers, List<List<String>> rows) => pw.TableHelper.fromTextArray(
+          headers: headers,
+          data: rows,
+          headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9.5),
+          headerDecoration: const pw.BoxDecoration(color: PdfColors.white),
+          cellStyle: const pw.TextStyle(fontSize: 9),
+          cellAlignment: pw.Alignment.centerRight,
+          headerAlignment: pw.Alignment.centerRight,
+          border: border,
+          cellPadding: const pw.EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+        );
+    pw.Widget section(String title) => pw.Padding(
+          padding: const pw.EdgeInsets.only(top: 10, bottom: 3),
+          child: pw.Text(title, style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 11)),
+        );
+
+    final doc = pw.Document();
+    doc.addPage(
+      pw.MultiPage(
+        pageTheme: pw.PageTheme(
+          pageFormat: PdfPageFormat.a4,
+          textDirection: pw.TextDirection.rtl,
+          theme: pw.ThemeData.withFont(base: regularFont, bold: boldFont),
+          margin: const pw.EdgeInsets.all(28),
+        ),
+        build: (context) => [
+          pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: [
+              pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+                pw.Text(companyName, style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold)),
+                pw.Text('بطاقة التشغيلة', style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
+              ]),
+              if (logoBytes != null)
+                pw.SizedBox(
+                  width: 54,
+                  height: 54,
+                  child: pw.Image(pw.MemoryImage(logoBytes), fit: pw.BoxFit.contain),
+                ),
+            ],
+          ),
+          pw.Divider(color: PdfColors.black, thickness: 1.2),
+          pw.Container(
+            width: double.infinity,
+            padding: const pw.EdgeInsets.symmetric(vertical: 8),
+            decoration: pw.BoxDecoration(border: pw.Border.all(color: PdfColors.black, width: 1.5)),
+            child: pw.Column(children: [
+              pw.Text('رقم الباتش', style: const pw.TextStyle(fontSize: 11)),
+              pw.Text(data.batchNumber,
+                  textDirection: pw.TextDirection.ltr,
+                  style: pw.TextStyle(fontSize: 38, fontWeight: pw.FontWeight.bold, letterSpacing: 2)),
+            ]),
+          ),
+          pw.SizedBox(height: 8),
+          pw.Table(
+            border: border,
+            children: [
+              for (var i = 0; i < data.meta.length; i += 2)
+                pw.TableRow(children: [
+                  for (final pair in data.meta.skip(i).take(2)) ...[
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(4),
+                      child: pw.Text(pair[0], style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9.5)),
+                    ),
+                    pw.Padding(
+                      padding: const pw.EdgeInsets.all(4),
+                      child: pw.Text(pair[1], style: const pw.TextStyle(fontSize: 9.5)),
+                    ),
+                  ],
+                  if (data.meta.skip(i).length == 1) ...[pw.SizedBox(), pw.SizedBox()],
+                ]),
+            ],
+          ),
+          section('المنتجات وتواريخ الانتهاء'),
+          table(const ['المنتج', 'تاريخ الانتهاء', 'الكمية المستلمة', 'سطر ماكينة التكويد'], data.outputRows),
+          section('الخامات المصروفة'),
+          table(const ['#', 'المادة', 'الكمية', 'الوحدة'], data.materialRows.isEmpty ? [['-', '-', '-', '-']] : data.materialRows),
+          if (data.packagingRows.isNotEmpty) ...[
+            section('مواد التعبئة المستخدمة'),
+            table(const ['#', 'المادة', 'الكمية', 'الوحدة'], data.packagingRows),
+          ],
+          if (data.notes != null && data.notes!.isNotEmpty) ...[
+            pw.SizedBox(height: 8),
+            pw.Text('ملاحظات: ${data.notes}', style: const pw.TextStyle(fontSize: 9.5)),
+          ],
+          pw.SizedBox(height: 20),
+          pw.Divider(color: PdfColors.black),
+          pw.Row(mainAxisAlignment: pw.MainAxisAlignment.spaceBetween, children: [
+            pw.Text('توقيع المسؤول: ..............................', style: const pw.TextStyle(fontSize: 9)),
+            pw.Text('طُبعت في $printedAt', style: const pw.TextStyle(fontSize: 9)),
+          ]),
+        ],
+      ),
+    );
+
+    await Printing.sharePdf(bytes: await doc.save(), filename: '${_fileSafe('بطاقة تشغيلة ${data.batchNumber}')}.pdf');
+  }
+
   static Future<void> exportExcel(
     ReportExportData data, {
     required String companyName,
@@ -321,6 +478,9 @@ class ReportExporter {
     sheet.appendRow([xls.TextCellValue('$companyName — ${data.title}')]);
     sheet.appendRow([xls.TextCellValue('الفترة: ${data.period}')]);
     sheet.appendRow([xls.TextCellValue('تاريخ الإصدار: $generatedAt')]);
+    for (final line in data.summaryLines) {
+      sheet.appendRow([xls.TextCellValue(line)]);
+    }
     sheet.appendRow(const []);
     sheet.appendRow(data.headers.map((h) => xls.TextCellValue(h)).toList());
     for (final row in data.rows) {

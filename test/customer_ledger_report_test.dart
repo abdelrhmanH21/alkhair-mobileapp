@@ -245,6 +245,21 @@ class _FakeAdminRemote implements AdminRemoteDataSource {
     return _realLedger();
   }
 
+  final List<String> debtRequests = [];
+  @override
+  Future<CustomerDebtsReportModel> fetchCustomerDebts({int page = 1, int perPage = 25, bool all = false}) async {
+    debtRequests.add(all ? 'all' : 'page$page');
+    return CustomerDebtsReportModel.fromJson({
+      'data': [
+        {'rank': 1, 'customer_id': 19, 'name': 'اسواق بدر', 'phone': '0', 'region': 'العجمي - هانوفيل',
+         'balance': 7520, 'last_transaction_at': '2026-09-30 10:12'},
+      ],
+      'meta': {'current_page': 1, 'per_page': 25, 'total': 1, 'last_page': 1, 'all': all, 'all_cap': 5000},
+      'summary': {'customer_count': 1, 'total_debt': 7520, 'credit_customer_count': 0, 'credit_total': 0,
+                  'generated_at': '2026-10-23 11:00'},
+    });
+  }
+
   @override
   Never noSuchMethod(Invocation i) => throw UnimplementedError('${i.memberName}');
 }
@@ -370,8 +385,28 @@ void main() {
     expect(find.text('رصيد بعدها: 7,520.00'), findsOneWidget);
   });
 
+  testWidgets('مديونيات العملاء: a row opens that customer\'s كشف حساب عميل', (tester) async {
+    final remote = _FakeAdminRemote();
+    await _pump(tester, role: 'admin', remote: remote);
+
+    await tester.ensureVisible(find.text('مديونيات العملاء'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('مديونيات العملاء'));
+    await tester.pumpAndSettle();
+    expect(find.text('هذا الشهر'), findsNothing, reason: 'current balances — no period chips');
+    expect(remote.debtRequests, contains('page1'));
+    expect(find.text('7,520.00'), findsWidgets);
+    expect(find.text('الإجمالي — 1 عميل'), findsOneWidget);
+
+    await tester.tap(find.text('اسواق بدر'));
+    await tester.pumpAndSettle();
+    expect(find.text('كشف حساب — اسواق بدر'), findsOneWidget);
+    expect(remote.ledgerRequests, [19]);
+  });
+
   testWidgets('a delegate never gets the customer statement tab', (tester) async {
     await _pump(tester, role: 'delegate', remote: _FakeAdminRemote());
     expect(find.text('كشف حساب عميل'), findsNothing);
+    expect(find.text('مديونيات العملاء'), findsNothing);
   });
 }

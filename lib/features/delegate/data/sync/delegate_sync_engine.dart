@@ -101,6 +101,9 @@ class DelegateSyncEngine {
         case PendingActionType.collection:
           await _syncCollection(action);
           break;
+        case PendingActionType.customerLocation:
+          await _syncCustomerLocation(action);
+          break;
       }
       // Kept (not deleted) so SyncStatusPage can show real "تم الإرسال"
       // confirmation — see PendingActionQueue's pruning of old synced rows.
@@ -205,6 +208,28 @@ class DelegateSyncEngine {
     // cleanup just leaves harmless clutter, never worth failing the sync
     // (already marked 'synced' by the caller) over.
     unawaited(PendingPhotoStorage.delete(photoPath));
+  }
+
+  /// Safe to replay any number of times: the server compares captured_at
+  /// (the fix time on the phone), so a re-send of the same capture is a
+  /// no-op and a capture older than the current pin never overwrites it
+  /// (applied=false — still a definitive outcome, so it counts as synced).
+  Future<void> _syncCustomerLocation(PendingAction action) async {
+    final p = action.payload;
+    try {
+      await _repo.submitCustomerLocation(
+        customerId: p['customer_id'] as int,
+        latitude: (p['latitude'] as num).toDouble(),
+        longitude: (p['longitude'] as num).toDouble(),
+        accuracyM: (p['accuracy_m'] as num?)?.toDouble(),
+        capturedAt: DateTime.parse(p['captured_at'] as String),
+      );
+    } on DioException catch (e) {
+      // Customer deleted meanwhile: nothing left to pin. Must not count as
+      // a transient failure — that would stall every later queued sale.
+      if (e.response?.statusCode == 404) return;
+      rethrow;
+    }
   }
 
   Future<void> _syncCollection(PendingAction action) async {

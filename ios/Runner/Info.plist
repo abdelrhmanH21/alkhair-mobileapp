@@ -37,6 +37,10 @@
 	     Bluetooth is touched (the print / طابعتي screens). -->
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>يستخدم التطبيق البلوتوث للاتصال بطابعة الفواتير.</string>
+	<!-- تسجيل موقع عميل: location is read only when the delegate taps
+	     «تسجيل الموقع» (when-in-use only, never in the background). -->
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>يستخدم التطبيق موقعك فقط عند الضغط على «تسجيل الموقع» لحفظ مكان العميل الذي تقف عنده، حتى يسهل الوصول إليه لاحقًا. لا يتم تتبع موقعك في الخلفية.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>يحتاج التطبيق للوصول إلى الكاميرا لالتقاط صورة إثبات المصروف أو إرفاقها بملاحظة.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

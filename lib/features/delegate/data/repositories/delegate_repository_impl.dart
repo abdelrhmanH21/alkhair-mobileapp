@@ -2,6 +2,7 @@ import 'dart:io';
 import '../datasources/delegate_remote_datasource.dart';
 import '../models/loading_model.dart';
 import '../models/client_model.dart';
+import '../models/customer_location_result.dart';
 import '../models/invoice_model.dart';
 import '../models/dashboard_model.dart';
 import '../models/sellable_product_model.dart';
@@ -168,6 +169,31 @@ class DelegateRepositoryImpl implements DelegateRepository {
         customerRegionId: customerRegionId,
         initialBalance: initialBalance,
       );
+
+  @override
+  Future<CustomerLocationResult> submitCustomerLocation({
+    required int customerId,
+    required double latitude,
+    required double longitude,
+    double? accuracyM,
+    required DateTime capturedAt,
+  }) async {
+    final result = await _remote.submitCustomerLocation(
+      customerId: customerId,
+      latitude: latitude,
+      longitude: longitude,
+      accuracyM: accuracyM,
+      capturedAt: capturedAt,
+    );
+    // Keep the offline customer list's "has a location" marker current.
+    final cached = getCachedCustomerList();
+    final i = cached.indexWhere((c) => c.id == customerId);
+    if (i != -1 && result.hasLocation) {
+      cached[i] = cached[i].copyWith(hasLocation: true, locationRecordedAt: result.locationRecordedAt);
+      await _cache.set(_kCustomerList, cached.map((c) => c.toJson()).toList());
+    }
+    return result;
+  }
 
   @override
   Future<List<SellableProductModel>> getSellableProducts({int? customerId}) async {

@@ -26,6 +26,10 @@ class ClientSearchField extends StatelessWidget {
   /// omit it and no history icon is shown.
   final void Function(ClientModel)? onViewHistory;
 
+  /// تسجيل موقع عميل: a small pin on results that already have a GPS
+  /// location. Off everywhere else so the sale/collection lists are unchanged.
+  final bool showLocationMarker;
+
   const ClientSearchField({
     super.key,
     required this.controller,
@@ -37,6 +41,7 @@ class ClientSearchField extends StatelessWidget {
     required this.onSelect,
     this.onAddNew,
     this.onViewHistory,
+    this.showLocationMarker = false,
   });
 
   @override
@@ -163,6 +168,14 @@ class ClientSearchField extends StatelessWidget {
                             trailing: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
+                                if (showLocationMarker && c.hasLocation)
+                                  const Padding(
+                                    padding: EdgeInsets.only(left: 4),
+                                    child: Tooltip(
+                                      message: 'الموقع مسجل',
+                                      child: Icon(Icons.location_on, size: 16, color: AppTheme.secondary),
+                                    ),
+                                  ),
                                 if (c.balance > 0)
                                   Padding(
                                     padding: const EdgeInsets.only(left: 4),

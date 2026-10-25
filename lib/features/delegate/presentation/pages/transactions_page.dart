@@ -19,6 +19,7 @@ import '../widgets/add_client_sheet.dart';
 import '../widgets/photo_attachment_field.dart';
 import '../../../../core/utils/number_input.dart';
 import 'my_printer_page.dart';
+import '../customer_location/customer_location_page.dart';
 
 /// عمليات tab (renamed from معاملات — display text only, route/file names
 /// unchanged): three lightweight route-side actions that don't belong to
@@ -264,6 +265,24 @@ class _TransactionsPageState extends State<TransactionsPage> {
               subtitle: 'شكوى أو ملاحظة تُرسَل لإدارة النظام',
               enabled: true,
               onTap: () => _openNoteSheet(context),
+            ),
+            const SizedBox(height: 12),
+            // Not loading-gated: pinning customers is useful between shifts too.
+            _ActionCard(
+              icon: Icons.add_location_alt_outlined,
+              color: AppTheme.secondary,
+              title: 'تسجيل موقع عميل',
+              subtitle: 'حفظ موقع GPS للعميل وأنت عنده',
+              enabled: true,
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => BlocProvider.value(
+                    value: context.read<DelegateBloc>(),
+                    child: const CustomerLocationPage(),
+                  ),
+                ),
+              ),
             ),
             const SizedBox(height: 12),
             _ActionCard(

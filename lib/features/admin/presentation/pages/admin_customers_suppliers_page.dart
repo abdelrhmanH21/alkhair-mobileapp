@@ -1,6 +1,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
+import 'package:intl/intl.dart' show DateFormat;
+import 'package:url_launcher/url_launcher.dart';
 import '../../../../core/di/service_locator.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/app_snackbar.dart';
@@ -297,6 +299,7 @@ class _CustomersTabState extends State<_CustomersTab> {
                       ),
                     ),
                   ),
+                  _LocationButton(customer: c),
                   IconButton(
                     icon: const Icon(Icons.edit_outlined, size: 18, color: AppTheme.textMuted),
                     onPressed: () => _openEdit(c),
@@ -1233,4 +1236,42 @@ class _ColumnHeadersRow extends StatelessWidget {
           ],
         ),
       );
+}
+
+/// GPS pin of a customer (read-only): opens Google Maps when recorded,
+/// otherwise a muted "غير مسجل" hint. Long-press shows when/by whom.
+class _LocationButton extends StatelessWidget {
+  final CustomerModel customer;
+  const _LocationButton({required this.customer});
+
+  Future<void> _open(BuildContext context) async {
+    final ok = await launchUrl(Uri.parse(customer.mapsUrl!), mode: LaunchMode.externalApplication);
+    if (!ok && context.mounted) AppSnackbar.showError(context, 'تعذر فتح الخريطة.');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!customer.hasLocation) {
+      return const Tooltip(
+        message: 'الموقع غير مسجل',
+        child: Padding(
+          padding: EdgeInsets.all(8),
+          child: Icon(Icons.location_off_outlined, size: 18, color: Colors.black26),
+        ),
+      );
+    }
+    final when = customer.locationRecordedAt != null
+        ? DateFormat('yyyy/MM/dd HH:mm').format(customer.locationRecordedAt!)
+        : null;
+    final tip = [
+      'موقع العميل',
+      if (when != null) 'سُجّل $when',
+      if (customer.locationRecordedByName != null) 'بواسطة ${customer.locationRecordedByName}',
+    ].join(' — ');
+    return IconButton(
+      icon: const Icon(Icons.location_on, size: 18, color: AppTheme.secondary),
+      tooltip: tip,
+      onPressed: () => _open(context),
+    );
+  }
 }

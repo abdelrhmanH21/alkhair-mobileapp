@@ -471,22 +471,37 @@ class CustomerModel {
   final double balance;
   final String? regionName;
 
+  /// GPS pin (admin/manager payload only): Google Maps link, when and by whom.
+  final bool hasLocation;
+  final String? mapsUrl;
+  final DateTime? locationRecordedAt;
+  final String? locationRecordedByName;
+
   const CustomerModel({
     required this.id,
     required this.name,
     required this.phone,
     required this.balance,
     required this.regionName,
+    this.hasLocation = false,
+    this.mapsUrl,
+    this.locationRecordedAt,
+    this.locationRecordedByName,
   });
 
   factory CustomerModel.fromJson(Map<String, dynamic> json) {
     final region = json['region'] as Map<String, dynamic>?;
+    final mapsUrl = json['maps_url'] as String?;
     return CustomerModel(
       id: json['id'] as int,
       name: json['name'] as String? ?? '',
       phone: json['phone'] as String?,
       balance: _asDouble(json['balance']),
       regionName: region?['name'] as String?,
+      hasLocation: json['has_location'] == true && mapsUrl != null,
+      mapsUrl: mapsUrl,
+      locationRecordedAt: DateTime.tryParse(json['location_recorded_at'] as String? ?? '')?.toLocal(),
+      locationRecordedByName: json['location_recorded_by_name'] as String?,
     );
   }
 }

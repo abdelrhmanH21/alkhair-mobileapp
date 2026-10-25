@@ -1,6 +1,7 @@
 import 'dart:io';
 import '../../data/models/loading_model.dart';
 import '../../data/models/client_model.dart';
+import '../../data/models/customer_location_result.dart';
 import '../../data/models/invoice_model.dart';
 import '../../data/models/dashboard_model.dart';
 import '../../data/models/sellable_product_model.dart';
@@ -47,6 +48,15 @@ abstract class DelegateRepository {
     String? region,
     int? customerRegionId,
     double? initialBalance,
+  });
+  /// تسجيل موقع عميل — also used by the sync engine to replay a queued
+  /// capture (idempotent server-side: same captured_at = no-op).
+  Future<CustomerLocationResult> submitCustomerLocation({
+    required int customerId,
+    required double latitude,
+    required double longitude,
+    double? accuracyM,
+    required DateTime capturedAt,
   });
   Future<List<SellableProductModel>> getSellableProducts({int? customerId});
   Future<List<CatalogProductModel>> getSalesCatalogProducts();

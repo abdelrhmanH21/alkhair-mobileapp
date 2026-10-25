@@ -33,11 +33,14 @@ class GpsService {
     }
   }
 
+  /// Check only — never prompts. The location permission is now declared
+  /// for every Android version (and iOS) for تسجيل موقع عميل, which is
+  /// where the delegate grants it; asking here would pop a system dialog in
+  /// the middle of a sale. Location services off → skip at once instead of
+  /// waiting out the fix timeout.
   Future<bool> _ensurePermission() async {
-    LocationPermission perm = await Geolocator.checkPermission();
-    if (perm == LocationPermission.denied) {
-      perm = await Geolocator.requestPermission();
-    }
+    if (!await Geolocator.isLocationServiceEnabled()) return false;
+    final perm = await Geolocator.checkPermission();
     return perm == LocationPermission.always ||
         perm == LocationPermission.whileInUse;
   }

@@ -16,7 +16,13 @@
          results, which lets Android 12+ skip the location permission. -->
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30"/>
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30"/>
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="30"/>
+    <!-- Location, foreground only: read on an explicit tap (تسجيل موقع عميل,
+         and the best-effort invoice coordinates once granted). No
+         ACCESS_BACKGROUND_LOCATION — nothing tracks location in the
+         background. Previously FINE was capped at API 30 (Bluetooth-only),
+         so Android 12+ could never grant location at all. -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation"/>
     <!-- Mandatory proof-of-expense photo (تسجيل مصروف) + optional تسجيل
@@ -63,6 +69,11 @@
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
+        </intent>
+        <!-- url_launcher: admin customers "فتح على الخريطة" (Google Maps URL). -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="https"/>
         </intent>
     </queries>
 </manifest>

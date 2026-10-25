@@ -150,6 +150,8 @@ class _PendingActionCard extends StatelessWidget {
         return Icons.payments_outlined;
       case PendingActionType.collection:
         return Icons.account_balance_wallet_outlined;
+      case PendingActionType.customerLocation:
+        return Icons.add_location_alt_outlined;
     }
   }
 
@@ -161,6 +163,8 @@ class _PendingActionCard extends StatelessWidget {
         return 'مصروف';
       case PendingActionType.collection:
         return 'تحصيل من عميل';
+      case PendingActionType.customerLocation:
+        return 'تسجيل موقع عميل';
     }
   }
 
@@ -179,6 +183,9 @@ class _PendingActionCard extends StatelessWidget {
       case PendingActionType.collection:
         final amount = (p['amount'] as num?)?.toStringAsFixed(2) ?? '';
         return '${p['customer_name'] ?? ''} — $amount ج.م';
+      case PendingActionType.customerLocation:
+        final acc = (p['accuracy_m'] as num?)?.round();
+        return '${p['customer_name'] ?? ''}${acc != null ? ' — دقة ±$acc م' : ''}';
     }
   }
 

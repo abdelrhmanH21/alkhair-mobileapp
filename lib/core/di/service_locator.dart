@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../network/api_client.dart';
 import '../utils/secure_session.dart';
 import '../utils/gps_service.dart';
+import '../utils/location_service.dart';
 import '../utils/bluetooth_printer.dart';
 import '../utils/push_notification_service.dart';
 import '../utils/offline_cache_service.dart';
@@ -41,6 +42,7 @@ Future<void> setupServiceLocator() async {
   sl.registerLazySingleton<SecureSession>(() => SecureSession());
   sl.registerLazySingleton<ApiClient>(() => ApiClient());
   sl.registerLazySingleton<GpsService>(() => GpsService());
+  sl.registerLazySingleton<LocationService>(() => const GeolocatorLocationService());
   sl.registerLazySingleton<BluetoothPrinterService>(() => BluetoothPrinterService());
   sl.registerLazySingleton<PushNotificationService>(() => PushNotificationService(sl()));
 

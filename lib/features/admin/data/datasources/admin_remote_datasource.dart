@@ -1,3 +1,7 @@
+import 'dart:typed_data';
+
+import 'package:dio/dio.dart';
+
 import '../../../../core/network/api_client.dart';
 import '../../../../core/network/api_endpoints.dart';
 import '../../../delegate/data/models/breakdown_models.dart';
@@ -155,6 +159,8 @@ abstract class AdminRemoteDataSource {
     int page = 1,
   });
   Future<DailySummaryModel> fetchDailySummary(int settlementId);
+  /// خط السير — the server-rendered PDF (same file the web downloads).
+  Future<({Uint8List bytes, String filename})> fetchRouteSheetPdf(int settlementId);
   Future<List<AdvanceModel>> fetchRepAdvances(int repId);
   Future<List<CommissionDayModel>> fetchRepCommissionBreakdown(int repId);
   // "مندوب حر السعر" management ─────────────────────────────────────────
@@ -690,6 +696,18 @@ class AdminRemoteDataSourceImpl implements AdminRemoteDataSource {
   Future<DailySummaryModel> fetchDailySummary(int settlementId) async {
     final res = await _client.dio.get(ApiEndpoints.adminDailySummary(settlementId));
     return DailySummaryModel.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  @override
+  Future<({Uint8List bytes, String filename})> fetchRouteSheetPdf(int settlementId) async {
+    final res = await _client.dio.get<List<int>>(
+      ApiEndpoints.adminRouteSheetPdf(settlementId),
+      options: Options(responseType: ResponseType.bytes, headers: {'Accept': 'application/pdf'}),
+    );
+    return (
+      bytes: Uint8List.fromList(res.data ?? const []),
+      filename: filenameFromDisposition(res.headers.value('content-disposition')) ?? 'route-$settlementId.pdf',
+    );
   }
 
   // ── Payroll (العمالة) ─────────────────────────────────────────────────
@@ -1383,3 +1401,17 @@ Map<String, dynamic> buildCreateLoadingPayload({
       if (notes != null && notes.isNotEmpty) 'notes': notes,
       if (loadingDate != null) 'loading_date': formatLoadingDate(loadingDate),
     };
+
+/// RFC 6266 Content-Disposition → file name, preferring the UTF-8
+/// filename* (Arabic name) over the ASCII fallback.
+String? filenameFromDisposition(String? header) {
+  if (header == null) return null;
+  final star = RegExp(r"filename\*\s*=\s*utf-8''([^;]+)", caseSensitive: false).firstMatch(header);
+  if (star != null) {
+    try {
+      return Uri.decodeComponent(star.group(1)!.trim());
+    } catch (_) {}
+  }
+  final plain = RegExp(r'filename\s*=\s*"?([^";]+)"?', caseSensitive: false).firstMatch(header);
+  return plain?.group(1)?.trim();
+}

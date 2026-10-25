@@ -5,7 +5,7 @@ import 'package:flutter/foundation.dart';
 
 import 'offline_cache_service.dart';
 
-enum PendingActionType { sale, expense, collection }
+enum PendingActionType { sale, expense, collection, customerLocation }
 
 enum PendingActionStatus { pending, syncing, failed, synced }
 

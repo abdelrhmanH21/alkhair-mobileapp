@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:printing/printing.dart';
 import '../../../../core/di/service_locator.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/app_snackbar.dart';
@@ -229,6 +230,23 @@ class _AdminSettlementHistoryPageState extends State<AdminSettlementHistoryPage>
     );
   }
 
+  int? _routeBusyId;
+
+  /// خط السير: the same server-rendered PDF the web downloads (Arabic +
+  /// clickable Maps/tel links), handed to the native share sheet.
+  Future<void> _shareRoute(SettlementRecordModel r) async {
+    if (_routeBusyId != null) return;
+    setState(() => _routeBusyId = r.id);
+    try {
+      final pdf = await _remote.fetchRouteSheetPdf(r.id);
+      await Printing.sharePdf(bytes: pdf.bytes, filename: pdf.filename);
+    } catch (_) {
+      if (mounted) AppSnackbar.showError(context, 'تعذر تحميل خط السير.');
+    } finally {
+      if (mounted) setState(() => _routeBusyId = null);
+    }
+  }
+
   Widget _buildList() {
     if (_loading) return const Center(child: CircularProgressIndicator());
     if (_error != null) return AppErrorView(message: _error!, onRetry: _load);
@@ -256,6 +274,8 @@ class _AdminSettlementHistoryPageState extends State<AdminSettlementHistoryPage>
           return _SettlementCard(
             record: _rows[i],
             onEditDate: () => _editLoadingDate(_rows[i]),
+            routeBusy: _routeBusyId == _rows[i].id,
+            onRoute: () => _shareRoute(_rows[i]),
           );
         },
       ),
@@ -266,7 +286,14 @@ class _AdminSettlementHistoryPageState extends State<AdminSettlementHistoryPage>
 class _SettlementCard extends StatelessWidget {
   final SettlementRecordModel record;
   final VoidCallback onEditDate;
-  const _SettlementCard({required this.record, required this.onEditDate});
+  final VoidCallback onRoute;
+  final bool routeBusy;
+  const _SettlementCard({
+    required this.record,
+    required this.onEditDate,
+    required this.onRoute,
+    this.routeBusy = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -319,18 +346,34 @@ class _SettlementCard extends StatelessWidget {
                       'تسوية: ${DateFormat('yyyy-MM-dd HH:mm').format(record.settledAt)}',
                       style: const TextStyle(fontSize: 11, color: AppTheme.textMuted),
                     ),
-                    IconButton(
-                      onPressed: () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => DailySummaryPage(settlementId: record.id),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        TextButton.icon(
+                          onPressed: routeBusy ? null : onRoute,
+                          icon: routeBusy
+                              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                              : const Icon(Icons.route_outlined, size: 18),
+                          label: const Text('خط السير', style: TextStyle(fontSize: 12)),
+                          style: TextButton.styleFrom(
+                            visualDensity: VisualDensity.compact,
+                            padding: const EdgeInsets.symmetric(horizontal: 6),
+                          ),
                         ),
-                      ),
-                      icon: const Icon(Icons.summarize_outlined, size: 20, color: AppTheme.primary),
-                      tooltip: 'ملخص اليوم',
-                      visualDensity: VisualDensity.compact,
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
+                        IconButton(
+                          onPressed: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => DailySummaryPage(settlementId: record.id),
+                            ),
+                          ),
+                          icon: const Icon(Icons.summarize_outlined, size: 20, color: AppTheme.primary),
+                          tooltip: 'ملخص اليوم',
+                          visualDensity: VisualDensity.compact,
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
+                      ],
                     ),
                   ],
                 ),

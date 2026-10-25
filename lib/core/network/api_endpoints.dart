@@ -37,6 +37,8 @@ class ApiEndpoints {
   static const String delegateClientSearch  = '/delegate/clients/search';
   static String delegateCustomerInvoiceHistory(int customerId) =>
       '/delegate/customers/$customerId/invoices';
+  static String delegateCustomerLocation(int customerId) =>
+      '/delegate/customers/$customerId/location';
 
   // Shared reference data (root API, not under /v1/mobile)
   static const String products        = '$apiRoot/products';
@@ -105,6 +107,7 @@ class ApiEndpoints {
       '/admin/sales-reps/$repId/commission-override';
   static const String adminSettlementHistory = '/admin/settlement-history';
   static String adminDailySummary(int settlementId) => '/admin/settlement/$settlementId/daily-summary';
+  static String adminRouteSheetPdf(int settlementId) => '/admin/settlement/$settlementId/route.pdf';
   static const String adminSale = '/admin/sale';
   static const String adminCustomerCollection = '/admin/customer-collection';
   static String adminProductPrice(int id) => '/admin/products/$id/price';

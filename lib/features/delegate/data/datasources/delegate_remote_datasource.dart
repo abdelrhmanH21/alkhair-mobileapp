@@ -4,6 +4,7 @@ import '../../../../core/network/api_client.dart';
 import '../../../../core/network/api_endpoints.dart';
 import '../models/loading_model.dart';
 import '../models/client_model.dart';
+import '../models/customer_location_result.dart';
 import '../models/invoice_model.dart';
 import '../models/dashboard_model.dart';
 import '../models/sellable_product_model.dart';
@@ -31,6 +32,13 @@ abstract class DelegateRemoteDataSource {
     String? region,
     int? customerRegionId,
     double? initialBalance,
+  });
+  Future<CustomerLocationResult> submitCustomerLocation({
+    required int customerId,
+    required double latitude,
+    required double longitude,
+    double? accuracyM,
+    required DateTime capturedAt,
   });
   Future<List<SellableProductModel>> fetchSellableProducts({int? customerId});
   Future<List<CatalogProductModel>> fetchSalesCatalogProducts();
@@ -202,6 +210,23 @@ class DelegateRemoteDataSourceImpl implements DelegateRemoteDataSource {
       if (initialBalance != null) 'initial_outstanding_balance': initialBalance,
     });
     return ClientModel.fromJson(res.data['data'] as Map<String, dynamic>);
+  }
+
+  @override
+  Future<CustomerLocationResult> submitCustomerLocation({
+    required int customerId,
+    required double latitude,
+    required double longitude,
+    double? accuracyM,
+    required DateTime capturedAt,
+  }) async {
+    final res = await _client.dio.post(ApiEndpoints.delegateCustomerLocation(customerId), data: {
+      'latitude': latitude,
+      'longitude': longitude,
+      if (accuracyM != null) 'accuracy_m': accuracyM,
+      'captured_at': capturedAt.toUtc().toIso8601String(),
+    });
+    return CustomerLocationResult.fromJson(Map<String, dynamic>.from(res.data as Map));
   }
 
   @override

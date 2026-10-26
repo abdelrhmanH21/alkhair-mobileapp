@@ -165,11 +165,23 @@ abstract class AdminRemoteDataSource {
   Future<List<CommissionDayModel>> fetchRepCommissionBreakdown(int repId);
   // "مندوب حر السعر" management ─────────────────────────────────────────
   Future<void> toggleFreePricingDelegate({required int repId, required bool isFreePricingDelegate});
-  Future<List<FreePricingReferencePriceModel>> fetchFreePricingReferencePrices(int repId);
-  Future<ReferencePriceSaveResult> setFreePricingReferencePrices({
+  /// Every product with the rep's reference price effective today and its history.
+  Future<List<ReferencePriceProductModel>> fetchReferencePrices(int repId);
+  /// Dry run of [createReferencePrice] — writes nothing.
+  Future<ReferencePriceChangeResult> previewReferencePrice({
     required int repId,
-    required List<Map<String, dynamic>> prices,
+    required int productId,
+    required double referencePrice,
+    required String effectiveFrom,
   });
+  /// New effective-dated price ("تعديل سعر منتج"); same date = update in place.
+  Future<ReferencePriceChangeResult> createReferencePrice({
+    required int repId,
+    required int productId,
+    required double referencePrice,
+    required String effectiveFrom,
+  });
+  Future<ReferencePriceChangeResult> deleteReferencePrice({required int repId, required int versionId});
   Future<void> payoutPriceVariance({
     required int repId,
     required double amount,
@@ -869,22 +881,46 @@ class AdminRemoteDataSourceImpl implements AdminRemoteDataSource {
   }
 
   @override
-  Future<List<FreePricingReferencePriceModel>> fetchFreePricingReferencePrices(int repId) async {
+  Future<List<ReferencePriceProductModel>> fetchReferencePrices(int repId) async {
     final res = await _client.dio.get(ApiEndpoints.adminFreePricingReferencePrices(repId));
-    final list = (res.data as Map<String, dynamic>)['data'] as List? ?? [];
-    return list.map((e) => FreePricingReferencePriceModel.fromJson(e as Map<String, dynamic>)).toList();
+    final list = (res.data as Map<String, dynamic>)['products'] as List? ?? [];
+    return list.map((e) => ReferencePriceProductModel.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   @override
-  Future<ReferencePriceSaveResult> setFreePricingReferencePrices({
+  Future<ReferencePriceChangeResult> previewReferencePrice({
     required int repId,
-    required List<Map<String, dynamic>> prices,
+    required int productId,
+    required double referencePrice,
+    required String effectiveFrom,
   }) async {
-    final res = await _client.dio.put(
-      ApiEndpoints.adminFreePricingReferencePrices(repId),
-      data: {'prices': prices},
-    );
-    return ReferencePriceSaveResult.fromJson(res.data as Map<String, dynamic>);
+    final res = await _client.dio.post(ApiEndpoints.adminFreePricingReferencePricePreview(repId), data: {
+      'product_id': productId,
+      'reference_price': referencePrice,
+      'effective_from': effectiveFrom,
+    });
+    return ReferencePriceChangeResult.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  @override
+  Future<ReferencePriceChangeResult> createReferencePrice({
+    required int repId,
+    required int productId,
+    required double referencePrice,
+    required String effectiveFrom,
+  }) async {
+    final res = await _client.dio.post(ApiEndpoints.adminFreePricingReferencePrices(repId), data: {
+      'product_id': productId,
+      'reference_price': referencePrice,
+      'effective_from': effectiveFrom,
+    });
+    return ReferencePriceChangeResult.fromJson(res.data as Map<String, dynamic>);
+  }
+
+  @override
+  Future<ReferencePriceChangeResult> deleteReferencePrice({required int repId, required int versionId}) async {
+    final res = await _client.dio.delete(ApiEndpoints.adminFreePricingReferencePriceVersion(repId, versionId));
+    return ReferencePriceChangeResult.fromJson(res.data as Map<String, dynamic>);
   }
 
   @override

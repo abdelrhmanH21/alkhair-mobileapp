@@ -132,6 +132,9 @@ class ApiEndpoints {
   // "مندوب حر السعر" admin management ─────────────────────────────────────
   static String adminFreePricingToggle(int repId) => '/admin/sales-reps/$repId/free-pricing-toggle';
   static String adminFreePricingReferencePrices(int repId) => '/admin/sales-reps/$repId/reference-prices';
+  static String adminFreePricingReferencePricePreview(int repId) => '/admin/sales-reps/$repId/reference-prices/preview';
+  static String adminFreePricingReferencePriceVersion(int repId, int versionId) =>
+      '/admin/sales-reps/$repId/reference-prices/$versionId';
   static String adminFreePricingPayout(int repId) => '/admin/sales-reps/$repId/price-variance-payout';
 
   // Admin — company-wide تقرير الخزائن / تقرير الموردين (التقارير screen)

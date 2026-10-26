@@ -2001,33 +2001,144 @@ class DistributorDailyReceiptModel {
 
 // ─── "مندوب حر السعر" (free-pricing delegate) management ────────────────────
 
-/// Mirrors FreePricingReferencePrice — this rep's own custom base price for
-/// one product. Genuinely per-rep, never the catalog price.
-class FreePricingReferencePriceModel {
+/// One effective-dated reference price of a rep for a product ("سجل الأسعار").
+/// [effectiveFrom] is Y-m-d, or null for the "منذ البداية" version.
+class ReferencePriceVersionModel {
   final int id;
-  final int productId;
-  final String productName;
-  final String productUnit;
   final double referencePrice;
+  final String? effectiveFrom;
+  final String? notes;
+  final String? createdByName;
+  final DateTime? createdAt;
 
-  const FreePricingReferencePriceModel({
+  const ReferencePriceVersionModel({
     required this.id,
-    required this.productId,
-    required this.productName,
-    required this.productUnit,
     required this.referencePrice,
+    this.effectiveFrom,
+    this.notes,
+    this.createdByName,
+    this.createdAt,
   });
 
-  factory FreePricingReferencePriceModel.fromJson(Map<String, dynamic> json) {
-    final product = json['product'] as Map<String, dynamic>?;
-    return FreePricingReferencePriceModel(
-      id: json['id'] as int,
+  factory ReferencePriceVersionModel.fromJson(Map<String, dynamic> json) => ReferencePriceVersionModel(
+        id: json['id'] as int,
+        referencePrice: _asDouble(json['reference_price']),
+        effectiveFrom: json['effective_from'] as String?,
+        notes: json['notes'] as String?,
+        createdByName: (json['created_by'] as Map<String, dynamic>?)?['name'] as String?,
+        createdAt: tryParseServerDateTime(json['created_at'] as String?),
+      );
+}
+
+/// One product in a free-pricing rep's reference-price list
+/// (GET reference-prices → `products`): the price effective today, since
+/// when, any scheduled change, and the product's full version history
+/// (newest first). [hasPrice] false = "لم يُحدد سعر".
+class ReferencePriceProductModel {
+  final int productId;
+  final String productName;
+  final String unit;
+  final bool hasPrice;
+  final double? referencePrice;
+  final String? effectiveFrom;
+  final double? nextChangePrice;
+  final String? nextChangeFrom;
+  final List<ReferencePriceVersionModel> versions;
+
+  const ReferencePriceProductModel({
+    required this.productId,
+    required this.productName,
+    required this.unit,
+    required this.hasPrice,
+    this.referencePrice,
+    this.effectiveFrom,
+    this.nextChangePrice,
+    this.nextChangeFrom,
+    this.versions = const [],
+  });
+
+  factory ReferencePriceProductModel.fromJson(Map<String, dynamic> json) {
+    final next = json['next_change'] as Map<String, dynamic>?;
+    return ReferencePriceProductModel(
       productId: json['product_id'] as int,
-      productName: product?['name'] as String? ?? '',
-      productUnit: product?['unit'] as String? ?? '',
-      referencePrice: _asDouble(json['reference_price']),
+      productName: json['product_name'] as String? ?? '',
+      unit: json['unit'] as String? ?? '',
+      hasPrice: json['has_price'] as bool? ?? false,
+      referencePrice: json['reference_price'] == null ? null : _asDouble(json['reference_price']),
+      effectiveFrom: json['effective_from'] as String?,
+      nextChangePrice: next == null ? null : _asDouble(next['reference_price']),
+      nextChangeFrom: next?['effective_from'] as String?,
+      versions: (json['versions'] as List? ?? [])
+          .map((e) => ReferencePriceVersionModel.fromJson(e as Map<String, dynamic>))
+          .toList(),
     );
   }
+}
+
+/// What a reference-price change does (or, for the preview, would do) to
+/// past accruals: how many invoices are re-priced, their price-date range,
+/// and the rep's balance before/after. [invoicesRecalculated] 0 = no past
+/// invoice changes. [retroactive] = the start date is in the past.
+class ReferencePriceChangeResult {
+  final int invoicesRecalculated;
+  final String? dateFrom;
+  final String? dateTo;
+  final double balanceBefore;
+  final double balanceAfter;
+  final bool retroactive;
+  final String? message;
+
+  const ReferencePriceChangeResult({
+    required this.invoicesRecalculated,
+    this.dateFrom,
+    this.dateTo,
+    required this.balanceBefore,
+    required this.balanceAfter,
+    this.retroactive = false,
+    this.message,
+  });
+
+  factory ReferencePriceChangeResult.fromJson(Map<String, dynamic> json) {
+    final d = json['data'] as Map<String, dynamic>? ?? json;
+    return ReferencePriceChangeResult(
+      invoicesRecalculated: (d['invoices_recalculated'] as num? ?? 0).toInt(),
+      dateFrom: d['date_from'] as String?,
+      dateTo: d['date_to'] as String?,
+      balanceBefore: _asDouble(d['balance_before']),
+      balanceAfter: _asDouble(d['balance_after']),
+      retroactive: d['retroactive'] as bool? ?? false,
+      message: json['message'] as String?,
+    );
+  }
+}
+
+/// One sold line of an accrual in the admin statement, with the reference
+/// price that applied on that invoice's date (historical, not today's).
+class PriceVarianceLineModel {
+  final String productName;
+  final double quantity;
+  final double referencePrice;
+  final bool referenceMissing;
+  final double chargedPrice;
+  final double variance;
+
+  const PriceVarianceLineModel({
+    required this.productName,
+    required this.quantity,
+    required this.referencePrice,
+    this.referenceMissing = false,
+    required this.chargedPrice,
+    required this.variance,
+  });
+
+  factory PriceVarianceLineModel.fromJson(Map<String, dynamic> json) => PriceVarianceLineModel(
+        productName: json['product_name'] as String? ?? '',
+        quantity: _asDouble(json['quantity']),
+        referencePrice: _asDouble(json['reference_price']),
+        referenceMissing: json['reference_missing'] as bool? ?? false,
+        chargedPrice: _asDouble(json['charged_price']),
+        variance: _asDouble(json['variance']),
+      );
 }
 
 /// Mirrors one PriceVarianceTransaction ledger row — an accrual (tied to an
@@ -2050,6 +2161,10 @@ class PriceVarianceTransactionModel {
   final String? sourceDate;
   final bool? _deletable;
   final String? deleteBlockedReason;
+  /// Accrual only: the invoice's price date and its sold lines with the
+  /// reference price applied on that date.
+  final String? priceDate;
+  final List<PriceVarianceLineModel> lines;
 
   const PriceVarianceTransactionModel({
     required this.id,
@@ -2065,6 +2180,8 @@ class PriceVarianceTransactionModel {
     this.sourceDate,
     bool? deletable,
     this.deleteBlockedReason,
+    this.priceDate,
+    this.lines = const [],
   }) : _deletable = deletable;
 
   bool get isAccrual => type == 'accrual';
@@ -2102,6 +2219,10 @@ class PriceVarianceTransactionModel {
       sourceDate: json['source_date'] as String?,
       deletable: json['deletable'] as bool?,
       deleteBlockedReason: json['delete_blocked_reason'] as String?,
+      priceDate: json['price_date'] as String?,
+      lines: (json['lines'] as List? ?? [])
+          .map((e) => PriceVarianceLineModel.fromJson(e as Map<String, dynamic>))
+          .toList(),
     );
   }
 }
@@ -2119,36 +2240,6 @@ class PriceVarianceStatementModel {
       transactions: (json['transactions'] as List? ?? [])
           .map((e) => PriceVarianceTransactionModel.fromJson(e as Map<String, dynamic>))
           .toList(),
-    );
-  }
-}
-
-/// Result of saving reference prices: the rep's refreshed price list plus, when
-/// a price actually changed, what the retroactive recompute did to past
-/// accruals (AdminFreePricingController::setReferencePrices()'s
-/// `variance_recalculation`). [invoicesRecalculated] is 0 when nothing changed.
-class ReferencePriceSaveResult {
-  final List<FreePricingReferencePriceModel> rows;
-  final int invoicesRecalculated;
-  final double? balanceBefore;
-  final double? balanceAfter;
-
-  const ReferencePriceSaveResult({
-    required this.rows,
-    this.invoicesRecalculated = 0,
-    this.balanceBefore,
-    this.balanceAfter,
-  });
-
-  factory ReferencePriceSaveResult.fromJson(Map<String, dynamic> json) {
-    final recalc = json['variance_recalculation'];
-    return ReferencePriceSaveResult(
-      rows: (json['data'] as List? ?? [])
-          .map((e) => FreePricingReferencePriceModel.fromJson(e as Map<String, dynamic>))
-          .toList(),
-      invoicesRecalculated: recalc is Map ? (recalc['invoices_recalculated'] as num? ?? 0).toInt() : 0,
-      balanceBefore: recalc is Map ? (recalc['balance_before'] as num?)?.toDouble() : null,
-      balanceAfter: recalc is Map ? (recalc['balance_after'] as num?)?.toDouble() : null,
     );
   }
 }

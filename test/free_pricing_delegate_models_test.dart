@@ -109,27 +109,73 @@ void main() {
     });
   });
 
-  group('ReferencePriceSaveResult.fromJson — retroactive recompute payload', () {
-    test('parses the recompute summary when prices changed (265 -> 255 example: 95 -> 145)', () {
-      final r = ReferencePriceSaveResult.fromJson({
-        'data': [],
-        'variance_recalculation': {
-          'invoices_recalculated': 2,
-          'balance_before': 95,
-          'balance_after': 145.0,
-          'changes': [],
+  group('effective-dated reference prices — admin payloads', () {
+    test('ReferencePriceProductModel parses the price effective today, the schedule and the history', () {
+      final m = ReferencePriceProductModel.fromJson({
+        'product_id': 7,
+        'product_name': 'جبن',
+        'unit': 'kg',
+        'has_price': true,
+        'version_id': 12,
+        'reference_price': 35,
+        'effective_from': '2026-10-26',
+        'next_change': {'reference_price': '40.50', 'effective_from': '2026-11-01'},
+        'versions': [
+          {'id': 13, 'reference_price': 40.5, 'effective_from': '2026-11-01', 'created_by': {'id': 1, 'name': 'Admin'}, 'created_at': '2026-10-26T10:00:00+03:00'},
+          {'id': 12, 'reference_price': 35, 'effective_from': '2026-10-26', 'created_by': null, 'created_at': null},
+          {'id': 3, 'reference_price': 20, 'effective_from': null, 'created_by': null, 'created_at': null},
+        ],
+      });
+      expect(m.hasPrice, isTrue);
+      expect(m.referencePrice, 35.0);
+      expect(m.effectiveFrom, '2026-10-26');
+      expect(m.nextChangePrice, 40.5);
+      expect(m.nextChangeFrom, '2026-11-01');
+      expect(m.versions.map((v) => v.id), [13, 12, 3]);
+      expect(m.versions.first.createdByName, 'Admin');
+      expect(m.versions.last.effectiveFrom, isNull); // منذ البداية
+    });
+
+    test('a product with no price parses with hasPrice=false and null price', () {
+      final m = ReferencePriceProductModel.fromJson({
+        'product_id': 8, 'product_name': 'لبن', 'unit': 'l', 'has_price': false,
+        'reference_price': null, 'effective_from': null, 'next_change': null, 'versions': [],
+      });
+      expect(m.hasPrice, isFalse);
+      expect(m.referencePrice, isNull);
+      expect(m.versions, isEmpty);
+    });
+
+    test('ReferencePriceChangeResult reads the preview/save payload under data', () {
+      final r = ReferencePriceChangeResult.fromJson({
+        'message': 'تم حفظ السعر المرجعي الجديد.',
+        'data': {
+          'invoices_recalculated': 2, 'date_from': '2026-10-22', 'date_to': '2026-10-24',
+          'balance_before': 200, 'balance_after': '170.00', 'retroactive': true,
         },
       });
       expect(r.invoicesRecalculated, 2);
-      expect(r.balanceBefore, 95.0);
-      expect(r.balanceAfter, 145.0);
+      expect(r.dateFrom, '2026-10-22');
+      expect(r.balanceBefore, 200.0);
+      expect(r.balanceAfter, 170.0);
+      expect(r.retroactive, isTrue);
+      expect(r.message, 'تم حفظ السعر المرجعي الجديد.');
     });
 
-    test('is a no-op result when nothing changed (variance_recalculation null)', () {
-      final r = ReferencePriceSaveResult.fromJson({'data': [], 'variance_recalculation': null});
-      expect(r.invoicesRecalculated, 0);
-      expect(r.balanceBefore, isNull);
-      expect(r.balanceAfter, isNull);
+    test('statement accrual rows carry the applied historical price per line', () {
+      final tx = PriceVarianceTransactionModel.fromJson({
+        'id': 1, 'type': 'accrual', 'amount': 10, 'balance_after': 10, 'created_at': '2026-10-25T10:00:00',
+        'price_date': '2026-10-25',
+        'lines': [
+          {'product_name': 'جبن', 'quantity': 1, 'reference_price': 20, 'reference_missing': false, 'charged_price': 30, 'variance': 10},
+        ],
+      });
+      expect(tx.priceDate, '2026-10-25');
+      expect(tx.lines.single.referencePrice, 20.0);
+      expect(tx.lines.single.variance, 10.0);
+      // Older server responses without lines still parse.
+      final old = PriceVarianceTransactionModel.fromJson({'id': 2, 'type': 'payout', 'amount': -5, 'balance_after': 5, 'created_at': '2026-10-25T10:00:00'});
+      expect(old.lines, isEmpty);
     });
   });
 }

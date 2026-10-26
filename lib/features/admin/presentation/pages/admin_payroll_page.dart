@@ -9,6 +9,7 @@ import '../../data/datasources/admin_remote_datasource.dart';
 import '../../data/models/admin_models.dart';
 import '../../../delegate/data/models/breakdown_models.dart';
 import '../../../../core/utils/number_input.dart';
+import '../widgets/reference_prices_tab.dart';
 
 /// العمالة — الأهداف الشهرية والرواتب الشهرية لكل مندوبي المبيعات، تعادل
 /// تبويبي الويب "الأهداف الشهرية"/"الرواتب الشهرية". المصدر:
@@ -526,7 +527,7 @@ class _RepPayrollDetailPageState extends State<_RepPayrollDetailPage>
                 controller: _tabController,
                 children: _isFreePricingDelegate
                     ? [
-                        _ReferencePricesTab(remote: widget.remote, repId: widget.rep.repId),
+                        ReferencePricesTab(remote: widget.remote, repId: widget.rep.repId),
                         _PriceVarianceTab(
                           remote: widget.remote,
                           repId: widget.rep.repId,
@@ -861,173 +862,6 @@ class _RepBonusesTabState extends State<_RepBonusesTab> {
   }
 }
 
-// ─── الأسعار المرجعية (مندوب حر السعر) ────────────────────────────────────────
-
-class _ReferencePricesTab extends StatefulWidget {
-  final AdminRemoteDataSource remote;
-  final int repId;
-  const _ReferencePricesTab({required this.remote, required this.repId});
-
-  @override
-  State<_ReferencePricesTab> createState() => _ReferencePricesTabState();
-}
-
-class _ReferencePricesTabState extends State<_ReferencePricesTab> {
-  List<FreePricingReferencePriceModel>? _rows;
-  List<SimpleProductModel> _products = [];
-  String? _error;
-  SimpleProductModel? _selectedProduct;
-  final _priceCtrl = TextEditingController();
-  bool _saving = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  @override
-  void dispose() {
-    _priceCtrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _load() async {
-    setState(() => _error = null);
-    try {
-      final results = await Future.wait([
-        widget.remote.fetchFreePricingReferencePrices(widget.repId),
-        widget.remote.fetchProducts(),
-      ]);
-      if (!mounted) return;
-      setState(() {
-        _rows = results[0] as List<FreePricingReferencePriceModel>;
-        _products = results[1] as List<SimpleProductModel>;
-      });
-    } catch (_) {
-      if (mounted) setState(() => _error = 'فشل تحميل الأسعار المرجعية.');
-    }
-  }
-
-  Future<void> _save() async {
-    final product = _selectedProduct;
-    final price = parseNumber(_priceCtrl.text);
-    if (product == null || price == null || price < 0) {
-      AppSnackbar.showError(context, 'يرجى اختيار منتج وإدخال سعر صحيح.');
-      return;
-    }
-    setState(() => _saving = true);
-    try {
-      final result = await widget.remote.setFreePricingReferencePrices(
-        repId: widget.repId,
-        prices: [
-          {'product_id': product.id, 'reference_price': price},
-        ],
-      );
-      if (!mounted) return;
-      setState(() {
-        _rows = result.rows;
-        _saving = false;
-        _selectedProduct = null;
-        _priceCtrl.clear();
-      });
-      // A changed price is retroactive — tell the admin what it did to the balance.
-      AppSnackbar.showSuccess(
-        context,
-        result.invoicesRecalculated > 0 && result.balanceBefore != null && result.balanceAfter != null
-            ? 'تم حفظ السعر المرجعي وإعادة احتساب ${result.invoicesRecalculated} فاتورة سابقة. '
-                'المستحق: ${result.balanceBefore!.toStringAsFixed(2)} ← ${result.balanceAfter!.toStringAsFixed(2)} ج.م'
-            : 'تم حفظ السعر المرجعي.',
-      );
-    } on DioException catch (e) {
-      if (!mounted) return;
-      setState(() => _saving = false);
-      AppSnackbar.showError(context, e.response?.data?['message'] as String? ?? 'فشل الحفظ.');
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _saving = false);
-      AppSnackbar.showError(context, 'حدث خطأ غير متوقع.');
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    if (_error != null) return AppErrorView(message: _error!, onRetry: _load);
-    if (_rows == null) return const Center(child: CircularProgressIndicator());
-
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                flex: 3,
-                child: DropdownButtonFormField<SimpleProductModel>(
-                  initialValue: _selectedProduct,
-                  isExpanded: true,
-                  decoration: const InputDecoration(labelText: 'المنتج', isDense: true),
-                  items: _products.map((p) => DropdownMenuItem(value: p, child: Text(p.name))).toList(),
-                  onChanged: (p) => setState(() => _selectedProduct = p),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                flex: 2,
-                child: TextField(
-                  controller: _priceCtrl,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  inputFormatters: numericInputFormatters,
-                  decoration: const InputDecoration(labelText: 'السعر المرجعي', isDense: true),
-                ),
-              ),
-              const SizedBox(width: 8),
-              IconButton.filled(
-                onPressed: _saving ? null : _save,
-                icon: _saving
-                    ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                    : const Icon(Icons.check),
-              ),
-            ],
-          ),
-        ),
-        const Divider(height: 1),
-        Expanded(
-          child: _rows!.isEmpty
-              ? const Center(
-                  child: Text('لا توجد أسعار مرجعية بعد.', style: TextStyle(color: AppTheme.textMuted)))
-              : ListView.builder(
-                  keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-                  padding: const EdgeInsets.all(12),
-                  itemCount: _rows!.length,
-                  itemBuilder: (_, i) {
-                    final rp = _rows![i];
-                    return Card(
-                      margin: const EdgeInsets.symmetric(vertical: 4),
-                      child: ListTile(
-                        leading: const Icon(Icons.shopping_bag_outlined, color: AppTheme.primary),
-                        title: Text(rp.productName),
-                        subtitle: Text(rp.productUnit),
-                        trailing: Text(rp.referencePrice.toStringAsFixed(2),
-                            style: const TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primary)),
-                        onTap: () {
-                          final product = _products.where((p) => p.id == rp.productId).firstOrNull;
-                          setState(() {
-                            _selectedProduct = product;
-                            _priceCtrl.text = rp.referencePrice.toStringAsFixed(2);
-                          });
-                        },
-                      ),
-                    );
-                  },
-                ),
-        ),
-      ],
-    );
-  }
-}
-
 // ─── فروقات الأسعار (مندوب حر السعر) ───────────────────────────────────────────
 
 class _PriceVarianceTab extends StatefulWidget {
@@ -1215,6 +1049,7 @@ class _VarianceTxCard extends StatelessWidget {
             : (tx.notes?.isNotEmpty == true ? tx.notes! : tx.type == 'payout' ? 'صرف مستحقات' : tx.typeLabel));
     final meta = [
       if (tx.sourceDate != null) 'بتاريخ ${tx.sourceDate}',
+      if (tx.priceDate != null) 'تاريخ التسعير ${tx.priceDate}',
       if (tx.createdByName != null) 'بواسطة ${tx.createdByName}',
     ].join(' · ');
 
@@ -1242,6 +1077,15 @@ class _VarianceTxCard extends StatelessWidget {
             Text(detail, style: const TextStyle(fontSize: 12)),
             if (meta.isNotEmpty)
               Text(meta, style: const TextStyle(fontSize: 10, color: AppTheme.textMuted)),
+            // Each sold line with the reference price applied on that
+            // invoice's date (historical, not today's price).
+            for (final l in tx.lines)
+              Text(
+                '${l.productName} × ${l.quantity.toStringAsFixed(2)}: مرجعي ${l.referencePrice.toStringAsFixed(2)}'
+                '${l.referenceMissing ? ' (سعر الكتالوج)' : ''} · بيع ${l.chargedPrice.toStringAsFixed(2)}'
+                ' = ${l.variance >= 0 ? '+' : ''}${l.variance.toStringAsFixed(2)}',
+                style: const TextStyle(fontSize: 10, color: AppTheme.textMuted),
+              ),
             const SizedBox(height: 6),
             Row(
               children: [
